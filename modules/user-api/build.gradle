@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation 'org.flywaydb:flyway-core'
     runtimeOnly 'org.flywaydb:flyway-mysql'
+    runtimeOnly 'com.mysql:mysql-connector-j'
 
     implementation project(':modules:core')
     implementation project(':modules:domain')
@@ -24,6 +25,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

@@ -1,11 +1,13 @@
-package org.backend.adminapi;
+package org.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "org.backend")
 public class AdminApiApplication {
+
     public static void main(String[] args) {
         SpringApplication.run(AdminApiApplication.class, args);
     }
+
 }
