@@ -1,1 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 rootProject.name = 'Back-end'
+
+include 'modules:core'
+include 'modules:domain'
+include 'modules:user-api'
+include 'modules:admin-api'
+
+project(':modules:core').projectDir = file('modules/core')
+project(':modules:domain').projectDir = file('modules/domain')
+project(':modules:user-api').projectDir = file('modules/user-api')
+project(':modules:admin-api').projectDir = file('modules/admin-api')
