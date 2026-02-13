@@ -7,20 +7,26 @@ group = 'org'
 version = '0.0.1-SNAPSHOT'
 description = 'Back-end'
 
-allprojects {
-    repositories {
-        mavenCentral()
-    }
-}
-
 subprojects {
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
+    apply plugin: 'io.spring.dependency-management'
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:4.0.2"
+        }
+        dependencies {
+            dependency "org.projectlombok:lombok:1.18.36"
         }
     }
 
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = 'UTF-8'
+    plugins.withType(org.gradle.api.plugins.JavaPlugin) {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = "UTF-8"
+        }
     }
 }
