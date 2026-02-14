@@ -25,7 +25,7 @@ public class VideoFile {
     @Column(name = "original_url", length = 500)
     private String originalUrl;
 
-    @Column(name = "hls_url", nullable = false, length = 500)
+    @Column(name = "hls_url", length = 500)
     private String hlsUrl;
 
     @Column(name = "duration_sec", nullable = false)
