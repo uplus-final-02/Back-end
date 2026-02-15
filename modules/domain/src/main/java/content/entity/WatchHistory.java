@@ -52,7 +52,7 @@ public class WatchHistory extends BaseTimeEntity {
     @Column(name = "last_position_sec", nullable = false)
     private Integer lastPositionSec;
 
-    @Column(name = "last_watched_at")
+    @Column(name = "last_watched_at", nullable = false)
     private LocalDateTime lastWatchedAt;
 
     @Column(name = "completed_at")
