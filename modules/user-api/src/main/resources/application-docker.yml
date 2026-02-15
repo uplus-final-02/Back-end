@@ -19,6 +19,12 @@ spring:
     password: ${ELASTIC_PASSWORD:}
 
 app:
+  search:
+    initial-index-on-startup: ${SEARCH_INITIAL_INDEX_ON_STARTUP:true}
+    realtime-sync:
+      enabled: ${SEARCH_REALTIME_SYNC_ENABLED:true}
+      interval-ms: ${SEARCH_REALTIME_SYNC_INTERVAL_MS:30000}
+
   storage:
     s3:
       provider: minio
