@@ -6,6 +6,9 @@ import common.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
+import org.backend.userapi.common.exception.DuplicateEmailException;
+import org.backend.userapi.common.exception.DuplicateNicknameException;
+import org.backend.userapi.common.exception.InvalidTagException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,7 +86,7 @@ public class AuthService {
      */
     private void validateDuplicateEmail(String email) {
         if (authAccountRepository.existsByAuthProviderAndAuthProviderSubject(AuthProvider.EMAIL, email)) {
-            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+            throw new DuplicateEmailException("이미 사용 중인 이메일입니다.");
         }
     }
 
@@ -93,7 +96,7 @@ public class AuthService {
      */
     private void validateDuplicateNickname(String nickname) {
         if (userRepository.existsByNickname(nickname)) {
-            throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+            throw new DuplicateNicknameException("이미 사용 중인 닉네임입니다.");
         }
     }
 
@@ -102,7 +105,7 @@ public class AuthService {
      */
     private void validateTagCount(List<Long> tagIds) {
         if (tagIds.size() < 3 || tagIds.size() > 5) {
-            throw new IllegalArgumentException("선호 태그는 3개 이상 5개 이하로 선택해야 합니다.");
+            throw new InvalidTagException("선호 태그는 3개 이상 5개 이하로 선택해야 합니다.");
         }
     }
 
@@ -113,7 +116,7 @@ public class AuthService {
     private List<Tag> validateAndGetTags(List<Long> tagIds) {
         List<Tag> tags = tagRepository.findAllByIdIn(tagIds);
         if (tags.size() != tagIds.size()) {
-            throw new IllegalArgumentException("유효하지 않은 태그 ID가 포함되어 있습니다.");
+            throw new InvalidTagException("유효하지 않은 태그 ID가 포함되어 있습니다.");
         }
         return tags;
     }
