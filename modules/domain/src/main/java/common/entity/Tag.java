@@ -36,7 +36,7 @@ public class Tag {
     private Boolean isActive;
 
     @CreatedDate
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "type", nullable = false, length = 20)

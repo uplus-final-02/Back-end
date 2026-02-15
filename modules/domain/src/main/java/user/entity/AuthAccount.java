@@ -55,7 +55,7 @@ public class AuthAccount {
     private String passwordHash;
 
     @CreatedDate
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "last_login_at")
