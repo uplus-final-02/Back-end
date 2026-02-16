@@ -42,4 +42,11 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, message, null));
     }
+
+    @ExceptionHandler(VideoNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVideoNotFound(VideoNotFoundException e) {
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND) // 404 상태 코드
+            .body(new ApiResponse<>(404, e.getMessage(), null));
+    }
 }

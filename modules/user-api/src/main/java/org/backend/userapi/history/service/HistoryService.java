@@ -6,6 +6,7 @@ import content.entity.WatchHistory;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.VideoNotFoundException;
 import org.backend.userapi.history.dto.SavePointRequest;
 import org.backend.userapi.history.dto.SavePointResponse;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,7 @@ public class HistoryService {
     public SavePointResponse savePoint(Long userId, Long videoId, SavePointRequest request) {
         // 1. 영상 정보 조회 (총 길이를 알기 위해 필요)
         Video video = videoRepository.findById(videoId)
-                                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 비디오입니다."));
+                                     .orElseThrow(() -> new VideoNotFoundException("존재하지 않는 비디오입니다."));
 
         // 2. 시청 기록 조회 (없으면 생성 - Upsert 로직)
         WatchHistory history = historyRepository.findByUserIdAndVideoId(userId, videoId)
