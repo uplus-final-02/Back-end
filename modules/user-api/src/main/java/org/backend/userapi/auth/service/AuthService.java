@@ -2,20 +2,27 @@ package org.backend.userapi.auth.service;
 
 import common.entity.Tag;
 import common.enums.AuthProvider;
+import common.enums.UserStatus;
 import common.repository.TagRepository;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.auth.dto.LoginRequest;
+import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
+import org.backend.userapi.auth.jwt.JwtTokenProvider;
 import org.backend.userapi.common.exception.DuplicateEmailException;
 import org.backend.userapi.common.exception.DuplicateNicknameException;
 import org.backend.userapi.common.exception.InvalidTagException;
+import org.backend.userapi.common.exception.InvalidCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.AuthAccount;
+import user.entity.RefreshToken;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
+import user.repository.RefreshTokenRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
 
@@ -30,6 +37,8 @@ public class AuthService {
     private final UserPreferredTagRepository userPreferredTagRepository;
     private final TagRepository tagRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     /*
      * 회원가입
@@ -76,6 +85,44 @@ public class AuthService {
                 .toList();
 
         return new SignupResponse(user.getId(), user.getNickname(), tagNames);
+    }
+
+    @Transactional
+    public LoginResponse login(LoginRequest request) {
+        AuthAccount authAccount = authAccountRepository
+                .findByAuthProviderAndEmail(AuthProvider.EMAIL, request.email())
+                .orElseThrow(() -> new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다."));
+
+        if (authAccount.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), authAccount.getPasswordHash())) {
+            throw new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+
+        User user = authAccount.getUser();
+
+        if (user.getUserStatus() != UserStatus.ACTIVE) {
+            throw new InvalidCredentialsException("비활성화된 계정입니다.");
+        }
+
+        authAccount.updateLastLoginAt();
+
+        String accessToken = jwtTokenProvider.generateAccessToken(user, authAccount.getEmail());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+
+        refreshTokenRepository.deleteByUserId(user.getId());
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .token(refreshToken)
+                .expiresAt(jwtTokenProvider.getRefreshTokenExpiresAt())
+                .build());
+
+        return new LoginResponse(
+                "Bearer",
+                accessToken,
+                jwtTokenProvider.getAccessTokenTtlSeconds(),
+                refreshToken,
+                jwtTokenProvider.getRefreshTokenTtlSeconds()
+        );
     }
 
     // ── 검증 메서드 ──
