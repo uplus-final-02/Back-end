@@ -63,7 +63,7 @@ public class WatchHistory extends BaseTimeEntity {
     public WatchHistory(Long userId, Video video, HistoryStatus status, Integer lastPositionSec, LocalDateTime lastWatchedAt, LocalDateTime completedAt) {
         this.userId = userId;
         this.video = video;
-        this.contentId = video.getContentId();
+        this.contentId = video.getContent().getId();
 
         // 값이 들어오면 그 값을 쓰고, 안 들어오면(null) 초기 기본값을 사용
         this.status = status != null ? status : HistoryStatus.STARTED;

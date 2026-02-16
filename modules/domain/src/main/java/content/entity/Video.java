@@ -32,8 +32,9 @@ public class Video extends BaseTimeEntity {
     @Column(name = "video_id")
     private Long id;
 
-    @Column(name = "content_id", nullable = false)
-    private Long contentId; // 작품 ID (FK 성격)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "content_id", nullable = false)
+    private Content content;
 
     @Column(name = "episode_no", nullable = false)
     private Integer episodeNo; // 회차 번호 (1화, 2화...)
@@ -62,7 +63,7 @@ public class Video extends BaseTimeEntity {
     // Builder 패턴 적용 (생성자)
     @Builder
     public Video(Long contentId, Integer episodeNo, String title, String description, String thumbnailUrl, VideoStatus status) {
-        this.contentId = contentId;
+        this.content = content;
         this.episodeNo = episodeNo;
         this.title = title;
         this.description = description;
