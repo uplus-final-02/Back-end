@@ -2,6 +2,8 @@ package org.backend.userapi.auth.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.auth.dto.LoginRequest;
+import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
 import org.backend.userapi.auth.service.AuthService;
@@ -28,5 +30,13 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.created(response));
+    }
+
+    @PostMapping("/login/email")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
+            @Valid @RequestBody LoginRequest request) {
+
+        LoginResponse response = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
