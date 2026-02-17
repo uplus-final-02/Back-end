@@ -1,6 +1,8 @@
 package org.backend.userapi.interaction.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse.BookmarkItemResponse;
@@ -14,7 +16,6 @@ import content.repository.ContentRepository;
 import interaction.entity.Bookmark;
 import interaction.repository.BookmarkRepository;
 import lombok.RequiredArgsConstructor;
-import user.entity.User;
 import user.repository.UserRepository;
 
 @Service
@@ -22,31 +23,33 @@ import user.repository.UserRepository;
 public class BookmarkService {
 
     private final BookmarkRepository bookmarkRepository;
-    private final ContentRepository contentRepository; // 등록 기능을 위해 추가
-    private final UserRepository userRepository;       // 등록 기능을 위해 추가
+    private final ContentRepository contentRepository;
+    private final UserRepository userRepository;
 
     /**
      * AE2-44: 찜하기 등록
      */
     @Transactional
     public void addBookmark(Long userId, Long contentId) {
-        // 1. 중복 체크 (Repository의 existsByUserIdAndContentId 사용)
+        // 1. 중복 체크
         if (bookmarkRepository.existsByUserIdAndContentId(userId, contentId)) {
             return;
         }
 
-        // 2. 엔티티 조회 및 검증
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        // 2. 존재 여부 검증 (객체 대신 존재 확인만 수행)
+        if (!userRepository.existsById(userId)) {
+            throw new IllegalArgumentException("사용자를 찾을 수 없습니다.");
+        }
+        
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."));
 
-        // 3. 찜 저장
+        // 3. 찜 저장 (수정된 Entity 구조: ID 직접 저장)
         bookmarkRepository.save(Bookmark.builder()
-                .user(user)
-                .content(content)
+                .userId(userId)    // 객체(user) 대신 ID(userId) 전달
+                .contentId(contentId) // 객체(content) 대신 ID(contentId) 전달
                 .build());
-        
+
         // 4. 콘텐츠 테이블의 북마크 총 수 증가
         content.updateBookmarkCount(content.getBookmarkCount() + 1);
     }
@@ -56,7 +59,7 @@ public class BookmarkService {
      */
     @Transactional(readOnly = true)
     public BookmarkListResponse getMyBookmarks(Long userId, Long cursorId, int size) {
-        // 다음 페이지 존재 확인을 위해 size + 1개 조회
+        // 1. 북마크 목록 먼저 조회
         List<Bookmark> bookmarks = bookmarkRepository.findByUserIdWithCursor(
                 userId, cursorId, PageRequest.of(0, size + 1));
 
@@ -65,18 +68,30 @@ public class BookmarkService {
             bookmarks = bookmarks.subList(0, size);
         }
 
-        List<BookmarkItemResponse> items = bookmarks.stream().map(b -> new BookmarkItemResponse(
-            b.getId(),
-            b.getContent().getId(),
-            b.getContent().getTitle(),
-            b.getContent().getThumbnailUrl(),
-            b.getContent().getType().name(),
-            "전체", // 카테고리 로직 (추후 확장)
-            b.getCreatedAt().toString(),
-            b.getContent().getStatus() == ContentStatus.DELETED // 삭제 여부 판별
-        )).toList();
+        // 2. 조회된 북마크들에서 contentId 목록 추출
+        List<Long> contentIds = bookmarks.stream()
+                .map(Bookmark::getContentId)
+                .toList();
 
-        // 마지막 데이터 ID를 다음 커서로 사용
+        // 3. 연관된 콘텐츠 정보 한꺼번에 조회 (IN 쿼리 사용)
+        Map<Long, Content> contentMap = contentRepository.findAllById(contentIds).stream()
+                .collect(Collectors.toMap(Content::getId, c -> c));
+
+        // 4. DTO 변환 (contentMap에서 정보 매핑)
+        List<BookmarkItemResponse> items = bookmarks.stream().map(b -> {
+            Content content = contentMap.get(b.getContentId());
+            return new BookmarkItemResponse(
+                b.getId(),
+                b.getContentId(),
+                content != null ? content.getTitle() : "알 수 없는 콘텐츠",
+                content != null ? content.getThumbnailUrl() : null,
+                content != null ? content.getType().name() : "UNKNOWN",
+                "전체",
+                b.getCreatedAt().toString(),
+                content == null || content.getStatus() == ContentStatus.DELETED
+            );
+        }).toList();
+
         String nextCursor = hasNext ? String.valueOf(bookmarks.get(bookmarks.size() - 1).getId()) : null;
 
         return new BookmarkListResponse(items, nextCursor, hasNext, bookmarkRepository.countByUserId(userId));
