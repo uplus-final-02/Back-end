@@ -5,21 +5,15 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
 import org.backend.userapi.search.service.ContentIndexingService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/contents")
+@RequestMapping("/api")
 public class ContentSearchController {
 
     private final ContentIndexingService contentIndexingService;
@@ -30,26 +24,28 @@ public class ContentSearchController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @PostMapping("/index/{contentId}")
-    public ResponseEntity<ApiResponse<Void>> indexOne(@PathVariable Long contentId) {
-        contentIndexingService.indexContent(contentId);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @DeleteMapping("/index/{contentId}")
-    public ResponseEntity<ApiResponse<Void>> deleteOne(@PathVariable Long contentId) {
-        contentIndexingService.deleteContent(contentId);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<ContentSearchResponse>> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "RELATED") String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "15") int size
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        Sort sortObj = switch (sort.toUpperCase()) {
+            case "LATEST" -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case "POPULAR" -> Sort.by(Sort.Direction.DESC, "totalViewCount");
+            default -> Sort.unsorted();
+        };
+
+        Pageable pageable = PageRequest.of(page, size, sortObj);
+        
         Page<ContentDocument> result = contentIndexingService.search(keyword, pageable);
-        return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result)));
+        return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
+    }
+
+    @GetMapping("/search/suggestions")
+    public ResponseEntity<ApiResponse<List<String>>> getSuggestions(@RequestParam String keyword) {
+        List<String> suggestions = contentIndexingService.getSuggestions(keyword);
+        return ResponseEntity.ok(ApiResponse.success(suggestions));
     }
 }
