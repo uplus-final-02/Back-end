@@ -56,4 +56,11 @@ public class GlobalExceptionHandler {
             .status(HttpStatus.NOT_FOUND) // 404 상태 코드
             .body(new ApiResponse<>(404, e.getMessage(), null));
     }
+    
+    @ExceptionHandler(IllegalArgumentException.class) // 없는 Id 호출 시 발생하는 예외를 404 응답으로 변환
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, e.getMessage(), null));
+    }
 }
