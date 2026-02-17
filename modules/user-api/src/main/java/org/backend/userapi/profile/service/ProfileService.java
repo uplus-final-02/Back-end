@@ -26,16 +26,16 @@ public class ProfileService {
   private final SubscriptionsRepository subscriptionsRepository;
 
   public ProfileDto getMyProfile(Long userId) {
-    // 1. 유저 조회
+    // 유저 조회
     User user = userRepository.findById(userId)
         .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-    // 2. 이메일 조회 (AuthAccountRepository에 추가한 메서드 사용)
+    // 이메일 조회 (AuthAccountRepository에 추가한 메서드 사용)
     String email = authAccountRepository.findFirstByUserIdAndEmailIsNotNull(userId)
         .map(AuthAccount::getEmail)
         .orElse(null); // 이메일 없으면 null
 
-    // 3. 태그 목록 조회 (UserPreferredTagRepository에 추가한 메서드 사용)
+    // 태그 목록 조회 (UserPreferredTagRepository에 추가한 메서드 사용)
     List<UserPreferredTag> userTags = userPreferredTagRepository.findAllByUserIdWithTag(userId);
 
     List<ProfileDto.TagDto> tagDtos = userTags.stream()
@@ -45,14 +45,14 @@ public class ProfileService {
             .build())
         .collect(Collectors.toList());
 
-    // 4. 구독 상태 확인 ("SUBSCRIBED" / "NONE")
+    // 구독 상태 확인 ("SUBSCRIBED" / "NONE")
     boolean isSubscribed = subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE);
     String subStatus = isSubscribed ? "SUBSCRIBED" : "NONE";
 
-    // 5. 유플러스 인증 여부
+    // 유플러스 인증 여부
     boolean isUPlus = user.getUplusVerified() != null && user.getUplusVerified().isVerified();
 
-    // 6. DTO 변환
+    // DTO 변환
     return ProfileDto.builder()
         .userId(user.getId())
         .email(email)
