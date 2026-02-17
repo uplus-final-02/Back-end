@@ -43,6 +43,10 @@ public class User extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @PrimaryKeyJoinColumn
+    private UplusUserVerified uplusVerified;
+
     @Builder
     public User(String nickname, String profileImage, UserRole userRole, UserStatus userStatus) {
         this.nickname = nickname;
