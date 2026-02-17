@@ -27,5 +27,7 @@ public class PlayController {
 
     // 서비스 호출
     // return videoService.getPlayInfo(videoId, user);
+	  
+	  return null;
   }
 }

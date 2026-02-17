@@ -8,7 +8,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: vaildate
     properties:
       hibernate:
         format_sql: true
