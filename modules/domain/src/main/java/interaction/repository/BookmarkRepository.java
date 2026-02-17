@@ -22,4 +22,9 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
                                           Pageable pageable);
 
     int countByUserId(Long userId);
+
+    @Query("SELECT b FROM Bookmark b " +
+        "WHERE b.userId = :userId " +
+        "ORDER BY b.createdAt DESC")
+    List<Bookmark> findRecentBookmarks(@Param("userId") Long userId, Pageable pageable);
 }
