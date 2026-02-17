@@ -10,6 +10,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -56,6 +59,9 @@ public class Content extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
+
+    @OneToMany(mappedBy = "content", fetch = FetchType.LAZY)
+    private List<ContentTag> contentTags = new ArrayList<>();
 
     @Builder
     public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel) {

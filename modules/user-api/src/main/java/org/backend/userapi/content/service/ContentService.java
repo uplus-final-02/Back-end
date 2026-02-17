@@ -1,14 +1,20 @@
 package org.backend.userapi.content.service;
 
+import common.enums.UserRole;
 import content.entity.Content;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
+import content.repository.ContentTagRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import user.entity.User;
+import user.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -20,7 +26,10 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ContentService {
 
+    private final ContentRepository contentRepository;
+    private final ContentTagRepository contentTagRepository;
     private final WatchHistoryRepository watchHistoryRepository;
+    private final UserRepository userRepository;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
@@ -61,5 +70,54 @@ public class ContentService {
                        .lastWatchedAt(wh.getLastWatchedAt())
                        .build())
                  .collect(Collectors.toList());
+    }
+
+    // 기본 콘텐츠 리스트 조회
+    public List<DefaultContentResponse> getContents(String category) {
+        List<Content> contents;
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+
+        if ("ADMIN".equalsIgnoreCase(category)) {
+            List<Long> adminIds = userRepository.findIdsByUserRole(UserRole.ADMIN);
+            if (adminIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            contents = contentRepository.findByUploaderIdIn(adminIds, sort);
+        } else if ("USER".equalsIgnoreCase(category)) {
+            List<Long> userIds = userRepository.findIdsByUserRole(UserRole.USER);
+            if (userIds.isEmpty()) {
+                return Collections.emptyList();
+            }
+            contents = contentRepository.findByUploaderIdIn(userIds, sort);
+        } else {
+            contents = contentRepository.findAll(sort);
+        }
+
+        if (contents.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 1. uploaderId 목록 수집 (중복 제거 및 null 제외)
+        Set<Long> uploaderIds = contents.stream()
+                .map(Content::getUploaderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // 2. User 일괄 조회 (findAllById)
+        Map<Long, String> uploaderNicknameMap = new HashMap<>();
+        if (!uploaderIds.isEmpty()) {
+            List<User> uploaders = userRepository.findAllById(new ArrayList<>(uploaderIds));
+            for (User u : uploaders) {
+                uploaderNicknameMap.put(u.getId(), u.getNickname());
+            }
+        }
+
+        // 3. DTO 변환 (Map에서 닉네임 조회)
+        return contents.stream()
+                .map(content -> {
+                    String uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "관리자");
+                    return DefaultContentResponse.from(content, uploaderName);
+                })
+                .collect(Collectors.toList());
     }
 }
