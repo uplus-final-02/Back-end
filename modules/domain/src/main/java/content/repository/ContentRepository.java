@@ -11,5 +11,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     List<Content> findByUpdatedAtAfter(LocalDateTime updatedAt);
 
-    List<Content> findByUploaderIdIn(List<Long> uploaderIds, Sort sort);
+    // 관리자 업로드 (uploaderId IS NULL)
+    List<Content> findByUploaderIdIsNull(Sort sort);
+
+    // 일반 유저 업로드 (uploaderId IS NOT NULL)
+    List<Content> findByUploaderIdIsNotNull(Sort sort);
 }

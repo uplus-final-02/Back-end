@@ -1,6 +1,5 @@
 package org.backend.userapi.content.service;
 
-import common.enums.UserRole;
 import content.entity.Content;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
@@ -78,18 +77,13 @@ public class ContentService {
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
         if ("ADMIN".equalsIgnoreCase(category)) {
-            List<Long> adminIds = userRepository.findIdsByUserRole(UserRole.ADMIN);
-            if (adminIds.isEmpty()) {
-                return Collections.emptyList();
-            }
-            contents = contentRepository.findByUploaderIdIn(adminIds, sort);
+            // 관리자 업로드: uploaderId가 NULL인 것 조회
+            contents = contentRepository.findByUploaderIdIsNull(sort);
         } else if ("USER".equalsIgnoreCase(category)) {
-            List<Long> userIds = userRepository.findIdsByUserRole(UserRole.USER);
-            if (userIds.isEmpty()) {
-                return Collections.emptyList();
-            }
-            contents = contentRepository.findByUploaderIdIn(userIds, sort);
+            // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
+            contents = contentRepository.findByUploaderIdIsNotNull(sort);
         } else {
+            // 전체 조회
             contents = contentRepository.findAll(sort);
         }
 
@@ -115,7 +109,11 @@ public class ContentService {
         // 3. DTO 변환 (Map에서 닉네임 조회)
         return contents.stream()
                 .map(content -> {
-                    String uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "관리자");
+                    // uploaderId가 null이면 "관리자", 아니면 닉네임 조회
+                    String uploaderName = "관리자";
+                    if (content.getUploaderId() != null) {
+                        uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+                    }
                     return DefaultContentResponse.from(content, uploaderName);
                 })
                 .collect(Collectors.toList());

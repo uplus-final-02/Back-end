@@ -53,7 +53,8 @@ public class Content extends BaseTimeEntity {
     private Long bookmarkCount;
 
     // MSA나 느슨한 결합을 위해 객체(User) 대신 ID만 저장
-    @Column(name = "uploader_id", nullable = false)
+    // NULL 허용 -> NULL이면 관리자(시스템) 업로드
+    @Column(name = "uploader_id")
     private Long uploaderId;
 
     @Enumerated(EnumType.STRING)
