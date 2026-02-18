@@ -81,4 +81,11 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "알 수 없는 오류가 발생했습니다.", null));
     }
+
+    @ExceptionHandler(ContentNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleContentNotFound(ContentNotFoundException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, e.getMessage(), null));
+    }
 }

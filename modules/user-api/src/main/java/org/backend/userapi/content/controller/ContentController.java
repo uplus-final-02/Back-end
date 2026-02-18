@@ -3,12 +3,15 @@ package org.backend.userapi.content.controller;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.interaction.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.interaction.service.BookmarkService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,5 +38,10 @@ public class ContentController {
         @AuthenticationPrincipal UserPrincipal userPrincipal
     ) {
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(userPrincipal.getUserId()));
+    }
+
+    @GetMapping("/{contentId}")
+    public ResponseEntity<ContentDetailResponse> getContentDetail(@PathVariable Long contentId) {
+        return ResponseEntity.ok(contentService.getContentDetail(contentId));
     }
 }

@@ -5,6 +5,8 @@ import content.entity.WatchHistory;
 import content.repository.ContentRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import java.util.stream.Collectors;
 public class ContentService {
 
     private final WatchHistoryRepository watchHistoryRepository;
+    private final ContentRepository contentRepository;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
@@ -61,5 +64,31 @@ public class ContentService {
                        .lastWatchedAt(wh.getLastWatchedAt())
                        .build())
                  .collect(Collectors.toList());
+    }
+
+    public ContentDetailResponse getContentDetail(Long contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ContentNotFoundException(
+                        "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+                ));
+
+        return ContentDetailResponse.builder()
+                .contentId(content.getId())
+                .type(content.getType())
+                .title(content.getTitle())
+                .description(content.getDescription())
+                .thumbnailUrl(content.getThumbnailUrl())
+                .status(content.getStatus())
+                .totalViewCount(content.getTotalViewCount())
+                .bookmarkCount(content.getBookmarkCount())
+                .uploaderId(content.getUploaderId())
+                .accessLevel(content.getAccessLevel())
+                .createdAt(content.getCreatedAt())
+                .updatedAt(content.getUpdatedAt())
+                .tags(content.getTags().stream()
+                        .map(ContentDetailResponse.TagResponse::from)
+                        .toList()
+                )
+                .build();
     }
 }
