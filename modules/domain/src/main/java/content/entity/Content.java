@@ -1,6 +1,7 @@
 package content.entity;
 
 import common.entity.BaseTimeEntity;
+import common.entity.Tag; 
 import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
@@ -10,13 +11,14 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "contents",
-    indexes = {
-        @Index(name = "idx_contents_title", columnList = "title")
-    }
+    indexes = { @Index(name = "idx_contents_title", columnList = "title") }
 )
 public class Content extends BaseTimeEntity {
 
@@ -27,12 +29,11 @@ public class Content extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
-    private ContentType type; // SINGLE, SERIES
+    private ContentType type;
 
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
-    // JPA에서 JSON 컬럼은 기본적으로 String으로 매핑하고 DB의 기능을 이용함
     @Column(name = "description", columnDefinition = "json")
     private String description;
 
@@ -49,7 +50,6 @@ public class Content extends BaseTimeEntity {
     @Column(name = "bookmark_count", nullable = false)
     private Long bookmarkCount;
 
-    // MSA나 느슨한 결합을 위해 객체(User) 대신 ID만 저장
     @Column(name = "uploader_id", nullable = false)
     private Long uploaderId;
 
@@ -57,28 +57,30 @@ public class Content extends BaseTimeEntity {
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "content_tags",
+        joinColumns = @JoinColumn(name = "content_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private Set<Tag> tags = new HashSet<>();
+
     @Builder
-    public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel) {
+    public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel, Set<Tag> tags) {
         this.type = type;
         this.title = title;
         this.description = description;
         this.thumbnailUrl = thumbnailUrl;
         this.uploaderId = uploaderId;
-
-        // Default Values 처리
         this.status = status != null ? status : ContentStatus.ACTIVE;
         this.accessLevel = accessLevel != null ? accessLevel : ContentAccessLevel.FREE;
+        this.tags = tags != null ? tags : new HashSet<>();
         this.totalViewCount = 0L;
         this.bookmarkCount = 0L;
     }
 
-    // [비즈니스 메서드] 조회수 증가
-    public void incrementTotalViewCount() {
-        this.totalViewCount++;
-    }
-
-    // [비즈니스 메서드] 북마크 수 변경
-    public void updateBookmarkCount(long count) {
-        this.bookmarkCount = count;
-    }
+    public void incrementTotalViewCount() { this.totalViewCount++; }
+    public void updateBookmarkCount(long count) { this.bookmarkCount = count; }
+    
+    public Set<Tag> getTags() { return tags; }
 }

@@ -1,6 +1,9 @@
 package org.backend.userapi.search.controller;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
@@ -8,48 +11,86 @@ import org.backend.userapi.search.service.ContentIndexingService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.util.StringUtils; // 💡 null safe 유틸 사용
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import lombok.RequiredArgsConstructor;
+
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/contents")
+@RequestMapping("/api")
 public class ContentSearchController {
 
     private final ContentIndexingService contentIndexingService;
 
+    // TODO: 운영 환경에서는 관리자 권한 체크 또는 내부망 접근 제한 필요
     @PostMapping("/index/rebuild")
     public ResponseEntity<ApiResponse<Void>> rebuildIndex() {
         contentIndexingService.indexAllContents();
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @PostMapping("/index/{contentId}")
-    public ResponseEntity<ApiResponse<Void>> indexOne(@PathVariable Long contentId) {
-        contentIndexingService.indexContent(contentId);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @DeleteMapping("/index/{contentId}")
-    public ResponseEntity<ApiResponse<Void>> deleteOne(@PathVariable Long contentId) {
-        contentIndexingService.deleteContent(contentId);
-        return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<ContentSearchResponse>> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "RELATED") String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "15") int size
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        // 1. [Fix] NPE 방지 및 공백 체크 (StringUtils 사용 권장)
+        if (!StringUtils.hasText(keyword)) {
+            throw new IllegalArgumentException("검색어를 입력해주세요.");
+        }
+
+        // 2. [Fix] 페이지 사이즈 상한 적용 및 음수 방어
+        if (page < 0) throw new IllegalArgumentException("page는 0 이상이어야 합니다.");
+        if (size <= 0) throw new IllegalArgumentException("size는 1 이상이어야 합니다.");
+        
+        int safeSize = Math.min(size, 50);
+
+        // 3. [Fix] 불필요한 try-catch 제거 및 간결한 switch문
+        Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
+            case "LATEST" -> Sort.by(
+                Sort.Order.desc("createdAt"), 
+                Sort.Order.desc("contentId") // Tie-breaker
+            );
+            case "POPULAR" -> Sort.by(
+                Sort.Order.desc("totalViewCount"), 
+                Sort.Order.desc("createdAt"), 
+                Sort.Order.desc("contentId") 
+            );
+            case "RELATED" -> Sort.unsorted(); // ES 점수(_score) 기준 정렬
+            default -> throw new IllegalArgumentException("지원하지 않는 정렬 방식입니다: " + sort);
+        };
+
+        // 4. [Fix] safeSize 변수 적용 (기존 코드 버그 수정)
+        Pageable pageable = PageRequest.of(page, safeSize, sortObj);
+        
         Page<ContentDocument> result = contentIndexingService.search(keyword, pageable);
-        return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result)));
+        
+        // keyword를 넘겨주어 matchType(TITLE, TAG 등) 판별
+        return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
+    }
+
+    @GetMapping("/search/suggestions")
+    public ResponseEntity<ApiResponse<List<String>>> getSuggestions(@RequestParam String keyword) {
+        // 자동완성에서도 공백 입력 방어 필요
+        if (!StringUtils.hasText(keyword)) {
+             return ResponseEntity.ok(ApiResponse.success(List.of())); // 빈 리스트 반환이 UX상 자연스러움
+        }
+        List<String> suggestions = contentIndexingService.getSuggestions(keyword);
+        return ResponseEntity.ok(ApiResponse.success(suggestions));
+    }
+    
+    @GetMapping("/index/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getIndexingStatus() {
+        Map<String, Object> status = contentIndexingService.getIndexingStatus();
+        return ResponseEntity.ok(ApiResponse.success(status));
     }
 }
