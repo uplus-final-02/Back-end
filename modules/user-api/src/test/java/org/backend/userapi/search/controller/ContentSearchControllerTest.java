@@ -133,4 +133,22 @@ class ContentSearchControllerTest {
                 .andExpect(jsonPath("$.data[0]").value("스프링"))
                 .andExpect(jsonPath("$.data[1]").value("스프링부트"));
     }
+    
+    @Test
+    @DisplayName("인덱싱 상태 조회 요청 시 현재 상태 정보를 반환한다")
+    void getIndexingStatus_returnsOk() throws Exception {
+        // given
+        java.util.Map<String, Object> statusMap = java.util.Map.of(
+            "status", "IDLE",
+            "lastRunTime", "2024-02-18T10:00:00"
+        );
+        
+        when(contentIndexingService.getIndexingStatus()).thenReturn(statusMap);
+
+        // when & then
+        mockMvc.perform(get("/api/index/status")) // 🚨 새로 만든 API 경로 호출
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.status").value("IDLE")); // 서비스가 준 값이 잘 나오는지 확인
+    }
 }

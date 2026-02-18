@@ -46,7 +46,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private LocalDateTime lastRunTime = null;
 
     @Override
-    @Async
+    @Async("indexingExecutor")
     @Transactional(readOnly = true)
     public void indexAllContents() {
         if (isIndexing.getAndSet(true)) {
@@ -81,6 +81,10 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
     @Override
     public Page<ContentDocument> search(String keyword, Pageable pageable) {
+    	
+    	if (!StringUtils.hasText(keyword)) {
+            return Page.empty(pageable);
+        }
 
         HighlightParameters highlightParameters = HighlightParameters.builder()
                 .withPreTags("<em>")

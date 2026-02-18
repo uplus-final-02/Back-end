@@ -2,6 +2,7 @@ package org.backend.userapi.search.controller;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.search.document.ContentDocument;
@@ -85,5 +86,11 @@ public class ContentSearchController {
         }
         List<String> suggestions = contentIndexingService.getSuggestions(keyword);
         return ResponseEntity.ok(ApiResponse.success(suggestions));
+    }
+    
+    @GetMapping("/index/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getIndexingStatus() {
+        Map<String, Object> status = contentIndexingService.getIndexingStatus();
+        return ResponseEntity.ok(ApiResponse.success(status));
     }
 }
