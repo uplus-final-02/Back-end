@@ -1,24 +1,32 @@
 package org.backend.userapi.search.service;
 
-import java.util.List;
-
+import common.entity.Tag;
+import content.entity.Content;
+import content.repository.ContentRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.repository.ContentSearchRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.query.HighlightQuery;
+import org.springframework.data.elasticsearch.core.query.highlight.Highlight;
+import org.springframework.data.elasticsearch.core.query.highlight.HighlightField;
+import org.springframework.data.elasticsearch.core.query.highlight.HighlightParameters;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
-import common.entity.Tag;
-import content.entity.Content;
-import content.repository.ContentRepository;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContentIndexingServiceImpl implements ContentIndexingService {
@@ -27,12 +35,74 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private final ContentSearchRepository contentSearchRepository;
     private final ElasticsearchOperations elasticsearchOperations;
 
+    private final AtomicBoolean isIndexing = new AtomicBoolean(false);
+
     @Override
+    public Page<ContentDocument> search(String keyword, Pageable pageable) {
+        if (!StringUtils.hasText(keyword)) {
+            return new PageImpl<>(List.of(), pageable, 0);
+        }
+
+    
+        HighlightParameters highlightParameters = HighlightParameters.builder()
+                .withPreTags("<em>")
+                .withPostTags("</em>")
+                .build();
+
+        HighlightField titleField = new HighlightField("title");
+        HighlightField descField = new HighlightField("description");
+
+        Highlight highlight = new Highlight(highlightParameters, List.of(titleField, descField));
+        
+        NativeQuery query = NativeQuery.builder()
+                .withQuery(q -> q.multiMatch(m -> m
+                        .fields("title^3", "tags^2", "description")
+                        .query(keyword)))
+                .withPageable(pageable) 
+                .withHighlightQuery(new HighlightQuery(highlight, null))
+                .build();
+
+        SearchHits<ContentDocument> searchHits = elasticsearchOperations.search(query, ContentDocument.class);
+
+        List<ContentDocument> contents = searchHits.stream()
+                .map(hit -> {
+                    ContentDocument doc = hit.getContent();
+                    
+                    List<String> titleHighlight = hit.getHighlightField("title");
+                    if (!titleHighlight.isEmpty()) {
+                        doc.setHighlightTitle(titleHighlight.get(0));
+                    }
+                    
+                    List<String> descHighlight = hit.getHighlightField("description");
+                    if (!descHighlight.isEmpty()) {
+                        doc.setHighlightDescription(descHighlight.get(0));
+                    }
+                    return doc;
+                })
+                .toList();
+
+        return new PageImpl<>(contents, pageable, searchHits.getTotalHits());
+    }
+
+    @Override
+    @Async
     @Transactional(readOnly = true)
     public void indexAllContents() {
-        List<Content> contents = contentRepository.findAll();
-        List<ContentDocument> documents = contents.stream().map(this::toDocument).toList();
-        contentSearchRepository.saveAll(documents);
+        if (isIndexing.getAndSet(true)) {
+            log.warn("⚠️ 이미 인덱싱 작업이 진행 중입니다.");
+            return;
+        }
+        try {
+            log.info("🚀 전체 콘텐츠 인덱싱 시작...");
+            List<Content> contents = contentRepository.findAll();
+            List<ContentDocument> documents = contents.stream().map(this::toDocument).toList();
+            contentSearchRepository.saveAll(documents);
+            log.info("✅ 완료 (총 {}건)", documents.size());
+        } catch (Exception e) {
+            log.error("❌ 오류 발생", e);
+        } finally {
+            isIndexing.set(false);
+        }
     }
 
     @Override
@@ -49,42 +119,24 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     @Override
-    public Page<ContentDocument> search(String keyword, Pageable pageable) {
-        if (keyword == null || keyword.isBlank()) {
-            return contentSearchRepository.findAll(pageable);
-        }
-
-        // 🚨 NativeQuery: 제목^3, 태그^2 가중치 적용
-        NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.multiMatch(m -> m
-                        .fields("title^3", "tags^2", "description")
-                        .query(keyword)))
-                .withPageable(pageable)
-                .withSort(convertSort(pageable.getSort()))
-                .build();
-
-        SearchHits<ContentDocument> hits = elasticsearchOperations.search(query, ContentDocument.class);
-        List<ContentDocument> contents = hits.stream().map(h -> h.getContent()).toList();
-
-        return new PageImpl<>(contents, pageable, hits.getTotalHits());
-    }
-
-    @Override
     public List<String> getSuggestions(String keyword) {
-        // 자동완성: 제목 접두사 매칭
+        if (!StringUtils.hasText(keyword)) return List.of();
+
         NativeQuery query = NativeQuery.builder()
                 .withQuery(q -> q.matchPhrasePrefix(m -> m.field("title").query(keyword)))
                 .withPageable(Pageable.ofSize(10))
                 .build();
+
         return elasticsearchOperations.search(query, ContentDocument.class)
-                .stream().map(h -> h.getContent().getTitle()).distinct().toList();
+                .stream()
+                .map(h -> h.getContent().getTitle())
+                .distinct()
+                .toList();
     }
 
     @Override
-    public long countIndexedContents() { return contentSearchRepository.count(); }
-
-    private Sort convertSort(Sort sort) {
-        return sort.isUnsorted() ? Sort.unsorted() : sort;
+    public long countIndexedContents() {
+        return contentSearchRepository.count();
     }
 
     private ContentDocument toDocument(Content content) {

@@ -1,34 +1,51 @@
 package org.backend.userapi.search.dto;
 
 import org.backend.userapi.search.document.ContentDocument;
+import org.springframework.util.StringUtils;
+
+import java.util.Arrays;
 import java.util.List;
 
 public record ContentSearchItem(
         Long contentId,
-        String title,
+        String title,            
+        String highlightTitle,   
+        String highlightDescription, 
         String thumbnailUrl,
-        String matchType, // TITLE, TAG, DESCRIPTION
+        String matchType,        
         List<String> tags
 ) {
     public static ContentSearchItem from(ContentDocument doc, String keyword) {
         return new ContentSearchItem(
                 doc.getContentId(),
                 doc.getTitle(),
+                doc.getHighlightTitle(),
+                doc.getHighlightDescription(),
                 doc.getThumbnailUrl(),
-                determineMatchType(doc, keyword), // 판별 로직 실행
+                determineMatchType(doc, keyword), 
                 doc.getTags()
         );
     }
 
     private static String determineMatchType(ContentDocument doc, String keyword) {
-        if (keyword == null || keyword.isBlank()) return "NONE";
-        String k = keyword.toLowerCase().trim();
-        
-        // 1순위: 제목 포함
-        if (doc.getTitle().toLowerCase().contains(k)) return "TITLE";
-        // 2순위: 태그 포함
-        if (doc.getTags() != null && doc.getTags().stream().anyMatch(t -> t.toLowerCase().contains(k))) return "TAG";
-        // 3순위: 설명 포함
-        return "DESCRIPTION";
+        if (StringUtils.hasText(doc.getHighlightTitle())) {
+            return "TITLE";
+        }
+
+        if (StringUtils.hasText(doc.getHighlightDescription())) {
+            return "DESCRIPTION";
+        }
+
+        if (doc.getTags() != null && StringUtils.hasText(keyword)) {
+            String[] tokens = keyword.toLowerCase().trim().split("\\s+"); 
+            
+            boolean tagMatch = doc.getTags().stream()
+                    .filter(StringUtils::hasText)
+                    .map(String::toLowerCase)
+                    .anyMatch(tag -> Arrays.stream(tokens).anyMatch(tag::contains)); 
+            if (tagMatch) return "TAG";
+        }
+
+        return "UNKNOWN"; 
     }
 }

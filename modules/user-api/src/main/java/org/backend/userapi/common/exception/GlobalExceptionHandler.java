@@ -57,10 +57,28 @@ public class GlobalExceptionHandler {
             .body(new ApiResponse<>(404, e.getMessage(), null));
     }
     
-    @ExceptionHandler(IllegalArgumentException.class) // 없는 Id 호출 시 발생하는 예외를 404 응답으로 변환
+    @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, e.getMessage(), null));
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage(), null));
+    }
+    
+    
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException e) {
+        // 보안상 e.getMessage()는 로그로만 남기고 클라이언트엔 숨기는 게 정석이나,
+        // 개발 단계에서는 원인 파악을 위해 노출 (운영 시엔 "서버 내부 오류"로 고정 추천)
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "서버 내부 오류가 발생했습니다: " + e.getMessage(), null));
+    }
+    
+    // (옵션) 최상위 Exception까지 잡고 싶다면 추가
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "알 수 없는 오류가 발생했습니다.", null));
     }
 }
