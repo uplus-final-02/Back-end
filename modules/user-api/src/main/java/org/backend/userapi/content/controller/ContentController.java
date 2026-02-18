@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;
+import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.interaction.dto.response.RecentBookmarkResponse;
@@ -43,5 +44,10 @@ public class ContentController {
     @GetMapping("/{contentId}")
     public ResponseEntity<ContentDetailResponse> getContentDetail(@PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentDetail(contentId));
+    }
+
+    @GetMapping("/{contentId}/episodes")
+    public ResponseEntity<EpisodesResponse> getContentEpisodes(@PathVariable Long contentId) {
+        return ResponseEntity.ok(contentService.getContentEpisodes(contentId));
     }
 }
