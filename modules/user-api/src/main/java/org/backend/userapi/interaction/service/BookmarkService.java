@@ -1,11 +1,13 @@
 package org.backend.userapi.interaction.service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse.BookmarkItemResponse;
+import org.backend.userapi.interaction.dto.response.RecentBookmarkResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,5 +97,50 @@ public class BookmarkService {
         String nextCursor = hasNext ? String.valueOf(bookmarks.get(bookmarks.size() - 1).getId()) : null;
 
         return new BookmarkListResponse(items, nextCursor, hasNext, bookmarkRepository.countByUserId(userId));
+    }
+
+    /**
+     * AE2-61: 홈 화면 - 최근 찜한 콘텐츠 목록 api
+     * 최근 북마크한 5개만 가져옴
+     */
+    public List<RecentBookmarkResponse> getRecentBookmarkList(Long userId) {
+        // 1. 최근 북마크 5개 조회 (Content 정보 없음, ID만 있음)
+        List<Bookmark> bookmarks = bookmarkRepository.findRecentBookmarks(
+            userId,
+            PageRequest.of(0, 5)
+        );
+
+        if (bookmarks.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 조회된 북마크에서 contentId 리스트 추출
+        List<Long> contentIds = bookmarks.stream()
+                                         .map(Bookmark::getContentId)
+                                         .collect(Collectors.toList());
+
+        // 3. contentId들로 Content 정보 한 번에 조회 (IN 쿼리 발생)
+        //    -> Map<ContentId, Content> 형태로 변환하여 매칭 속도 높임 (O(1))
+        Map<Long, Content> contentMap = contentRepository.findAllById(contentIds).stream()
+                                                         .collect(Collectors.toMap(Content::getId, content -> content));
+
+        // 4. Bookmark + Content 정보 조립하여 DTO 변환
+        return bookmarks.stream()
+                        .map(bookmark -> {
+                            Content content = contentMap.get(bookmark.getContentId());
+
+                            // 만약 Content가 삭제되었을 경우 대비 (null check)
+                            String title = (content != null) ? content.getTitle() : "삭제된 콘텐츠";
+                            String thumbnailUrl = (content != null) ? content.getThumbnailUrl() : "";
+
+                            return RecentBookmarkResponse.builder()
+                                                         .bookmarkId(bookmark.getId())
+                                                         .contentId(bookmark.getContentId())
+                                                         .title(title)
+                                                         .thumbnailUrl(thumbnailUrl)
+                                                         .bookmarkedAt(bookmark.getCreatedAt())
+                                                         .build();
+                        })
+                        .collect(Collectors.toList());
     }
 }
