@@ -57,8 +57,7 @@ public class Content extends BaseTimeEntity {
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
 
-    // 🚨 핵심: DB의 content_tags 테이블과 매핑
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "content_tags",
         joinColumns = @JoinColumn(name = "content_id"),

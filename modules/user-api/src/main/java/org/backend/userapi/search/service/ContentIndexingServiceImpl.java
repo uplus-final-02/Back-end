@@ -23,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
@@ -36,14 +39,49 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private final ElasticsearchOperations elasticsearchOperations;
 
     private final AtomicBoolean isIndexing = new AtomicBoolean(false);
+    
+    // 🚨 [추가] 작업 상태 모니터링용 필드
+    private String lastIndexingStatus = "IDLE"; 
+    private String lastErrorMessage = null;
+    private LocalDateTime lastRunTime = null;
+
+    @Override
+    @Async
+    @Transactional(readOnly = true)
+    public void indexAllContents() {
+        if (isIndexing.getAndSet(true)) {
+            log.warn("⚠️ 이미 인덱싱 작업이 진행 중입니다.");
+            return;
+        }
+
+        try {
+            log.info("🚀 전체 콘텐츠 인덱싱 시작...");
+            lastIndexingStatus = "RUNNING";
+            lastRunTime = LocalDateTime.now();
+            lastErrorMessage = null;
+
+            List<Content> contents = contentRepository.findAllWithTags();
+            
+            List<ContentDocument> documents = contents.stream().map(this::toDocument).toList();
+            contentSearchRepository.saveAll(documents);
+            
+            log.info("✅ 전체 콘텐츠 인덱싱 완료 (총 {}건)", documents.size());
+            lastIndexingStatus = "SUCCESS";
+
+        } catch (Exception e) {
+            log.error("❌ 인덱싱 중 치명적 오류 발생", e);
+            lastIndexingStatus = "FAILED";
+            lastErrorMessage = e.getMessage();
+            
+            throw new RuntimeException("인덱싱 작업 실패", e); 
+        } finally {
+            isIndexing.set(false);
+        }
+    }
 
     @Override
     public Page<ContentDocument> search(String keyword, Pageable pageable) {
-        if (!StringUtils.hasText(keyword)) {
-            return new PageImpl<>(List.of(), pageable, 0);
-        }
 
-    
         HighlightParameters highlightParameters = HighlightParameters.builder()
                 .withPreTags("<em>")
                 .withPostTags("</em>")
@@ -58,7 +96,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .withQuery(q -> q.multiMatch(m -> m
                         .fields("title^3", "tags^2", "description")
                         .query(keyword)))
-                .withPageable(pageable) 
+                .withPageable(pageable)
                 .withHighlightQuery(new HighlightQuery(highlight, null))
                 .build();
 
@@ -67,16 +105,11 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         List<ContentDocument> contents = searchHits.stream()
                 .map(hit -> {
                     ContentDocument doc = hit.getContent();
-                    
                     List<String> titleHighlight = hit.getHighlightField("title");
-                    if (!titleHighlight.isEmpty()) {
-                        doc.setHighlightTitle(titleHighlight.get(0));
-                    }
+                    if (!titleHighlight.isEmpty()) doc.setHighlightTitle(titleHighlight.get(0));
                     
                     List<String> descHighlight = hit.getHighlightField("description");
-                    if (!descHighlight.isEmpty()) {
-                        doc.setHighlightDescription(descHighlight.get(0));
-                    }
+                    if (!descHighlight.isEmpty()) doc.setHighlightDescription(descHighlight.get(0));
                     return doc;
                 })
                 .toList();
@@ -85,26 +118,16 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     @Override
-    @Async
-    @Transactional(readOnly = true)
-    public void indexAllContents() {
-        if (isIndexing.getAndSet(true)) {
-            log.warn("⚠️ 이미 인덱싱 작업이 진행 중입니다.");
-            return;
+    public Map<String, Object> getIndexingStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("status", lastIndexingStatus);
+        status.put("lastRunTime", lastRunTime);
+        if (lastErrorMessage != null) {
+            status.put("error", lastErrorMessage);
         }
-        try {
-            log.info("🚀 전체 콘텐츠 인덱싱 시작...");
-            List<Content> contents = contentRepository.findAll();
-            List<ContentDocument> documents = contents.stream().map(this::toDocument).toList();
-            contentSearchRepository.saveAll(documents);
-            log.info("✅ 완료 (총 {}건)", documents.size());
-        } catch (Exception e) {
-            log.error("❌ 오류 발생", e);
-        } finally {
-            isIndexing.set(false);
-        }
+        return status;
     }
-
+    
     @Override
     @Transactional(readOnly = true)
     public void indexContent(Long contentId) {
