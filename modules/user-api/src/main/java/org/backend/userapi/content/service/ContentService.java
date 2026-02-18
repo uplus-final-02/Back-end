@@ -1,12 +1,19 @@
 package org.backend.userapi.content.service;
 
+import common.enums.ContentType;
 import content.entity.Content;
+import content.entity.Video;
+import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
 import content.repository.WatchHistoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.content.dto.ContentDetailResponse;
+import org.backend.userapi.content.dto.EpisodeResponse;
+import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -24,6 +31,9 @@ public class ContentService {
 
     private final WatchHistoryRepository watchHistoryRepository;
     private final ContentRepository contentRepository;
+
+    @PersistenceContext
+    private EntityManager em;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
@@ -90,5 +100,50 @@ public class ContentService {
                         .toList()
                 )
                 .build();
+    }
+
+    public EpisodesResponse getContentEpisodes(Long contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ContentNotFoundException(
+                        "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+                ));
+
+        if (content.getType() != ContentType.SERIES) {
+            throw new IllegalArgumentException(
+                    "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId
+            );
+        }
+
+        List<Object[]> rows = em.createQuery("""
+                select v, vf
+                from Video v
+                left join v.videoFile vf
+                where v.content.id = :contentId
+                order by v.episodeNo asc
+            """, Object[].class)
+                .setParameter("contentId", contentId)
+                .getResultList();
+
+        List<EpisodeResponse> episodes = rows.stream()
+                .map(row -> {
+                    Video v = (Video) row[0];
+                    VideoFile vf = (VideoFile) row[1];
+
+                    Integer durationSec = (vf != null) ? vf.getDurationSec() : null;
+
+                    return EpisodeResponse.builder()
+                            .videoId(v.getId())
+                            .episodeNo(v.getEpisodeNo())
+                            .title(v.getTitle())
+                            .description(v.getDescription())
+                            .thumbnailUrl(v.getThumbnailUrl())
+                            .viewCount(v.getViewCount())
+                            .status(v.getStatus())
+                            .durationSec(durationSec)
+                            .build();
+                })
+                .toList();
+
+        return EpisodesResponse.of(contentId, episodes);
     }
 }
