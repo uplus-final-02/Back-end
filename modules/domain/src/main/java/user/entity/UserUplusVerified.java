@@ -14,13 +14,13 @@ import java.time.LocalDateTime;
 public class UserUplusVerified extends BaseTimeEntity {
 
   @Id
-  @Column(name = "user_id")
+  @Column(name = "user_id", nullable = false)
   private Long userId;
 
-  @Column(name = "phone_number", length = 20)
+  @Column(name = "phone_number", nullable = false, length = 20)
   private String phoneNumber;
 
-  @Column(name = "is_verified")
+  @Column(name = "is_verified", nullable = false)
   private boolean isVerified;
 
   @Column(name = "verified_at")
