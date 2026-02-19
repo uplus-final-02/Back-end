@@ -1,10 +1,11 @@
-package org.backend.userapi.tag.controller;
+package org.backend.userapi.user.tag.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.backend.userapi.auth.dto.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
-import org.backend.userapi.tag.dto.request.PreferredTagUpdateRequest;
-import org.backend.userapi.tag.service.UserTagPreferenceService;
+import org.backend.userapi.user.controller.TagController;
+import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
+import org.backend.userapi.user.service.UserTagPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
