@@ -3,7 +3,7 @@ package org.backend.userapi.user.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.backend.userapi.common.dto.ApiResponse;
-import org.backend.userapi.user.dto.NicknameUpdateDto;
+import org.backend.userapi.user.dto.response.NicknameUpdateResponse;
 import org.backend.userapi.user.service.UserService;
 
 @RestController
@@ -15,7 +15,7 @@ public class UserController {
 
   // PATCH /api/users/nickname?userId=1&nickname=새닉네임
   @PatchMapping("/nickname")
-  public ApiResponse<NicknameUpdateDto> updateNickname(
+  public ApiResponse<NicknameUpdateResponse> updateNickname(
       // TODO: 실제 배포 시 @AuthenticationPrincipal 사용
       @RequestParam(name = "userId", defaultValue = "1") Long userId,
       @RequestParam(name = "nickname") String nickname
@@ -26,7 +26,7 @@ public class UserController {
     }
 
     // 서비스 호출 및 응답 반환
-    NicknameUpdateDto response = userService.updateNickname(userId, nickname);
+    NicknameUpdateResponse response = userService.updateNickname(userId, nickname);
 
     return ApiResponse.success(response);
   }

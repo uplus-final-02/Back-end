@@ -1,8 +1,8 @@
 package org.backend.userapi.profile; // ★ 이 부분이 폴더 경로와 일치해야 합니다.
 
 import common.enums.UserStatus;
-import org.backend.userapi.profile.dto.ProfileDto;
-import org.backend.userapi.profile.service.ProfileService;
+import org.backend.userapi.user.dto.response.ProfileResponse;
+import org.backend.userapi.user.service.ProfileService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,7 +57,7 @@ class ProfileServiceTest {
     given(subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE)).willReturn(true);
 
     // 2. When (서비스 실행)
-    ProfileDto result = profileService.getMyProfile(userId);
+    ProfileResponse result = profileService.getMyProfile(userId);
 
     // 3. Then (검증)
     assertThat(result.getNickname()).isEqualTo("테스트유저");

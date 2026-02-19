@@ -1,7 +1,7 @@
 package org.backend.userapi.user.service;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.user.dto.NicknameUpdateDto;
+import org.backend.userapi.user.dto.response.NicknameUpdateResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
@@ -19,7 +19,7 @@ public class UserService {
   // 변경 주기 (30일)
   private static final int CHANGE_LIMIT_DAYS = 30;
 
-  public NicknameUpdateDto updateNickname(Long userId, String newNickname) {
+  public NicknameUpdateResponse updateNickname(Long userId, String newNickname) {
     User user = userRepository.findById(userId)
         .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
@@ -42,7 +42,7 @@ public class UserService {
     user.updateNickname(newNickname);
 
     // 응답 반환
-    return NicknameUpdateDto.builder()
+    return NicknameUpdateResponse.builder()
         .nickname(newNickname)
         .nextChangeAvailableAt(LocalDateTime.now().plusDays(CHANGE_LIMIT_DAYS))
         .build();

@@ -1,10 +1,10 @@
-package org.backend.userapi.profile.service;
+package org.backend.userapi.user.service;
 
 import common.enums.UserStatus;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.profile.dto.ProfileDto;
+import org.backend.userapi.user.dto.response.ProfileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.AuthAccount;
@@ -25,7 +25,7 @@ public class ProfileService {
   private final UserPreferredTagRepository userPreferredTagRepository;
   private final SubscriptionsRepository subscriptionsRepository;
 
-  public ProfileDto getMyProfile(Long userId) {
+  public ProfileResponse getMyProfile(Long userId) {
     // 유저 조회
     User user = userRepository.findById(userId)
         .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
@@ -38,8 +38,8 @@ public class ProfileService {
     // 태그 목록 조회 (UserPreferredTagRepository에 추가한 메서드 사용)
     List<UserPreferredTag> userTags = userPreferredTagRepository.findAllByUserIdWithTag(userId);
 
-    List<ProfileDto.TagDto> tagDtos = userTags.stream()
-        .map(upt -> ProfileDto.TagDto.builder()
+    List<ProfileResponse.TagDto> tagDtos = userTags.stream()
+        .map(upt -> ProfileResponse.TagDto.builder()
             .tagId(upt.getTag().getId())
             .name(upt.getTag().getName())
             .build())
@@ -53,7 +53,7 @@ public class ProfileService {
     boolean isUPlus = user.getUplusVerified() != null && user.getUplusVerified().isVerified();
 
     // DTO 변환
-    return ProfileDto.builder()
+    return ProfileResponse.builder()
         .userId(user.getId())
         .email(email)
         .nickname(user.getNickname())
