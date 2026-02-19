@@ -2,8 +2,8 @@ package org.backend.userapi.search.document;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient; 
 import org.springframework.data.elasticsearch.annotations.*;
-import org.springframework.data.annotation.Transient; // 💡 Import 추가 필수!
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -53,7 +53,6 @@ public class ContentDocument {
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime updatedAt;
 
-    // 🚨 [수정] ES 저장소 제외 (응답 DTO용)
     @Transient 
     private String highlightTitle;
 

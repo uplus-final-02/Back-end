@@ -6,19 +6,24 @@ import content.entity.Video;
 import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
+import content.repository.ContentTagRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.EpisodeResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import user.entity.User;
+import user.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -30,8 +35,10 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ContentService {
 
-    private final WatchHistoryRepository watchHistoryRepository;
     private final ContentRepository contentRepository;
+    private final ContentTagRepository contentTagRepository;
+    private final WatchHistoryRepository watchHistoryRepository;
+    private final UserRepository userRepository;
     private final VideoRepository videoRepository;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
@@ -75,6 +82,54 @@ public class ContentService {
                  .collect(Collectors.toList());
     }
 
+    // 기본 콘텐츠 리스트 조회
+    public List<DefaultContentResponse> getContents(String category) {
+        List<Content> contents;
+        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+
+        if ("ADMIN".equalsIgnoreCase(category)) {
+            // 관리자 업로드: uploaderId가 NULL인 것 조회
+            contents = contentRepository.findByUploaderIdIsNull(sort);
+        } else if ("USER".equalsIgnoreCase(category)) {
+            // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
+            contents = contentRepository.findByUploaderIdIsNotNull(sort);
+        } else {
+            // 전체 조회
+            contents = contentRepository.findAll(sort);
+        }
+
+        if (contents.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 1. uploaderId 목록 수집 (중복 제거 및 null 제외)
+        Set<Long> uploaderIds = contents.stream()
+                .map(Content::getUploaderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // 2. User 일괄 조회 (findAllById)
+        Map<Long, String> uploaderNicknameMap = new HashMap<>();
+        if (!uploaderIds.isEmpty()) {
+            List<User> uploaders = userRepository.findAllById(new ArrayList<>(uploaderIds));
+            for (User u : uploaders) {
+                uploaderNicknameMap.put(u.getId(), u.getNickname());
+            }
+        }
+
+        // 3. DTO 변환 (Map에서 닉네임 조회)
+        return contents.stream()
+                .map(content -> {
+                    // uploaderId가 null이면 "관리자", 아니면 닉네임 조회
+                    String uploaderName = "관리자";
+                    if (content.getUploaderId() != null) {
+                        uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+                    }
+                    return DefaultContentResponse.from(content, uploaderName);
+                })
+                .collect(Collectors.toList());
+    }
+  
     public ContentDetailResponse getContentDetail(Long contentId) {
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new ContentNotFoundException(

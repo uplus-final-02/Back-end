@@ -14,9 +14,9 @@ public interface UserPreferredTagRepository extends JpaRepository<UserPreferredT
 
     List<UserPreferredTag> findAllByUserId(Long userId);
 
-    @Modifying
-    @Transactional
-    void deleteByUserId(Long userId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM UserPreferredTag upt WHERE upt.user.id = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
 
     @Query("SELECT upt FROM UserPreferredTag upt JOIN FETCH upt.tag WHERE upt.user.id = :userId")
     List<UserPreferredTag> findAllByUserIdWithTag(@Param("userId") Long userId);

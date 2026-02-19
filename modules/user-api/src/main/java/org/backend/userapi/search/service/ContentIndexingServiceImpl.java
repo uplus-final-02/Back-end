@@ -2,6 +2,7 @@ package org.backend.userapi.search.service;
 
 import common.entity.Tag;
 import content.entity.Content;
+import content.entity.ContentTag; 
 import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -40,7 +43,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
     private final AtomicBoolean isIndexing = new AtomicBoolean(false);
     
-    // 🚨 [추가] 작업 상태 모니터링용 필드
     private String lastIndexingStatus = "IDLE"; 
     private String lastErrorMessage = null;
     private LocalDateTime lastRunTime = null;
@@ -62,7 +64,10 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
             List<Content> contents = contentRepository.findAllWithTags();
             
-            List<ContentDocument> documents = contents.stream().map(this::toDocument).toList();
+            List<ContentDocument> documents = contents.stream()
+                    .map(this::toDocument)
+                    .toList();
+
             contentSearchRepository.saveAll(documents);
             
             log.info("✅ 전체 콘텐츠 인덱싱 완료 (총 {}건)", documents.size());
@@ -72,7 +77,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             log.error("❌ 인덱싱 중 치명적 오류 발생", e);
             lastIndexingStatus = "FAILED";
             lastErrorMessage = e.getMessage();
-            
             throw new RuntimeException("인덱싱 작업 실패", e); 
         } finally {
             isIndexing.set(false);
@@ -81,8 +85,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
     @Override
     public Page<ContentDocument> search(String keyword, Pageable pageable) {
-    	
-    	if (!StringUtils.hasText(keyword)) {
+        if (!StringUtils.hasText(keyword)) {
             return Page.empty(pageable);
         }
 
@@ -167,11 +170,15 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     private ContentDocument toDocument(Content content) {
+        List<String> tagNames = content.getContentTags().stream()
+                .map(ct -> ct.getTag().getName())
+                .collect(Collectors.toList());
+
         return ContentDocument.builder()
                 .contentId(content.getId())
                 .title(content.getTitle())
                 .description(content.getDescription())
-                .tags(content.getTags().stream().map(Tag::getName).toList())
+                .tags(tagNames) // 수정된 태그 리스트 주입
                 .type(content.getType().name())
                 .status(content.getStatus().name())
                 .accessLevel(content.getAccessLevel().name())
