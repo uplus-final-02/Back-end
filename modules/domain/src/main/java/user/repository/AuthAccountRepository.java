@@ -13,4 +13,6 @@ public interface AuthAccountRepository extends JpaRepository<AuthAccount, Long> 
     Optional<AuthAccount> findByAuthProviderAndAuthProviderSubject(AuthProvider authProvider, String authProviderSubject);
 
     Optional<AuthAccount> findByAuthProviderAndEmail(AuthProvider authProvider, String email);
+
+    Optional<AuthAccount> findFirstByUserIdAndEmailIsNotNull(Long userId);
 }
