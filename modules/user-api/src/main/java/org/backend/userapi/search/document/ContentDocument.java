@@ -1,19 +1,15 @@
 package org.backend.userapi.search.document;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.elasticsearch.annotations.DateFormat;
-import org.springframework.data.elasticsearch.annotations.Document;
-import org.springframework.data.elasticsearch.annotations.Field;
-import org.springframework.data.elasticsearch.annotations.FieldType;
-import org.springframework.data.elasticsearch.annotations.Setting;
+import org.springframework.data.elasticsearch.annotations.*;
+import org.springframework.data.annotation.Transient; // 💡 Import 추가 필수!
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -31,26 +27,36 @@ public class ContentDocument {
     private String description;
 
     @Field(type = FieldType.Keyword)
-    private String type;
+    private List<String> tags;
 
+    @Field(type = FieldType.Keyword)
+    private String type;
+    
     @Field(type = FieldType.Keyword)
     private String status;
-
+    
     @Field(type = FieldType.Keyword)
     private String accessLevel;
-
+    
     @Field(type = FieldType.Keyword, index = false)
     private String thumbnailUrl;
-
+    
     @Field(type = FieldType.Long)
     private Long totalViewCount;
-
+    
     @Field(type = FieldType.Long)
     private Long bookmarkCount;
-
+    
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime createdAt;
-
+    
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime updatedAt;
+
+    // 🚨 [수정] ES 저장소 제외 (응답 DTO용)
+    @Transient 
+    private String highlightTitle;
+
+    @Transient
+    private String highlightDescription;
 }
