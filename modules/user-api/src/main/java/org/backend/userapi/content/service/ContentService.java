@@ -6,6 +6,7 @@ import content.entity.Video;
 import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
+import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -31,9 +32,7 @@ public class ContentService {
 
     private final WatchHistoryRepository watchHistoryRepository;
     private final ContentRepository contentRepository;
-
-    @PersistenceContext
-    private EntityManager em;
+    private final VideoRepository videoRepository;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
@@ -114,21 +113,11 @@ public class ContentService {
             );
         }
 
-        List<Object[]> rows = em.createQuery("""
-                select v, vf
-                from Video v
-                left join v.videoFile vf
-                where v.content.id = :contentId
-                order by v.episodeNo asc
-            """, Object[].class)
-                .setParameter("contentId", contentId)
-                .getResultList();
+        List<Video> videos = videoRepository.findEpisodesWithVideoFileByContentId(contentId);
 
-        List<EpisodeResponse> episodes = rows.stream()
-                .map(row -> {
-                    Video v = (Video) row[0];
-                    VideoFile vf = (VideoFile) row[1];
-
+        List<EpisodeResponse> episodes = videos.stream()
+                .map(v -> {
+                    VideoFile vf = v.getVideoFile();
                     Integer durationSec = (vf != null) ? vf.getDurationSec() : null;
 
                     return EpisodeResponse.builder()
