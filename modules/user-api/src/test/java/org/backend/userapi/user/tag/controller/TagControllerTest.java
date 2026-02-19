@@ -1,9 +1,12 @@
-package org.backend.userapi.interaction.controller;
+package org.backend.userapi.user.tag.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
-import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
-import org.backend.userapi.interaction.service.BookmarkService;
+import org.backend.userapi.user.controller.TagController;
+import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
+import org.backend.userapi.user.service.UserTagPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,30 +24,30 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
-import java.util.Collections;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
-class BookmarkControllerTest {
+class TagControllerTest {
 
     @Mock
-    private BookmarkService bookmarkService;
+    private UserTagPreferenceService userTagPreferenceService;
 
     @InjectMocks
-    private BookmarkController bookmarkController;
+    private TagController tagController;
 
     private MockMvc mockMvc;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(bookmarkController)
+        mockMvc = MockMvcBuilders.standaloneSetup(tagController)
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {
@@ -64,34 +67,17 @@ class BookmarkControllerTest {
     }
 
     @Test
-    @DisplayName("찜하기 등록 요청 시 200 OK를 반환한다")
-    void addBookmark_returnsOk() throws Exception {
-        Long contentId = 100L;
-        doNothing().when(bookmarkService).addBookmark(1L, contentId);
+    @DisplayName("선호 태그 변경 요청 시 200 OK를 반환한다")
+    void updatePreferredTags_returnsOk() throws Exception {
+        PreferredTagUpdateRequest request = new PreferredTagUpdateRequest(List.of(1L, 2L, 3L));
 
-        mockMvc.perform(post("/api/histories/bookmarks/{contentId}", contentId)
-                        .contentType(MediaType.APPLICATION_JSON))
+        doNothing().when(userTagPreferenceService).updatePreferredTags(eq(1L), any(PreferredTagUpdateRequest.class));
+
+        mockMvc.perform(put("/api/users/me/preferred-tags")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message").value("Success"));
-    }
-
-    @Test
-    @DisplayName("찜 목록 조회 시 데이터를 반환한다")
-    void getBookmarks_returnsList() throws Exception {
-        // 🚨 중요: 실제 레코드 정의(bookmarks, nextCursor, hasNext, totalCount) 순서를 맞춰야 합니다.
-        BookmarkListResponse mockResponse = new BookmarkListResponse(
-                Collections.emptyList(), null, false, 0L
-        );
-        
-        when(bookmarkService.getMyBookmarks(eq(1L), any(), anyInt()))
-                .thenReturn(mockResponse);
-
-        mockMvc.perform(get("/api/users/me/bookmarks")
-                        .param("size", "10")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.message").value("찜 목록 조회 성공"));
+                .andExpect(jsonPath("$.status").value(200)) // ApiResponse 필드명 status 확인
+                .andExpect(jsonPath("$.message").value("선호 태그 변경 성공"));
     }
 }

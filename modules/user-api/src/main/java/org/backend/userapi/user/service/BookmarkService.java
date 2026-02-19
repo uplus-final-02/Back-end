@@ -1,13 +1,13 @@
-package org.backend.userapi.interaction.service;
+package org.backend.userapi.user.service;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
-import org.backend.userapi.interaction.dto.response.BookmarkListResponse.BookmarkItemResponse;
-import org.backend.userapi.interaction.dto.response.RecentBookmarkResponse;
+import org.backend.userapi.user.dto.response.BookmarkListResponse;
+import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
+import org.backend.userapi.user.dto.response.BookmarkListResponse.BookmarkItemResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

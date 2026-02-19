@@ -1,9 +1,16 @@
-package org.backend.userapi.interaction.controller;
+package org.backend.userapi.user.controller;
 
 import lombok.RequiredArgsConstructor;
+<<<<<<< HEAD:modules/user-api/src/main/java/org/backend/userapi/interaction/controller/BookmarkController.java
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
 import org.backend.userapi.interaction.service.BookmarkService;
 import org.backend.userapi.auth.jwt.UserPrincipal;
+=======
+
+import org.backend.userapi.user.dto.response.BookmarkListResponse;
+import org.backend.userapi.user.service.BookmarkService;
+import org.backend.userapi.auth.dto.UserPrincipal;
+>>>>>>> origin/develop:modules/user-api/src/main/java/org/backend/userapi/user/controller/BookmarkController.java
 import org.backend.userapi.common.dto.ApiResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;

@@ -1,4 +1,4 @@
-package org.backend.userapi.interaction.dto.response;
+package org.backend.userapi.user.dto.response;
 
 import java.util.List;
 
