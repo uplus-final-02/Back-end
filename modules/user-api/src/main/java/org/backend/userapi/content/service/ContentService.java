@@ -1,12 +1,22 @@
 package org.backend.userapi.content.service;
 
+import common.enums.ContentType;
 import content.entity.Content;
+import content.entity.Video;
+import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
 import content.repository.ContentTagRepository;
+import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.content.dto.DefaultContentResponse;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.content.dto.ContentDetailResponse;
+import org.backend.userapi.content.dto.EpisodeResponse;
+import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -29,6 +39,7 @@ public class ContentService {
     private final ContentTagRepository contentTagRepository;
     private final WatchHistoryRepository watchHistoryRepository;
     private final UserRepository userRepository;
+    private final VideoRepository videoRepository;
 
     public List<WatchingContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
@@ -117,5 +128,66 @@ public class ContentService {
                     return DefaultContentResponse.from(content, uploaderName);
                 })
                 .collect(Collectors.toList());
+    }
+  
+    public ContentDetailResponse getContentDetail(Long contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ContentNotFoundException(
+                        "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+                ));
+
+        return ContentDetailResponse.builder()
+                .contentId(content.getId())
+                .type(content.getType())
+                .title(content.getTitle())
+                .description(content.getDescription())
+                .thumbnailUrl(content.getThumbnailUrl())
+                .status(content.getStatus())
+                .totalViewCount(content.getTotalViewCount())
+                .bookmarkCount(content.getBookmarkCount())
+                .uploaderId(content.getUploaderId())
+                .accessLevel(content.getAccessLevel())
+                .createdAt(content.getCreatedAt())
+                .updatedAt(content.getUpdatedAt())
+                .tags(content.getTags().stream()
+                        .map(ContentDetailResponse.TagResponse::from)
+                        .toList()
+                )
+                .build();
+    }
+
+    public EpisodesResponse getContentEpisodes(Long contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ContentNotFoundException(
+                        "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+                ));
+
+        if (content.getType() != ContentType.SERIES) {
+            throw new IllegalArgumentException(
+                    "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId
+            );
+        }
+
+        List<Video> videos = videoRepository.findEpisodesWithVideoFileByContentId(contentId);
+
+        List<EpisodeResponse> episodes = videos.stream()
+                .map(v -> {
+                    VideoFile vf = v.getVideoFile();
+                    Integer durationSec = (vf != null) ? vf.getDurationSec() : null;
+
+                    return EpisodeResponse.builder()
+                            .videoId(v.getId())
+                            .episodeNo(v.getEpisodeNo())
+                            .title(v.getTitle())
+                            .description(v.getDescription())
+                            .thumbnailUrl(v.getThumbnailUrl())
+                            .viewCount(v.getViewCount())
+                            .status(v.getStatus())
+                            .durationSec(durationSec)
+                            .build();
+                })
+                .toList();
+
+        return EpisodesResponse.of(contentId, episodes);
     }
 }
