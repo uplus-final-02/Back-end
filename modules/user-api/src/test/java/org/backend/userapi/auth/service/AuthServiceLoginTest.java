@@ -24,6 +24,8 @@ import common.repository.TagRepository;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import static org.mockito.ArgumentMatchers.eq;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -46,6 +48,8 @@ class AuthServiceLoginTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private JwtTokenProvider jwtTokenProvider;
+    @Mock 
+    private RefreshTokenService refreshTokenService;
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
@@ -60,7 +64,7 @@ class AuthServiceLoginTest {
                 tagRepository,
                 passwordEncoder,
                 jwtTokenProvider,
-                refreshTokenRepository
+                refreshTokenService
         );
     }
 
@@ -84,10 +88,9 @@ class AuthServiceLoginTest {
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
         when(jwtTokenProvider.generateAccessToken(user, "test@test.com")).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken(1L)).thenReturn("refresh-token");
-        when(jwtTokenProvider.getRefreshTokenExpiresAt()).thenReturn(LocalDateTime.now().plusSeconds(1209600));
         when(jwtTokenProvider.getAccessTokenTtlSeconds()).thenReturn(1800L);
         when(jwtTokenProvider.getRefreshTokenTtlSeconds()).thenReturn(1209600L);
-
+        
         LoginResponse response = authService.login(request);
 
         assertThat(response.tokenType()).isEqualTo("Bearer");
@@ -96,8 +99,9 @@ class AuthServiceLoginTest {
         assertThat(response.accessTokenTtlSeconds()).isEqualTo(1800L);
         assertThat(response.refreshTokenTtlSeconds()).isEqualTo(1209600L);
 
-        verify(refreshTokenRepository).deleteByUserId(1L);
-        verify(refreshTokenRepository).save(any(RefreshToken.class));
+//        verify(refreshTokenRepository).deleteByUserId(1L);
+//        verify(refreshTokenRepository).save(any(RefreshToken.class));
+        verify(refreshTokenService).upsert(eq(1L), eq("refresh-token"));
     }
 
     @Test

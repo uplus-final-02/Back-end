@@ -10,6 +10,7 @@ import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
 import org.backend.userapi.auth.jwt.JwtTokenProvider;
+import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.DuplicateEmailException;
 import org.backend.userapi.common.exception.DuplicateNicknameException;
 import org.backend.userapi.common.exception.InvalidTagException;
@@ -25,7 +26,10 @@ import user.repository.AuthAccountRepository;
 import user.repository.RefreshTokenRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
+import org.backend.userapi.auth.dto.ReissueRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -38,8 +42,10 @@ public class AuthService {
     private final TagRepository tagRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
+//    private final RefreshTokenRepository refreshTokenRepository;
 
+    private final RefreshTokenService refreshTokenService;
+    
     /*
      * 회원가입
      */
@@ -109,12 +115,10 @@ public class AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(user, authAccount.getEmail());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
-        refreshTokenRepository.deleteByUserId(user.getId());
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
-                .token(refreshToken)
-                .expiresAt(jwtTokenProvider.getRefreshTokenExpiresAt())
-                .build());
+        LocalDateTime expiresAt = jwtTokenProvider.getRefreshTokenExpiresAt();
+        
+        refreshTokenService.upsert(user.getId(), refreshToken);
+
 
         return new LoginResponse(
                 "Bearer",
@@ -167,4 +171,56 @@ public class AuthService {
         }
         return tags;
     }
+    
+    @Transactional
+    public LoginResponse reissue(ReissueRequest request) {
+        String refreshToken = request.refreshToken();
+
+        final Long userId;
+        try {
+            jwtTokenProvider.validateRefreshToken(refreshToken);
+            userId = jwtTokenProvider.extractUserId(refreshToken);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidCredentialsException("리프레시 토큰이 유효하지 않습니다.");
+        }
+
+
+        RefreshToken saved = refreshTokenService.validateAndGet(userId, refreshToken);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new InvalidCredentialsException("사용자 정보를 찾을 수 없습니다."));
+
+        if (user.getUserStatus() != UserStatus.ACTIVE) {
+            throw new InvalidCredentialsException("비활성화된 계정입니다.");
+        }
+
+        AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
+
+        String newAccessToken = jwtTokenProvider.generateAccessToken(user, authAccount.getEmail());
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+
+
+        refreshTokenService.rotate(saved, newRefreshToken);
+
+        return new LoginResponse(
+                "Bearer",
+                newAccessToken,
+                jwtTokenProvider.getAccessTokenTtlSeconds(),
+                newRefreshToken,
+                jwtTokenProvider.getRefreshTokenTtlSeconds()
+        );
+    }
+
+    @Transactional
+    public void logout() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new InvalidCredentialsException("인증 정보가 없습니다.");
+        }
+
+        UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
+        refreshTokenService.deleteByUserId(principal.getUserId());
+    }
+
 }

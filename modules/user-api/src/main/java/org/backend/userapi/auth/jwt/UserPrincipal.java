@@ -1,4 +1,4 @@
-package org.backend.userapi.auth.dto;
+package org.backend.userapi.auth.jwt;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -3,7 +3,7 @@ package org.backend.userapi.interaction.controller;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
 import org.backend.userapi.interaction.service.BookmarkService;
-import org.backend.userapi.auth.dto.UserPrincipal;
+import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;

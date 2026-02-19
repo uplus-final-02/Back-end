@@ -25,8 +25,16 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // 1. 로그인/회원가입 허용
-                        .requestMatchers("/api/auth/**").permitAll()
+                		.requestMatchers(
+                                "/api/auth/signup/**",
+                                "/api/auth/login/**",
+                                "/api/auth/reissue"
+                        ).permitAll()
                         
+                		// 로그아웃은 인증 필요
+                		.requestMatchers("/api/auth/logout").authenticated()
+
+                		
                         // 2. 북마크 관련 경로 인증 필수 (컨트롤러 주소와 100% 일치)
                         .requestMatchers("/api/histories/bookmarks/**", "/api/users/me/bookmarks/**", "/api/users/me/preferred-tags").authenticated()
                         
