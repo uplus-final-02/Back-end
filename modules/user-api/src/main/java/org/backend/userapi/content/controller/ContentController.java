@@ -12,11 +12,7 @@ import org.backend.userapi.interaction.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.interaction.service.BookmarkService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -28,6 +24,7 @@ public class ContentController {
     private final ContentService contentService;
     private final BookmarkService bookmarkService;
 
+    // 1. 시청 중인 콘텐츠
     @GetMapping("/home/watching")
     public ApiResponse<List<WatchingContentResponse>> getWatchingContents(
         @AuthenticationPrincipal Long userId
@@ -36,6 +33,7 @@ public class ContentController {
         return ApiResponse.success(response);
     }
 
+    // 2. 기본 콘텐츠 목록 (카테고리별)
     @GetMapping("/home/basic")
     public ApiResponse<List<DefaultContentResponse>> getContents(
             @RequestParam(required = false) String category
@@ -43,22 +41,25 @@ public class ContentController {
         List<DefaultContentResponse> response = contentService.getContents(category);
         return ApiResponse.success(response);
     }
-}
+
+    // 3. 최근 찜 목록
     @GetMapping("/home/bookmark-list")
     public ApiResponse<List<RecentBookmarkResponse>> getBookmarkList(
         @AuthenticationPrincipal UserPrincipal userPrincipal
     ) {
+        // userPrincipal이 null이 아닐 때만 동작 (Security 설정에 따라 다름)
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(userPrincipal.getUserId()));
     }
-}
 
+    // 4. 콘텐츠 상세 조회
     @GetMapping("/{contentId}")
     public ResponseEntity<ContentDetailResponse> getContentDetail(@PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentDetail(contentId));
     }
 
+    // 5. 에피소드 조회
     @GetMapping("/{contentId}/episodes")
     public ResponseEntity<EpisodesResponse> getContentEpisodes(@PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentEpisodes(contentId));
     }
-}
+} 

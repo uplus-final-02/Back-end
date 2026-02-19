@@ -1,7 +1,7 @@
 package content.entity;
 
 import common.entity.BaseTimeEntity;
-import common.entity.Tag; 
+import common.entity.Tag;
 import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Getter
@@ -52,8 +52,6 @@ public class Content extends BaseTimeEntity {
     @Column(name = "bookmark_count", nullable = false)
     private Long bookmarkCount;
 
-    // MSA나 느슨한 결합을 위해 객체(User) 대신 ID만 저장
-    // NULL 허용 -> NULL이면 관리자(시스템) 업로드
     @Column(name = "uploader_id")
     private Long uploaderId;
 
@@ -61,11 +59,12 @@ public class Content extends BaseTimeEntity {
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
 
-    @OneToMany(mappedBy = "content", fetch = FetchType.LAZY)
+    // [수정] 팀원이 추가한 중간 엔티티 리스트
+    @OneToMany(mappedBy = "content", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ContentTag> contentTags = new ArrayList<>();
 
     @Builder
-    public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel, Set<Tag> tags) {
+    public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel) {
         this.type = type;
         this.title = title;
         this.description = description;
@@ -73,13 +72,16 @@ public class Content extends BaseTimeEntity {
         this.uploaderId = uploaderId;
         this.status = status != null ? status : ContentStatus.ACTIVE;
         this.accessLevel = accessLevel != null ? accessLevel : ContentAccessLevel.FREE;
-        this.tags = tags != null ? tags : new HashSet<>();
         this.totalViewCount = 0L;
         this.bookmarkCount = 0L;
     }
 
     public void incrementTotalViewCount() { this.totalViewCount++; }
     public void updateBookmarkCount(long count) { this.bookmarkCount = count; }
-    
-    public Set<Tag> getTags() { return tags; }
+
+    public List<Tag> getTags() {
+        return contentTags.stream()
+                .map(ContentTag::getTag)
+                .collect(Collectors.toList());
+    }
 }

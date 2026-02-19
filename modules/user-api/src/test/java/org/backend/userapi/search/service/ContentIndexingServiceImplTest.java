@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -28,7 +29,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,19 +48,16 @@ class ContentIndexingServiceImplTest {
     @Mock
     private ElasticsearchOperations elasticsearchOperations;
 
+    @InjectMocks
     private ContentIndexingServiceImpl contentIndexingService;
-
-    @BeforeEach
-    void setUp() {
-        contentIndexingService = new ContentIndexingServiceImpl(contentRepository, contentSearchRepository, elasticsearchOperations);
-    }
 
     @Test
     @DisplayName("전체 인덱싱 시 findAllWithTags()를 호출하고 문서를 저장한다")
     void indexAllContents_savesAllMappedDocuments() {
         // Given
         Content content = sampleContent(10L, "테스트 제목");
-        // 🚨 [수정] findAll() -> findAllWithTags() 로 변경됨
+        
+        // Repository가 반환할 Mock 데이터 설정
         when(contentRepository.findAllWithTags()).thenReturn(List.of(content));
 
         // When
@@ -74,6 +71,7 @@ class ContentIndexingServiceImplTest {
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getContentId()).isEqualTo(10L);
         assertThat(saved.get(0).getTitle()).isEqualTo("테스트 제목");
+        // sampleContent에서 주입한 태그가 잘 들어갔는지 확인
         assertThat(saved.get(0).getTags()).contains("테스트태그"); 
     }
 
@@ -118,7 +116,8 @@ class ContentIndexingServiceImplTest {
         // SearchHit 모킹 (하이라이트 포함)
         SearchHit<ContentDocument> hit = mock(SearchHit.class);
         when(hit.getContent()).thenReturn(doc);
-        // 🚨 하이라이트 필드 반환 모킹
+        
+        // 하이라이트 필드 반환 모킹
         when(hit.getHighlightField("title")).thenReturn(List.of("<em>드라마</em> 제목"));
         when(hit.getHighlightField("description")).thenReturn(Collections.emptyList());
 
@@ -139,7 +138,7 @@ class ContentIndexingServiceImplTest {
         ContentDocument resultDoc = result.getContent().get(0);
         
         assertThat(resultDoc.getTitle()).isEqualTo("드라마 제목");
-        // 🚨 하이라이트 적용 확인 (DTO 매핑 로직 검증)
+        // 하이라이트 적용 확인 (DTO 매핑 로직 검증)
         assertThat(resultDoc.getHighlightTitle()).isEqualTo("<em>드라마</em> 제목");
         
         verify(elasticsearchOperations).search(any(NativeQuery.class), eq(ContentDocument.class));
@@ -170,9 +169,12 @@ class ContentIndexingServiceImplTest {
         assertThat(contentIndexingService.countIndexedContents()).isEqualTo(42L);
     }
 
+    // 🚨 [핵심 수정] 중간 엔티티(ContentTag) 반영을 위한 헬퍼 메서드
     private Content sampleContent(Long id, String title) {
-        Tag tag = Tag.builder().name("테스트태그").build(); // 간소화된 빌더 사용 가정
+        // 1. 태그 생성
+        Tag tag = Tag.builder().name("테스트태그").build();
 
+        // 2. Content 생성 (빌더에서 tags 파라미터 제거됨)
         Content content = Content.builder()
                 .type(ContentType.SERIES)
                 .title(title)
@@ -181,9 +183,20 @@ class ContentIndexingServiceImplTest {
                 .status(ContentStatus.ACTIVE)
                 .uploaderId(1L)
                 .accessLevel(ContentAccessLevel.FREE)
-                .tags(Set.of(tag))
                 .build();
+        
+        // 3. ID 주입 (Reflection 사용)
         ReflectionTestUtils.setField(content, "id", id);
+
+        // 4. [중요] 중간 엔티티(ContentTag) Mock 생성 및 주입
+        // ContentTag의 생성자가 protected거나 복잡할 수 있으므로 Mock 객체 사용
+        content.entity.ContentTag mockContentTag = mock(content.entity.ContentTag.class);
+        when(mockContentTag.getTag()).thenReturn(tag);
+
+        // 5. Content 내부의 contentTags 리스트에 Mock 객체 리스트 주입
+        // 이렇게 하면 content.getTags() 호출 시 이 Mock 객체를 통해 태그를 가져옵니다.
+        ReflectionTestUtils.setField(content, "contentTags", List.of(mockContentTag));
+
         return content;
     }
 }
