@@ -1,9 +1,10 @@
-package org.backend.userapi.interaction.controller;
+package org.backend.userapi.user.interaction.controller;
 
 import org.backend.userapi.auth.dto.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
-import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
-import org.backend.userapi.interaction.service.BookmarkService;
+import org.backend.userapi.user.controller.BookmarkController;
+import org.backend.userapi.user.dto.response.BookmarkListResponse;
+import org.backend.userapi.user.service.BookmarkService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

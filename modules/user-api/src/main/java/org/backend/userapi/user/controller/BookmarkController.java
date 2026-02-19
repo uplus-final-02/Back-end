@@ -1,8 +1,9 @@
-package org.backend.userapi.interaction.controller;
+package org.backend.userapi.user.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.interaction.dto.response.BookmarkListResponse;
-import org.backend.userapi.interaction.service.BookmarkService;
+
+import org.backend.userapi.user.dto.response.BookmarkListResponse;
+import org.backend.userapi.user.service.BookmarkService;
 import org.backend.userapi.auth.dto.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

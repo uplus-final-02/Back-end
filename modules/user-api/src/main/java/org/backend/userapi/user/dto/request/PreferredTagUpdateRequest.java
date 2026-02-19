@@ -1,4 +1,4 @@
-package org.backend.userapi.tag.dto.request;
+package org.backend.userapi.user.dto.request;
 import java.util.List;
 
 public record PreferredTagUpdateRequest(

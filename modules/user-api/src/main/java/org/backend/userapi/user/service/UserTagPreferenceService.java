@@ -1,7 +1,8 @@
-package org.backend.userapi.tag.service;
+package org.backend.userapi.user.service;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.tag.dto.request.PreferredTagUpdateRequest;
+
+import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
