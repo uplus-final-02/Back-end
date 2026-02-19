@@ -45,7 +45,7 @@ public class User extends BaseTimeEntity {
 
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @PrimaryKeyJoinColumn
-    private UplusUserVerified uplusVerified;
+    private UserUplusVerified uplusVerified;
 
     @Builder
     public User(String nickname, String profileImage, UserRole userRole, UserStatus userStatus) {

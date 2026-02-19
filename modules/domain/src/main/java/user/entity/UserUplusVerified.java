@@ -11,9 +11,8 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "user_uplus_verified")
-public class UplusUserVerified extends BaseTimeEntity {
+public class UserUplusVerified extends BaseTimeEntity {
 
-  // user_id가 PK이므로 @Id를 붙입니다.
   @Id
   @Column(name = "user_id")
   private Long userId;
@@ -21,7 +20,7 @@ public class UplusUserVerified extends BaseTimeEntity {
   @Column(name = "phone_number", length = 20)
   private String phoneNumber;
 
-  @Column(name = "is_verified", nullable = false)
+  @Column(name = "is_verified")
   private boolean isVerified;
 
   @Column(name = "verified_at")
