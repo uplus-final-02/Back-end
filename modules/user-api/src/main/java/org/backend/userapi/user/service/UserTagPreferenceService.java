@@ -1,7 +1,8 @@
-package org.backend.userapi.tag.service;
+package org.backend.userapi.user.service;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.tag.dto.request.PreferredTagUpdateRequest;
+
+import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,14 +28,8 @@ public class UserTagPreferenceService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
 
-        // 1. 기존 태그 삭제
         userPreferredTagRepository.deleteByUserId(userId);
         
-        // 🚨 [핵심 수정] 삭제 쿼리를 DB에 즉시 반영하라고 강제합니다.
-        // 이게 없으면 insert가 먼저 실행되면서 "이미 존재하는 데이터"라고 에러가 납니다.
-        userPreferredTagRepository.flush(); 
-
-        // 2. 태그 삭제만 원하는 경우 종료
         if (request.tagIds() == null || request.tagIds().isEmpty()) {
             return;
         }

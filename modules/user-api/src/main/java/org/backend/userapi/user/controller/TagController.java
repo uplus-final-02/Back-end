@@ -1,11 +1,11 @@
-package org.backend.userapi.tag.controller; // 패키지명 확인!
+package org.backend.userapi.user.controller; // 패키지명 확인!
 
 import lombok.RequiredArgsConstructor;
 
 import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
-import org.backend.userapi.tag.dto.request.PreferredTagUpdateRequest;
-import org.backend.userapi.tag.service.UserTagPreferenceService;
+import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
+import org.backend.userapi.user.service.UserTagPreferenceService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
