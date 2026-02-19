@@ -1,4 +1,4 @@
-package org.backend.userapi.profile.dto;
+package org.backend.userapi.user.dto.response;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -7,7 +7,7 @@ import java.util.List;
 
 @Getter
 @Builder
-public class ProfileDto {
+public class ProfileResponse {
   private Long userId;
   private String email;
   private String nickname;
