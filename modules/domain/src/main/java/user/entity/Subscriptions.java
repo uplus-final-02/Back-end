@@ -26,7 +26,7 @@ public class Subscriptions extends BaseTimeEntity {
   private User user;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "status", nullable = false, length = 20)
+  @Column(name = "subscription_status", nullable = false, length = 20)
   private UserStatus status;
 
   @Builder
