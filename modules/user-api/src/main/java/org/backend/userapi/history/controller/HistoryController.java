@@ -1,5 +1,6 @@
 package org.backend.userapi.history.controller;
 
+import core.security.principal.JwtPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
@@ -18,11 +19,11 @@ public class HistoryController {
 
     @PostMapping("/savepoint/{videoId}")
     public ApiResponse<SavePointResponse> savePoint(
-        @AuthenticationPrincipal Long userId,
+        @AuthenticationPrincipal JwtPrincipal jwtPrincipal,
         @PathVariable Long videoId,
         @RequestBody @Valid SavePointRequest request
     ) {
-        SavePointResponse response = historyService.savePoint(userId, videoId, request);
-        return ApiResponse.success(response);
+        SavePointResponse response = historyService.savePoint(jwtPrincipal.getUserId(), videoId, request);
+        return new ApiResponse<>(200, "시청 기록 저장 성공", response);
     }
 }
