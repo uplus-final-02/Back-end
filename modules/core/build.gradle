@@ -3,7 +3,17 @@ plugins {
 }
 
 dependencies {
+    api 'com.auth0:java-jwt:4.4.0'
+    
+    api 'org.springframework.security:spring-security-web'
+    api 'org.springframework.security:spring-security-config'
+    
+    implementation 'org.slf4j:slf4j-api'
+    
+    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
     
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+    
+    
 }

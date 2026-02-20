@@ -1,10 +1,12 @@
 package org.backend.userapi.auth.service;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.auth.jwt.JwtTokenProvider;
+
 import org.backend.userapi.common.exception.InvalidCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import core.security.jwt.JwtTokenProvider;
 import user.entity.RefreshToken;
 import user.repository.RefreshTokenRepository;
 
@@ -24,8 +26,6 @@ public class RefreshTokenService {
         RefreshToken rt = refreshTokenRepository.findByUserId(userId)
                 .orElseGet(() -> RefreshToken.builder()
                         .userId(userId)
-                        .token(refreshToken)
-                        .expiresAt(expiresAt)
                         .build());
 
         rt.rotate(refreshToken, expiresAt);
@@ -34,16 +34,13 @@ public class RefreshTokenService {
 
 
     @Transactional(readOnly = true)
-    public RefreshToken validateAndGet(Long userId, String refreshToken) {
-        RefreshToken saved = refreshTokenRepository.findByUserId(userId)
+    public RefreshToken validateStoredTokenAndGet(Long userId, String presentedRefreshToken) {
+        // 만료 검증 X (DB 저장값과 일치 검증을 위함)
+    	RefreshToken saved = refreshTokenRepository.findByUserId(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("리프레시 토큰이 유효하지 않습니다."));
 
-        if (!saved.getToken().equals(refreshToken)) {
+        if (!saved.getToken().equals(presentedRefreshToken)) {
             throw new InvalidCredentialsException("리프레시 토큰이 유효하지 않습니다.");
-        }
-
-        if (saved.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new InvalidCredentialsException("리프레시 토큰이 만료되었습니다.");
         }
 
         return saved;
