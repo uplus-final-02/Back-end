@@ -16,10 +16,5 @@ public interface AuthAccountRepository extends JpaRepository<AuthAccount, Long> 
     
     Optional<AuthAccount> findByUser_Id(Long userId);
 
-
-    
-    Optional<AuthAccount> findByUser_Id(Long userId);
-
-
     Optional<AuthAccount> findFirstByUserIdAndEmailIsNotNull(Long userId);
 }
