@@ -1,19 +1,18 @@
 package org.backend.userapi.user.service;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
 
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import common.entity.Tag;
+import common.repository.TagRepository; // ✅ import 확인 (common 패키지)
+import lombok.RequiredArgsConstructor;
 import user.entity.User;
 import user.entity.UserPreferredTag;
-import common.repository.TagRepository; // ✅ import 확인 (common 패키지)
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
