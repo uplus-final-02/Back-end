@@ -1,6 +1,7 @@
 package org.backend.userapi.config;
 
-import org.backend.userapi.auth.jwt.JwtAuthenticationFilter;
+import java.io.IOException;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -10,40 +11,52 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+
+import core.security.handler.JwtAccessDeniedHandler;
+import core.security.handler.JwtAuthenticationEntryPoint;
+import core.security.jwt.JwtAuthenticationFilter;
+import core.security.jwt.JwtTokenProvider;
+
 
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
-    
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        // 1. 로그인/회원가입 허용
-                		.requestMatchers(
-                                "/api/auth/signup/**",
-                                "/api/auth/login/**",
-                                "/api/auth/reissue"
-                        ).permitAll()
-                        
-                		// 로그아웃은 인증 필요
-                		.requestMatchers("/api/auth/logout").authenticated()
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                .accessDeniedHandler(jwtAccessDeniedHandler)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/api/auth/signup/**",
+                    "/api/auth/login/**",
+                    "/api/auth/reissue"
+                ).permitAll()
+                .requestMatchers("/api/auth/logout").authenticated()
+                .requestMatchers("/api/histories/bookmarks/**",
+                                 "/api/users/me/bookmarks/**",
+                                 "/api/users/me/preferred-tags").authenticated()
+                .anyRequest().permitAll()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-                		
-                        // 2. 북마크 관련 경로 인증 필수 (컨트롤러 주소와 100% 일치)
-                        .requestMatchers("/api/histories/bookmarks/**", "/api/users/me/bookmarks/**", "/api/users/me/preferred-tags").authenticated()
-                        
-                        // 3. 나머지 허용
-                        .anyRequest().permitAll()
-                )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        
         return http.build();
+    }
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+        return new JwtAuthenticationFilter(jwtTokenProvider);
     }
 
     @Bean

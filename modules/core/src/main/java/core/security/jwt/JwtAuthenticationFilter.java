@@ -1,0 +1,83 @@
+package core.security.jwt;
+
+import java.io.IOException;
+import java.util.Collections; // 추가됨
+import java.util.List;
+
+import core.security.principal.JwtPrincipal;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.auth0.jwt.interfaces.DecodedJWT;
+
+import core.security.exception.JwtInvalidTokenException;
+import core.security.exception.JwtTokenExpiredException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) 
+            throws ServletException, IOException {
+        
+        String token = resolveToken(request);
+
+        if (token != null) {
+        	try {
+            // 토큰 파싱
+//            Long userId = Long.valueOf(com.auth0.jwt.JWT.decode(token).getSubject());
+//        	Long userId = jwtTokenProvider.extractUserId(token); // verify 포함 버전이면 OK
+        	 DecodedJWT jwt = jwtTokenProvider.validateAndGet(token, null);
+        	
+        	// refresh 차단
+			String type = jwt.getClaim("type").asString();
+			 	if ("refresh".equals(type)) {
+			 		throw new JwtInvalidTokenException("액세스 토큰이 필요합니다.");
+			}
+        	
+		 	Long userId = Long.parseLong(jwt.getSubject());
+            String role = jwt.getClaim("role").asString();
+                	
+            log.info("JWT validated subject={}, role={}", userId, role);
+            
+            JwtPrincipal principal = new JwtPrincipal(userId);
+            
+            List<GrantedAuthority> authorities =
+                    (role == null || role.isBlank())
+                            ? Collections.emptyList()
+                            : List.of(new SimpleGrantedAuthority("ROLE_" + role));
+
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(principal, null, authorities);
+
+            
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        } catch (JwtInvalidTokenException | JwtTokenExpiredException e) {
+            SecurityContextHolder.clearContext();
+        	}
+        }
+        filterChain.doFilter(request, response);
+    }
+
+    private String resolveToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+}

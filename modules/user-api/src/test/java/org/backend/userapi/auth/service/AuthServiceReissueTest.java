@@ -3,9 +3,10 @@ package org.backend.userapi.auth.service;
 import common.enums.AuthProvider;
 import common.enums.UserStatus;
 import common.repository.TagRepository;
+import core.security.jwt.JwtTokenProvider;
+
 import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.ReissueRequest;
-import org.backend.userapi.auth.jwt.JwtTokenProvider;
 import org.backend.userapi.common.exception.InvalidCredentialsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceReissueTest {
 
-    @Mock private AuthAccountRepository authAccountRepository;
+	@Mock private AuthAccountRepository authAccountRepository;
     @Mock private UserRepository userRepository;
     @Mock private UserPreferredTagRepository userPreferredTagRepository;
     @Mock private TagRepository tagRepository;
@@ -61,28 +62,40 @@ class AuthServiceReissueTest {
 
         ReissueRequest request = new ReissueRequest(oldRefresh);
 
-        // jwt
-        doNothing().when(jwtTokenProvider).validateRefreshToken(oldRefresh);
-        when(jwtTokenProvider.extractUserId(oldRefresh)).thenReturn(userId);
+        // jwt (이제 한 번에 userId 추출)
+        when(jwtTokenProvider.extractUserIdFromRefreshToken(oldRefresh))
+        	.thenReturn(userId);
 
-        when(jwtTokenProvider.generateRefreshToken(userId)).thenReturn(newRefresh);
-        when(jwtTokenProvider.generateAccessToken(any(User.class), eq("test@test.com"))).thenReturn(newAccess);
+        when(jwtTokenProvider.generateRefreshToken(userId))
+                .thenReturn(newRefresh);
+
+        when(jwtTokenProvider.generateAccessToken(
+                eq(userId),
+                eq("test@test.com"),
+                eq("tester"),
+                eq("USER")
+        )).thenReturn(newAccess);
+
         when(jwtTokenProvider.getAccessTokenTtlSeconds()).thenReturn(1800L);
         when(jwtTokenProvider.getRefreshTokenTtlSeconds()).thenReturn(1209600L);
 
-        // refresh validation (DB 일치/만료 검증은 service가 수행)
+        // refresh validation
         RefreshToken saved = RefreshToken.builder()
                 .userId(userId)
                 .token(oldRefresh)
                 .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
-        when(refreshTokenService.validateAndGet(userId, oldRefresh)).thenReturn(saved);
+
+        when(refreshTokenService.validateStoredTokenAndGet(userId, oldRefresh))
+                .thenReturn(saved);
 
         // user
         User user = User.builder()
                 .nickname("tester")
                 .userStatus(UserStatus.ACTIVE)
                 .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         // auth account
@@ -93,7 +106,8 @@ class AuthServiceReissueTest {
                 .email("test@test.com")
                 .passwordHash("encoded")
                 .build();
-        when(authAccountRepository.findByUser_Id(userId)).thenReturn(Optional.of(authAccount));
+        when(authAccountRepository.findByUser_Id(userId))
+                .thenReturn(Optional.of(authAccount));
 
         LoginResponse response = authService.reissue(request);
 
@@ -103,10 +117,11 @@ class AuthServiceReissueTest {
         assertThat(response.accessTokenTtlSeconds()).isEqualTo(1800L);
         assertThat(response.refreshTokenTtlSeconds()).isEqualTo(1209600L);
 
-        verify(refreshTokenService).validateAndGet(userId, oldRefresh);
+        verify(refreshTokenService).validateStoredTokenAndGet(userId, oldRefresh);
         verify(refreshTokenService).rotate(saved, newRefresh);
     }
 
+    // DB 불일치 케이스
     @Test
     void reissue_whenRefreshInvalid_throwsInvalidCredentials() {
         Long userId = 2L;
@@ -114,17 +129,18 @@ class AuthServiceReissueTest {
 
         ReissueRequest request = new ReissueRequest(refresh);
 
-        doNothing().when(jwtTokenProvider).validateRefreshToken(refresh);
-        when(jwtTokenProvider.extractUserId(refresh)).thenReturn(userId);
+        when(jwtTokenProvider.extractUserIdFromRefreshToken(refresh))
+                .thenReturn(userId);
 
-        when(refreshTokenService.validateAndGet(userId, refresh))
+        when(refreshTokenService.validateStoredTokenAndGet(userId, refresh))
                 .thenThrow(new InvalidCredentialsException("리프레시 토큰이 유효하지 않습니다."));
 
         assertThatThrownBy(() -> authService.reissue(request))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("리프레시 토큰이 유효하지 않습니다.");
 
-        verify(refreshTokenService).validateAndGet(userId, refresh);
+        verify(refreshTokenService).validateStoredTokenAndGet(userId, refresh);
         verify(refreshTokenService, never()).rotate(any(), anyString());
     }
+
 }

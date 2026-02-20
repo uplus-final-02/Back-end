@@ -4,7 +4,6 @@ import common.enums.AuthProvider;
 import common.enums.UserStatus;
 import org.backend.userapi.auth.dto.LoginRequest;
 import org.backend.userapi.auth.dto.LoginResponse;
-import org.backend.userapi.auth.jwt.JwtTokenProvider;
 import org.backend.userapi.common.exception.InvalidCredentialsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +20,7 @@ import user.repository.RefreshTokenRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
 import common.repository.TagRepository;
+import core.security.jwt.JwtTokenProvider;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -36,23 +36,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceLoginTest {
 
-    @Mock
-    private AuthAccountRepository authAccountRepository;
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private UserPreferredTagRepository userPreferredTagRepository;
-    @Mock
-    private TagRepository tagRepository;
-    @Mock
-    private PasswordEncoder passwordEncoder;
-    @Mock
-    private JwtTokenProvider jwtTokenProvider;
-    @Mock 
-    private RefreshTokenService refreshTokenService;
-    @Mock
-    private RefreshTokenRepository refreshTokenRepository;
-
+	@Mock private AuthAccountRepository authAccountRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private UserPreferredTagRepository userPreferredTagRepository;
+    @Mock private TagRepository tagRepository;
+    @Mock private PasswordEncoder passwordEncoder;
+    @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock private RefreshTokenService refreshTokenService;
+    @Mock private RefreshTokenRepository refreshTokenRepository;
+    
     private AuthService authService;
 
     @BeforeEach
@@ -86,7 +78,12 @@ class AuthServiceLoginTest {
         when(authAccountRepository.findByAuthProviderAndEmail(AuthProvider.EMAIL, "test@test.com"))
                 .thenReturn(Optional.of(authAccount));
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
-        when(jwtTokenProvider.generateAccessToken(user, "test@test.com")).thenReturn("access-token");
+        when(jwtTokenProvider.generateAccessToken(
+                eq(1L),
+                eq("test@test.com"),
+                eq("tester"),
+                eq(user.getUserRole().name()) // 기본값이 USER
+        )).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken(1L)).thenReturn("refresh-token");
         when(jwtTokenProvider.getAccessTokenTtlSeconds()).thenReturn(1800L);
         when(jwtTokenProvider.getRefreshTokenTtlSeconds()).thenReturn(1209600L);

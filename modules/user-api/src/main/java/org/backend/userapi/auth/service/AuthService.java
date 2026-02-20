@@ -4,12 +4,12 @@ import common.entity.Tag;
 import common.enums.AuthProvider;
 import common.enums.UserStatus;
 import common.repository.TagRepository;
+import core.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.LoginRequest;
 import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
-import org.backend.userapi.auth.jwt.JwtTokenProvider;
 import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.DuplicateEmailException;
 import org.backend.userapi.common.exception.DuplicateNicknameException;
@@ -112,7 +112,13 @@ public class AuthService {
 
         authAccount.updateLastLoginAt();
 
-        String accessToken = jwtTokenProvider.generateAccessToken(user, authAccount.getEmail());
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(),
+                authAccount.getEmail(),
+                user.getNickname(),
+                user.getUserRole().name()
+        );
+
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         LocalDateTime expiresAt = jwtTokenProvider.getRefreshTokenExpiresAt();
@@ -176,16 +182,11 @@ public class AuthService {
     public LoginResponse reissue(ReissueRequest request) {
         String refreshToken = request.refreshToken();
 
-        final Long userId;
-        try {
-            jwtTokenProvider.validateRefreshToken(refreshToken);
-            userId = jwtTokenProvider.extractUserId(refreshToken);
-        } catch (IllegalArgumentException e) {
-            throw new InvalidCredentialsException("리프레시 토큰이 유효하지 않습니다.");
-        }
+        // JWT 검증, 만료
+        Long userId = jwtTokenProvider.extractUserIdFromRefreshToken(refreshToken);
 
-
-        RefreshToken saved = refreshTokenService.validateAndGet(userId, refreshToken);
+        // DB 저장값과 일치 검증
+        RefreshToken saved = refreshTokenService.validateStoredTokenAndGet(userId, refreshToken);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("사용자 정보를 찾을 수 없습니다."));
@@ -197,20 +198,26 @@ public class AuthService {
         AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(user, authAccount.getEmail());
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(),
+                authAccount.getEmail(),
+                user.getNickname(),
+                user.getUserRole().name()
+        );
 
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
         refreshTokenService.rotate(saved, newRefreshToken);
 
         return new LoginResponse(
                 "Bearer",
-                newAccessToken,
+                accessToken,
                 jwtTokenProvider.getAccessTokenTtlSeconds(),
                 newRefreshToken,
                 jwtTokenProvider.getRefreshTokenTtlSeconds()
         );
     }
+
 
     @Transactional
     public void logout() {
