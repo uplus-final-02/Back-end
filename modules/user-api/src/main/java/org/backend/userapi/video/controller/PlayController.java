@@ -22,6 +22,6 @@ public class PlayController {
       @PathVariable Long videoId,
       @AuthenticationPrincipal JwtPrincipal jwtPrincipal
   ) {
-    return videoService.getPlayInfo(videoId, jwtPrincipal.getUserId());
+    return videoService.getPlayInfo(videoId, jwtPrincipal);
   }
 }
