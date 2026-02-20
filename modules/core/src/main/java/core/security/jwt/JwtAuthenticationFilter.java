@@ -13,9 +13,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
+import core.security.handler.JwtAuthenticationEntryPoint;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     
     private final JwtTokenProvider jwtTokenProvider;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) 
@@ -66,10 +69,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             
             SecurityContextHolder.getContext().setAuthentication(auth);
-        } catch (JwtInvalidTokenException | JwtTokenExpiredException e) {
-            SecurityContextHolder.clearContext();
-        	}
-        }
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                log.error("JWT validation failed", e);
+
+                jwtAuthenticationEntryPoint.commence(
+                    request,
+                    response,
+                    new BadCredentialsException("Invalid JWT", e)
+                );
+                return;
+            }
+        }   // ✅ 이거 추가 (if 닫기)
+
         filterChain.doFilter(request, response);
     }
 

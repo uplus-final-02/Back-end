@@ -118,7 +118,7 @@ class AuthServiceReissueTest {
         assertThat(response.refreshTokenTtlSeconds()).isEqualTo(1209600L);
 
         verify(refreshTokenService).validateStoredTokenAndGet(userId, oldRefresh);
-        verify(refreshTokenService).rotate(saved, newRefresh);
+        verify(refreshTokenService).upsert(userId, newRefresh);
     }
 
     // DB 불일치 케이스
@@ -140,7 +140,7 @@ class AuthServiceReissueTest {
                 .hasMessage("리프레시 토큰이 유효하지 않습니다.");
 
         verify(refreshTokenService).validateStoredTokenAndGet(userId, refresh);
-        verify(refreshTokenService, never()).rotate(any(), anyString());
+        verify(refreshTokenService, never()).upsert(anyLong(), anyString());
     }
 
 }

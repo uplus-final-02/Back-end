@@ -207,7 +207,8 @@ public class AuthService {
 
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
-        refreshTokenService.rotate(saved, newRefreshToken);
+	    // 기존 rotate 대신 upsert 사용
+	    refreshTokenService.upsert(userId, newRefreshToken);
 
         return new LoginResponse(
                 "Bearer",
