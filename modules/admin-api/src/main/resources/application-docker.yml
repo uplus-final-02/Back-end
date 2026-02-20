@@ -22,7 +22,7 @@ app:
   storage:
     s3:
       provider: minio
-      endpoint: http://minio:9000
+      endpoint: ${MINIO_ENDPOINT:http://minio:9000}
       access-key: ${MINIO_ROOT_USER}
       secret-key: ${MINIO_ROOT_PASSWORD}
       bucket: ${S3_BUCKET:app-bucket}
