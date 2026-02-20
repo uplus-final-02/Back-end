@@ -3,16 +3,15 @@ package org.backend.userapi.video.service;
 import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
-import content.entity.WatchHistory;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
+import core.security.principal.JwtPrincipal;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.video.dto.VideoPlayDto;
 import org.backend.userapi.video.dto.VideoResponseDto;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,7 +23,7 @@ public class VideoService {
   private final VideoFileRepository videoFileRepository;
   private final WatchHistoryRepository watchHistoryRepository;
 
-  public VideoResponseDto getPlayInfo(Long videoId, UserDetails user) {
+  public VideoResponseDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
     // videos, contents 기본 정보 선조회
     Video video = videoRepository.findById(videoId)
         .orElseThrow(() -> new EntityNotFoundException("비디오 정보를 찾을 수 없습니다."));
