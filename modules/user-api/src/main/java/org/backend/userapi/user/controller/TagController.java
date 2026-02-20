@@ -2,6 +2,7 @@ package org.backend.userapi.user.controller;
 
 
 import org.backend.userapi.common.dto.ApiResponse;
+
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.backend.userapi.user.service.UserTagPreferenceService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
