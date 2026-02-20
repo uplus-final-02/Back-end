@@ -3,7 +3,6 @@ package org.backend.userapi.auth.jwt;
 import java.io.IOException;
 import java.util.Collections; // 추가됨
 
-import org.backend.userapi.auth.dto.UserPrincipal;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -28,8 +27,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
 
         if (token != null) {
+        	try {
             // 토큰 파싱
-            Long userId = Long.valueOf(com.auth0.jwt.JWT.decode(token).getSubject()); 
+//            Long userId = Long.valueOf(com.auth0.jwt.JWT.decode(token).getSubject());
+        	Long userId = jwtTokenProvider.extractUserId(token); // verify 포함 버전이면 OK
+
             UserPrincipal principal = new UserPrincipal(userId, null);
             
             // [핵심] null 대신 emptyList() 사용
@@ -37,6 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
             
             SecurityContextHolder.getContext().setAuthentication(auth);
+        } catch (IllegalArgumentException e) {
+        	SecurityContextHolder.clearContext();
+        	}
         }
         filterChain.doFilter(request, response);
     }

@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.LoginRequest;
 import org.backend.userapi.auth.dto.LoginResponse;
+import org.backend.userapi.auth.dto.ReissueRequest;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
 import org.backend.userapi.auth.service.AuthService;
@@ -39,4 +40,21 @@ public class AuthController {
         LoginResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+    
+    @PostMapping("/reissue")
+    public ResponseEntity<ApiResponse<LoginResponse>> reissue(
+            @Valid @RequestBody ReissueRequest request) {
+
+        LoginResponse response = authService.reissue(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout() {
+
+        authService.logout();
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+    
+    
 }

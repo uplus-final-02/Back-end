@@ -1,7 +1,8 @@
 package org.backend.userapi.user.tag.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.backend.userapi.auth.dto.UserPrincipal;
+
+import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.user.controller.TagController;
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;

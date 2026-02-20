@@ -37,4 +37,10 @@ public class RefreshToken {
         this.token = token;
         this.expiresAt = expiresAt;
     }
+    
+    public void rotate(String token, LocalDateTime expiresAt) {
+        this.token = token;
+        this.expiresAt = expiresAt;
+    }
+
 }

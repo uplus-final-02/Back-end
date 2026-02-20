@@ -1,7 +1,8 @@
 package org.backend.userapi.content.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.auth.dto.UserPrincipal;
+
+import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;

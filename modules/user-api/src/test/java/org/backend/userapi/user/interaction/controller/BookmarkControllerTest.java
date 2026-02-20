@@ -1,6 +1,6 @@
 package org.backend.userapi.user.interaction.controller;
 
-import org.backend.userapi.auth.dto.UserPrincipal;
+import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.user.controller.BookmarkController;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
