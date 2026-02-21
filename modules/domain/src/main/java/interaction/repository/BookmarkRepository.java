@@ -14,6 +14,8 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
 
     boolean existsByUserIdAndContentId(Long userId, Long contentId);
 
+    void deleteByUserIdAndContentId(Long userId, Long contentId);
+    
     @Query("SELECT b FROM Bookmark b WHERE b.userId = :userId " +
            "AND (:cursorId IS NULL OR b.id < :cursorId) " +
            "ORDER BY b.id DESC")
@@ -27,4 +29,6 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
         "WHERE b.userId = :userId " +
         "ORDER BY b.createdAt DESC")
     List<Bookmark> findRecentBookmarks(@Param("userId") Long userId, Pageable pageable);
+    
+    
 }
