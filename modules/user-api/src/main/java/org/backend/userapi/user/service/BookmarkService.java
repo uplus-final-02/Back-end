@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
-import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse.BookmarkItemResponse;
+import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
