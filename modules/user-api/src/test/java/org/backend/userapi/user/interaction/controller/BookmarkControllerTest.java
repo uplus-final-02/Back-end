@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.Collections;
 
-import org.backend.userapi.auth.jwt.UserPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.user.controller.BookmarkController;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
@@ -34,6 +33,8 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import core.security.principal.JwtPrincipal;
+
 @ExtendWith(MockitoExtension.class)
 class BookmarkControllerTest {
 
@@ -51,13 +52,13 @@ class BookmarkControllerTest {
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {
-                        return parameter.getParameterType().equals(UserPrincipal.class);
+                        return parameter.getParameterType().equals(JwtPrincipal.class);
                     }
 
                     @Override
                     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer, 
                                                 NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-                        UserPrincipal mockPrincipal = Mockito.mock(UserPrincipal.class);
+                    	JwtPrincipal mockPrincipal = Mockito.mock(JwtPrincipal.class);
                         Mockito.when(mockPrincipal.getUserId()).thenReturn(1L);
                         return mockPrincipal;
                     }
