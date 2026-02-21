@@ -4,7 +4,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.Collections;
 
+import org.backend.userapi.common.exception.BookmarkNotFoundException;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.user.controller.BookmarkController;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
@@ -97,5 +100,39 @@ class BookmarkControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.message").value("찜 목록 조회 성공"));
+    }
+    
+    @Test
+    @DisplayName("찜하기 삭제 요청 시 200 OK와 성공 메시지를 반환한다")
+    void removeBookmark_returnsOk() throws Exception {
+        // given
+        Long contentId = 100L;
+        doNothing().when(bookmarkService).removeBookmark(1L, contentId);
+
+        // when & then
+        mockMvc.perform(delete("/api/users/me/bookmarks/{contentId}", contentId)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("찜 목록에서 삭제되었습니다."));
+    }
+
+    @Test
+    @DisplayName("찜하지 않은 콘텐츠 삭제 요청 시 404 에러를 반환한다")
+    void removeBookmark_throwsNotFoundException() throws Exception {
+        // given
+        Long contentId = 999L; // 존재하지 않는 콘텐츠 ID 가정
+        String errorMessage = "찜하지 않은 콘텐츠입니다.";
+        
+        // 💡 서비스에서 에러를 던지도록 모킹 (이전에 만든 커스텀 예외 클래스 사용)
+        doThrow(new BookmarkNotFoundException(errorMessage))
+                .when(bookmarkService).removeBookmark(1L, contentId);
+
+        // when & then
+        mockMvc.perform(delete("/api/users/me/bookmarks/{contentId}", contentId)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound()) // 404 상태 코드 검증
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value(errorMessage));
     }
 }
