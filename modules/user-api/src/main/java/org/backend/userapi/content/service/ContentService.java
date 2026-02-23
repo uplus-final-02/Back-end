@@ -1,5 +1,7 @@
 package org.backend.userapi.content.service;
 
+import common.entity.Tag;
+import common.enums.ContentStatus;
 import common.enums.ContentType;
 import content.entity.Content;
 import content.entity.Video;
@@ -9,8 +11,6 @@ import content.repository.ContentRepository;
 import content.repository.ContentTagRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.common.exception.ContentNotFoundException;
@@ -47,9 +47,9 @@ public class ContentService {
 
         // 최근 3개월 시청이력 중, (중복 제거를 고려해) 넉넉하게 50개 조회
         List<WatchHistory> histories = watchHistoryRepository.findRecentWatchHistories(
-            userId,
-            threeMonthsAgo,
-            PageRequest.of(0, 50)
+                userId,
+                threeMonthsAgo,
+                PageRequest.of(0, 50)
         );
 
         // 2. contentId 기준으로 중복 제거 (LinkedHashMap으로 순서 보장: 최신순)
@@ -70,33 +70,47 @@ public class ContentService {
 
         // 3. DTO 변환 (별도의 조회 쿼리 없이 바로 변환 가능)
         return distinctHistoryMap.values().stream()
-                 .map(wh -> WatchingContentResponse.builder()
-                       .contentId(wh.getVideo().getContent().getId())
-                       .title(wh.getVideo().getContent().getTitle())
-                       .thumbnailUrl(wh.getVideo().getContent().getThumbnailUrl())
-                       .lastVideoId(wh.getVideo().getId())
-                       .lastVideoTitle(wh.getVideo().getTitle())
-                       .currentPositionSec(wh.getLastPositionSec())
-                       .lastWatchedAt(wh.getLastWatchedAt())
-                       .build())
-                 .collect(Collectors.toList());
+                .map(wh -> WatchingContentResponse.builder()
+                        .contentId(wh.getVideo().getContent().getId())
+                        .title(wh.getVideo().getContent().getTitle())
+                        .thumbnailUrl(wh.getVideo().getContent().getThumbnailUrl())
+                        .lastVideoId(wh.getVideo().getId())
+                        .lastVideoTitle(wh.getVideo().getTitle())
+                        .currentPositionSec(wh.getLastPositionSec())
+                        .lastWatchedAt(wh.getLastWatchedAt())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     // 기본 콘텐츠 리스트 조회
-    public List<DefaultContentResponse> getContents(String category) {
+    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag) {
         List<Content> contents;
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
-        if ("ADMIN".equalsIgnoreCase(category)) {
+        // 제공자별 필터링
+        if ("ADMIN".equalsIgnoreCase(uploaderType)) {
             // 관리자 업로드: uploaderId가 NULL인 것 조회
             contents = contentRepository.findByUploaderIdIsNull(sort);
-        } else if ("USER".equalsIgnoreCase(category)) {
+        } else if ("USER".equalsIgnoreCase(uploaderType)) {
             // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
             contents = contentRepository.findByUploaderIdIsNotNull(sort);
         } else {
             // 전체 조회
             contents = contentRepository.findAll(sort);
         }
+
+        // 상태 필터링 (ACTIVE 상태만) 및 태그 필터링 (태그도 ACTIVE 상태만)
+        contents = contents.stream()
+                .filter(content -> content.getStatus() == ContentStatus.ACTIVE)
+                .filter(content -> {
+                    if (tag != null && !tag.isEmpty()) {
+                        return content.getTags().stream()
+                                .filter(Tag::getIsActive)
+                                .anyMatch(t -> t.getName().equalsIgnoreCase(tag));
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
 
         if (contents.isEmpty()) {
             return Collections.emptyList();
@@ -125,11 +139,18 @@ public class ContentService {
                     if (content.getUploaderId() != null) {
                         uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
                     }
-                    return DefaultContentResponse.from(content, uploaderName);
+                    
+                    // 태그 필터링 (ACTIVE 상태만)
+                    List<Tag> activeTags = content.getTags().stream()
+                            .filter(Tag::getIsActive)
+                            .collect(Collectors.toList());
+
+                    // 오버로딩된 from 메소드 사용 (필터링된 태그 전달)
+                    return DefaultContentResponse.from(content, uploaderName, activeTags);
                 })
                 .collect(Collectors.toList());
     }
-  
+
     public ContentDetailResponse getContentDetail(Long contentId) {
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new ContentNotFoundException(

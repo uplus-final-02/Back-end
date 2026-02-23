@@ -27,25 +27,26 @@ public class ContentController {
     // 1. 시청 중인 콘텐츠
     @GetMapping("/home/watching")
     public ApiResponse<List<WatchingContentResponse>> getWatchingContents(
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-        ) {
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
         List<WatchingContentResponse> response = contentService.getWatchingContents(jwtPrincipal.getUserId());
         return ApiResponse.success(response);
     }
 
-    // 2. 기본 콘텐츠 목록 (카테고리별)
+    // 2. 기본 콘텐츠 목록 (제공자별 - uploaderType, 태그별 - tag)
     @GetMapping("/home/basic")
     public ApiResponse<List<DefaultContentResponse>> getContents(
-            @RequestParam(required = false) String category
+            @RequestParam(required = false) String uploaderType,
+            @RequestParam(required = false) String tag
     ) {
-        List<DefaultContentResponse> response = contentService.getContents(category);
+        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag);
         return ApiResponse.success(response);
     }
 
     // 3. 최근 찜 목록
     @GetMapping("/home/bookmark-list")
     public ApiResponse<List<RecentBookmarkResponse>> getBookmarkList(
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         // userPrincipal이 null이 아닐 때만 동작 (Security 설정에 따라 다름)
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(jwtPrincipal.getUserId()));
