@@ -13,8 +13,11 @@ import content.repository.WatchHistoryRepository;
 import core.security.principal.JwtPrincipal;
 import interaction.repository.BookmarkRepository;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.VideoNotFoundException;
 import org.backend.userapi.video.dto.VideoPlayDto;
+import org.backend.userapi.video.dto.VideoSimpleMetaData;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
@@ -38,7 +41,7 @@ public class VideoService {
     public VideoPlayDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
         // videos, contents 기본 정보 선조회
         Video video = videoRepository.findById(videoId)
-                .orElseThrow(() -> new EntityNotFoundException("비디오 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new VideoNotFoundException("비디오 정보를 찾을 수 없습니다."));
         Content content = video.getContent();
 
         Long userId = jwtPrincipal.getUserId();
@@ -112,6 +115,18 @@ public class VideoService {
         return videoPlayDto;
 
     }
+
+    @Transactional(readOnly = true)
+    public VideoSimpleMetaData getContentIdByVideoId(Long videoId) {
+        Tuple tuple = videoRepository.findMetaDataById(videoId)
+            .orElseThrow(() -> new VideoNotFoundException("비디오 정보를 찾을 수 없습니다."));
+
+        return new VideoSimpleMetaData(
+            tuple.get("contentId", Long.class),
+            tuple.get("durationiSec", Integer.class)
+        );
+    }
+
     // access 검증 메소드
 //  private void checkAccessPermission(Content content, CustomUserDetails user) {
 //    String requiredLevel = content.getAccessLevel(); // FREE, BASIC, UPLUS

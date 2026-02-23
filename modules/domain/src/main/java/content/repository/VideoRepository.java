@@ -5,6 +5,8 @@ import content.entity.WatchHistory;
 
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.Tuple;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,4 +24,11 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
   Optional<Video> findByContentIdAndEpisodeNo(Long contentId, Integer episodeNo);
   
   List<Video> findAllByContentIdInOrderByEpisodeNoAsc(List<Long> contentIds);
+
+  @Query("""
+      SELECT v.content.id AS contentId, v.videoFile.durationSec AS durationSec
+      FROM Video v
+      WHERE v.id = :videoId
+   """)
+  Optional<Tuple> findMetaDataById(@Param("videoId") Long videoId);
 }
