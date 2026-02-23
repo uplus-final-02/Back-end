@@ -15,7 +15,6 @@ import interaction.repository.BookmarkRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.video.dto.VideoPlayDto;
-import org.backend.userapi.video.dto.VideoResponseDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
