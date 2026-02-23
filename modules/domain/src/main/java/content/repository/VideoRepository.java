@@ -20,4 +20,6 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
   List<Video> findEpisodesWithVideoFileByContentId(@Param("contentId") Long contentId);
 
   Optional<Video> findByContentIdAndEpisodeNo(Long contentId, Integer episodeNo);
+  
+  List<Video> findAllByContentIdInOrderByEpisodeNoAsc(List<Long> contentIds);
 }

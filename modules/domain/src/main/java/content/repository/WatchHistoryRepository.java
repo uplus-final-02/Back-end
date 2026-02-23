@@ -25,4 +25,6 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
         @Param("threeMonthsAgo") LocalDateTime threeMonthsAgo,
         Pageable pageable
     );
+    
+    List<WatchHistory> findByUserIdAndVideoIdIn(Long userId, List<Long> videoIds);
 }
