@@ -83,7 +83,7 @@ public class DefaultContentResponse {
                 .createdAt(content.getCreatedAt())
                 .updatedAt(content.getUpdatedAt())
                 .tags(tags.stream()
-                        .map(ContentDetailResponse.TagResponse::from)
+                        .map(TagResponse::from)
                         .collect(Collectors.toList())
                 )
                 .build();

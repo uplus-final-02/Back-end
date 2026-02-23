@@ -83,72 +83,131 @@ public class ContentService {
     }
 
     // 기본 콘텐츠 리스트 조회
+//    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag) {
+//        List<Content> contents;
+//        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+//
+//        // 제공자별 필터링
+//        if ("ADMIN".equalsIgnoreCase(uploaderType)) {
+//            // 관리자 업로드: uploaderId가 NULL인 것 조회
+//            contents = contentRepository.findByUploaderIdIsNull(sort);
+//        } else if ("USER".equalsIgnoreCase(uploaderType)) {
+//            // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
+//            contents = contentRepository.findByUploaderIdIsNotNull(sort);
+//        } else {
+//            // 전체 조회
+//            contents = contentRepository.findAll(sort);
+//        }
+//
+//        // 상태 필터링 (ACTIVE 상태만) 및 태그 필터링 (태그도 ACTIVE 상태만)
+//        contents = contents.stream()
+//                .filter(content -> content.getStatus() == ContentStatus.ACTIVE)
+//                .filter(content -> {
+//                    if (tag != null && !tag.isEmpty()) {
+//                        return content.getTags().stream()
+//                                .filter(Tag::getIsActive)
+//                                .anyMatch(t -> t.getName().equalsIgnoreCase(tag));
+//                    }
+//                    return true;
+//                })
+//                .collect(Collectors.toList());
+//
+//        if (contents.isEmpty()) {
+//            return Collections.emptyList();
+//        }
+//
+//        // 1. uploaderId 목록 수집 (중복 제거 및 null 제외)
+//        Set<Long> uploaderIds = contents.stream()
+//                .map(Content::getUploaderId)
+//                .filter(Objects::nonNull)
+//                .collect(Collectors.toSet());
+//
+//        // 2. User 일괄 조회 (findAllById)
+//        Map<Long, String> uploaderNicknameMap = new HashMap<>();
+//        if (!uploaderIds.isEmpty()) {
+//            List<User> uploaders = userRepository.findAllById(new ArrayList<>(uploaderIds));
+//            for (User u : uploaders) {
+//                uploaderNicknameMap.put(u.getId(), u.getNickname());
+//            }
+//        }
+//
+//        // 3. DTO 변환 (Map에서 닉네임 조회)
+//        return contents.stream()
+//                .map(content -> {
+//                    // uploaderId가 null이면 "관리자", 아니면 닉네임 조회
+//                    String uploaderName = "관리자";
+//                    if (content.getUploaderId() != null) {
+//                        uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+//                    }
+//
+//                    // 태그 필터링 (ACTIVE 상태만)
+//                    List<Tag> activeTags = content.getTags().stream()
+//                            .filter(Tag::getIsActive)
+//                            .collect(Collectors.toList());
+//
+//                    // 오버로딩된 from 메소드 사용 (필터링된 태그 전달)
+//                    return DefaultContentResponse.from(content, uploaderName, activeTags);
+//                })
+//                .collect(Collectors.toList());
+//    }
     public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag) {
-        List<Content> contents;
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
-        // 제공자별 필터링
-        if ("ADMIN".equalsIgnoreCase(uploaderType)) {
-            // 관리자 업로드: uploaderId가 NULL인 것 조회
-            contents = contentRepository.findByUploaderIdIsNull(sort);
-        } else if ("USER".equalsIgnoreCase(uploaderType)) {
-            // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
-            contents = contentRepository.findByUploaderIdIsNotNull(sort);
-        } else {
-            // 전체 조회
-            contents = contentRepository.findAll(sort);
-        }
-
-        // 상태 필터링 (ACTIVE 상태만) 및 태그 필터링 (태그도 ACTIVE 상태만)
-        contents = contents.stream()
-                .filter(content -> content.getStatus() == ContentStatus.ACTIVE)
-                .filter(content -> {
-                    if (tag != null && !tag.isEmpty()) {
-                        return content.getTags().stream()
-                                .filter(Tag::getIsActive)
-                                .anyMatch(t -> t.getName().equalsIgnoreCase(tag));
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
+        // 1. DB 레벨 필터링: 'ACTIVE' 상태, 제공자, 태그 조건이 모두 적용된 데이터 조회 (N+1 방지)
+        List<Content> contents = contentRepository.findContentsWithFilters(
+                ContentStatus.ACTIVE, // 🔥 상태 파라미터 명시적 전달
+                uploaderType,
+                tag
+        );
 
         if (contents.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // 1. uploaderId 목록 수집 (중복 제거 및 null 제외)
+        // 2. User 닉네임 일괄 조회 (in 쿼리 최적화)
+        Map<Long, String> uploaderNicknameMap = getUploaderNicknameMap(contents);
+
+        // 3. DTO 변환 및 반환
+        return contents.stream()
+                .map(content -> convertToDto(content, uploaderNicknameMap))
+                .collect(Collectors.toList());
+    }
+
+    // ---------------------- [Private Helper Methods] ----------------------
+
+    /**
+     * 콘텐츠 리스트에서 업로더 ID를 추출하여 닉네임 맵(Map)으로 반환
+     */
+    private Map<Long, String> getUploaderNicknameMap(List<Content> contents) {
         Set<Long> uploaderIds = contents.stream()
                 .map(Content::getUploaderId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        // 2. User 일괄 조회 (findAllById)
-        Map<Long, String> uploaderNicknameMap = new HashMap<>();
-        if (!uploaderIds.isEmpty()) {
-            List<User> uploaders = userRepository.findAllById(new ArrayList<>(uploaderIds));
-            for (User u : uploaders) {
-                uploaderNicknameMap.put(u.getId(), u.getNickname());
-            }
+        if (uploaderIds.isEmpty()) {
+            return Collections.emptyMap();
         }
 
-        // 3. DTO 변환 (Map에서 닉네임 조회)
-        return contents.stream()
-                .map(content -> {
-                    // uploaderId가 null이면 "관리자", 아니면 닉네임 조회
-                    String uploaderName = "관리자";
-                    if (content.getUploaderId() != null) {
-                        uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
-                    }
-                    
-                    // 태그 필터링 (ACTIVE 상태만)
-                    List<Tag> activeTags = content.getTags().stream()
-                            .filter(Tag::getIsActive)
-                            .collect(Collectors.toList());
+        // IN 쿼리로 유저를 일괄 조회한 뒤 바로 Map으로 수집
+        return userRepository.findAllById(uploaderIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getNickname));
+    }
 
-                    // 오버로딩된 from 메소드 사용 (필터링된 태그 전달)
-                    return DefaultContentResponse.from(content, uploaderName, activeTags);
-                })
+    /**
+     * Content 엔티티를 DefaultContentResponse DTO로 변환
+     */
+    private DefaultContentResponse convertToDto(Content content, Map<Long, String> uploaderNicknameMap) {
+        // 업로더 이름 결정
+        String uploaderName = (content.getUploaderId() == null)
+                ? "관리자"
+                : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+
+        // 활성 상태인 태그만 필터링
+        List<Tag> activeTags = content.getTags().stream()
+                .filter(Tag::getIsActive)
                 .collect(Collectors.toList());
+
+        // 오버로딩된 from 메소드 사용 (필터링된 태그 전달)
+        return DefaultContentResponse.from(content, uploaderName, activeTags);
     }
 
     public ContentDetailResponse getContentDetail(Long contentId) {
