@@ -36,7 +36,7 @@ public class VideoService {
     private final BookmarkRepository bookmarkRepository;
     private final ContentTagRepository contentTagRepository;
 
-    public VideoResponseDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
+    public VideoPlayDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
         // videos, contents 기본 정보 선조회
         Video video = videoRepository.findById(videoId)
                 .orElseThrow(() -> new EntityNotFoundException("비디오 정보를 찾을 수 없습니다."));
@@ -110,12 +110,7 @@ public class VideoService {
                         .build())
                 .build();
 
-        VideoResponseDto response = new VideoResponseDto();
-        response.setCode(200);
-        response.setMessage("재생 정보 조회 성공");
-        response.setData(videoPlayDto);
-
-        return response;
+        return videoPlayDto;
 
     }
     // access 검증 메소드
