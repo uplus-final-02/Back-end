@@ -7,34 +7,42 @@ import common.repository.TagRepository;
 import core.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import org.backend.userapi.auth.dto.LoginRequest;
 import org.backend.userapi.auth.dto.LoginResponse;
+import org.backend.userapi.auth.dto.ReissueRequest;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
+
 import core.security.principal.JwtPrincipal;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+
 import org.backend.userapi.common.exception.DuplicateEmailException;
 import org.backend.userapi.common.exception.DuplicateNicknameException;
-import org.backend.userapi.common.exception.InvalidTagException;
 import org.backend.userapi.common.exception.InvalidCredentialsException;
+import org.backend.userapi.common.exception.InvalidTagException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.entity.Tag;
+import common.enums.AuthProvider;
+import common.enums.UserStatus;
+import common.repository.TagRepository;
+import core.security.jwt.JwtTokenProvider;
+import core.security.principal.JwtPrincipal;
+import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.RefreshToken;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
-import user.repository.RefreshTokenRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
-import org.backend.userapi.auth.dto.ReissueRequest;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Slf4j
 @Service

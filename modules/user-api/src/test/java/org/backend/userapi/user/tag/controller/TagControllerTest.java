@@ -1,8 +1,14 @@
 package org.backend.userapi.user.tag.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.backend.userapi.auth.jwt.UserPrincipal;
+import java.util.List;
+
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.user.controller.TagController;
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
@@ -24,14 +30,9 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
-import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import core.security.principal.JwtPrincipal;
 
 @ExtendWith(MockitoExtension.class)
 class TagControllerTest {
@@ -51,13 +52,13 @@ class TagControllerTest {
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {
-                        return parameter.getParameterType().equals(UserPrincipal.class);
+                        return parameter.getParameterType().equals(JwtPrincipal.class);
                     }
 
                     @Override
                     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer, 
                                                 NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-                        UserPrincipal mockPrincipal = Mockito.mock(UserPrincipal.class);
+                    	JwtPrincipal mockPrincipal = Mockito.mock(JwtPrincipal.class);
                         Mockito.when(mockPrincipal.getUserId()).thenReturn(1L);
                         return mockPrincipal;
                     }
