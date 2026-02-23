@@ -6,11 +6,15 @@ import common.enums.UserStatus;
 import common.repository.TagRepository;
 import core.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.backend.userapi.auth.dto.LoginRequest;
 import org.backend.userapi.auth.dto.LoginResponse;
 import org.backend.userapi.auth.dto.SignupRequest;
 import org.backend.userapi.auth.dto.SignupResponse;
-import org.backend.userapi.auth.jwt.UserPrincipal;
+import core.security.principal.JwtPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.backend.userapi.common.exception.DuplicateEmailException;
 import org.backend.userapi.common.exception.DuplicateNicknameException;
 import org.backend.userapi.common.exception.InvalidTagException;
@@ -32,6 +36,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -222,12 +227,17 @@ public class AuthService {
 
     @Transactional
     public void logout() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getPrincipal() == null) {
+    	Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    	if (auth == null || auth.getPrincipal() == null || "anonymousUser".equals(auth.getPrincipal())) {
             throw new InvalidCredentialsException("인증 정보가 없습니다.");
         }
 
-        UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
+        Object principalObj = auth.getPrincipal();
+        
+        if (!(principalObj instanceof JwtPrincipal principal)) {
+            throw new InvalidCredentialsException("인증 정보가 올바르지 않습니다.");
+        }
+        
         refreshTokenService.deleteByUserId(principal.getUserId());
     }
 
