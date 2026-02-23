@@ -105,7 +105,7 @@ class BookmarkServiceTest {
         when(history3.getLastPositionSec()).thenReturn(600); // 600초 중 600초 시청 (100%)
 
         // Repository 동작 정의 (MOCKING)
-        when(bookmarkRepository.findPlaylistByUserIdAsc(eq(userId), any(Pageable.class)))
+        when(bookmarkRepository.findPlaylistByUserIdDesc(eq(userId), any(Pageable.class)))
                 .thenReturn(List.of(bookmark1, bookmark2)); // 찜 2개 반환
         when(videoRepository.findAllByContentIdInOrderByEpisodeNoAsc(List.of(100L, 200L)))
                 .thenReturn(List.of(video1, video2, video3)); // 비디오 3개 반환
