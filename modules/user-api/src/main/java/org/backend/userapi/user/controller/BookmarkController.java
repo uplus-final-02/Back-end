@@ -2,6 +2,7 @@ package org.backend.userapi.user.controller;
 
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
+import org.backend.userapi.user.dto.response.BookmarkPlaylistResponse;
 import org.backend.userapi.user.service.BookmarkService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -10,8 +11,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import core.security.principal.JwtPrincipal;
 
+import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -47,5 +48,14 @@ public class BookmarkController {
     			bookmarkService.removeBookmark(jwtPrincipal.getUserId(), contentId);
     			
     			return new ApiResponse<Void>(200, "찜 목록에서 삭제되었습니다.", null);
+    }
+    
+    @GetMapping("/api/users/me/bookmarks/playlist")
+    public ApiResponse<BookmarkPlaylistResponse> getBookmarkPlaylist(
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        BookmarkPlaylistResponse data = bookmarkService.getBookmarkPlaylist(jwtPrincipal.getUserId());
+        
+        return new ApiResponse<>(200, "찜 목록 연속 재생 정보 조회 성공", data);
     }
 }
