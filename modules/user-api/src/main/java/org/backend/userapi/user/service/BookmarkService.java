@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.backend.userapi.common.exception.BookmarkNotFoundException;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse.BookmarkItemResponse;
 import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
@@ -55,7 +56,26 @@ public class BookmarkService {
         // 4. 콘텐츠 테이블의 북마크 총 수 증가
         content.updateBookmarkCount(content.getBookmarkCount() + 1);
     }
-
+    
+	
+    @Transactional
+    public void removeBookmark(Long userId, Long contentId) {
+    	if (!bookmarkRepository.existsByUserIdAndContentId(userId, contentId)) {
+            // 🚨 여기서 커스텀 예외를 던집니다!
+            throw new BookmarkNotFoundException("찜하지 않은 콘텐츠입니다."); 
+        }
+        bookmarkRepository.deleteByUserIdAndContentId(userId, contentId);
+    	
+    	contentRepository.findById(contentId).ifPresent(content ->{
+    		if(content.getBookmarkCount() > 0) {
+    			content.updateBookmarkCount(content.getBookmarkCount()-1);
+    		}
+    		
+    	});
+    }
+    
+    
+    
     /**
      * AE2-43: 찜 목록 조회 (Cursor 기반 페이징)
      */

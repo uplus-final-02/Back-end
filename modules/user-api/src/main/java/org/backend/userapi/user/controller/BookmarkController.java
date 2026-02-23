@@ -4,6 +4,7 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
 import org.backend.userapi.user.service.BookmarkService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,5 +37,15 @@ public class BookmarkController {
     ) {
         BookmarkListResponse data = bookmarkService.getMyBookmarks(jwtPrincipal.getUserId(), cursor, size);
         return new ApiResponse<>(200, "찜 목록 조회 성공", data);
+    }
+    
+    @DeleteMapping("/api/users/me/bookmarks/{contentId}")
+    public ApiResponse<Void> removeBookmark(
+    		@PathVariable Long contentId,
+    		@AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    		){
+    			bookmarkService.removeBookmark(jwtPrincipal.getUserId(), contentId);
+    			
+    			return new ApiResponse<Void>(200, "찜 목록에서 삭제되었습니다.", null);
     }
 }

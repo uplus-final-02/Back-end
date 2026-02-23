@@ -1,12 +1,13 @@
 package org.backend.userapi.common.exception;
 
-import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestControllerAdvice
@@ -88,6 +89,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ContentNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleContentNotFound(ContentNotFoundException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, e.getMessage(), null));
+    }
+    
+    //찜 삭제 전용 404 예외 처리
+    @ExceptionHandler(BookmarkNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBookmarkNotFound(BookmarkNotFoundException e) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, e.getMessage(), null));
