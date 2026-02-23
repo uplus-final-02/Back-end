@@ -164,7 +164,7 @@ public class BookmarkService {
     public BookmarkPlaylistResponse getBookmarkPlaylist(Long userId) {
         
         // 1. 유저의 찜 목록을 '오래된 순(ASC)'으로 가져옴
-        List<Bookmark> bookmarks = bookmarkRepository.findPlaylistByUserIdAsc(userId, PageRequest.of(0, 50));
+        List<Bookmark> bookmarks = bookmarkRepository.findPlaylistByUserIdDesc(userId, PageRequest.of(0, 50));
         
         if (bookmarks.isEmpty()) {
             return new BookmarkPlaylistResponse(Collections.emptyList(), 0);

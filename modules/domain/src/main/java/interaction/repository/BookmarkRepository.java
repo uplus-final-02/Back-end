@@ -31,5 +31,5 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
     List<Bookmark> findRecentBookmarks(@Param("userId") Long userId, Pageable pageable);
     
     @Query("SELECT b FROM Bookmark b WHERE b.userId = :userId ORDER BY b.createdAt ASC")
-    List<Bookmark> findPlaylistByUserIdAsc(@Param("userId") Long userId, Pageable pageable);
-}
+    List<Bookmark> findPlaylistByUserIdDesc(@Param("userId") Long userId, Pageable pageable);
+    }
