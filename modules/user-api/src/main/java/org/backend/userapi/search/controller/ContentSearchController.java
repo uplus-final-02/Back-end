@@ -46,15 +46,15 @@ public class ContentSearchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size
     ) {
-    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category)) {
-            throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
-        }
+    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category) && !StringUtils.hasText(genre)) {
+    	    throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
+    	}
 
     	int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
         Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
             case "LATEST" -> Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
             case "POPULAR" -> Sort.by(Sort.Order.desc("totalViewCount"), Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
-            case "RELATED" -> Sort.unsorted(); 
+            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId")); 
             default -> throw new IllegalArgumentException("지원하지 않는 정렬 방식입니다: " + sort);
         };
 

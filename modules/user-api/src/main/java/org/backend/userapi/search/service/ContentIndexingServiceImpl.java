@@ -106,7 +106,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
                     // 카테고리 필터 (정확도 점수 미반영, 캐싱 활용)
                     if (StringUtils.hasText(category)) {
-                        b.filter(f -> f.term(t -> t.field("type").value(category.toUpperCase())));
+                        b.filter(f -> f.term(t -> t.field("category").value(category.toUpperCase())));
                     }
 
                     // 장르/태그 필터 (태그 리스트 내 검색)
@@ -196,7 +196,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .title(content.getTitle())
                 .description(content.getDescription())
                 .tags(tagNames) // 수정된 태그 리스트 주입
-                .type(content.getType().name())
+                .category(content.getType().name())
                 .status(content.getStatus().name())
                 .accessLevel(content.getAccessLevel().name())
                 .thumbnailUrl(content.getThumbnailUrl())
