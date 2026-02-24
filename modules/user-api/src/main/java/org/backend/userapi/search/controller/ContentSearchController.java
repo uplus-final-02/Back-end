@@ -39,43 +39,31 @@ public class ContentSearchController {
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<ContentSearchResponse>> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String category, 
+            @RequestParam(required = false) String genre,   
+            @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "RELATED") String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size
     ) {
-        // 1. [Fix] NPE 방지 및 공백 체크 (StringUtils 사용 권장)
-        if (!StringUtils.hasText(keyword)) {
-            throw new IllegalArgumentException("검색어를 입력해주세요.");
-        }
+    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category) && !StringUtils.hasText(genre)) {
+    	    throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
+    	}
 
-        // 2. [Fix] 페이지 사이즈 상한 적용 및 음수 방어
-        if (page < 0) throw new IllegalArgumentException("page는 0 이상이어야 합니다.");
-        if (size <= 0) throw new IllegalArgumentException("size는 1 이상이어야 합니다.");
-        
-        int safeSize = Math.min(size, 50);
-
-        // 3. [Fix] 불필요한 try-catch 제거 및 간결한 switch문
+    	int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
         Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
-            case "LATEST" -> Sort.by(
-                Sort.Order.desc("createdAt"), 
-                Sort.Order.desc("contentId") // Tie-breaker
-            );
-            case "POPULAR" -> Sort.by(
-                Sort.Order.desc("totalViewCount"), 
-                Sort.Order.desc("createdAt"), 
-                Sort.Order.desc("contentId") 
-            );
-            case "RELATED" -> Sort.unsorted(); // ES 점수(_score) 기준 정렬
+            case "LATEST" -> Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
+            case "POPULAR" -> Sort.by(Sort.Order.desc("totalViewCount"), Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
+            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId")); 
             default -> throw new IllegalArgumentException("지원하지 않는 정렬 방식입니다: " + sort);
         };
 
-        // 4. [Fix] safeSize 변수 적용 (기존 코드 버그 수정)
-        Pageable pageable = PageRequest.of(page, safeSize, sortObj);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, sortObj);
         
-        Page<ContentDocument> result = contentIndexingService.search(keyword, pageable);
+    	Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, pageable);
         
         // keyword를 넘겨주어 matchType(TITLE, TAG 등) 판별
-        return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
+    	return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
     }
 
     @GetMapping("/search/suggestions")
