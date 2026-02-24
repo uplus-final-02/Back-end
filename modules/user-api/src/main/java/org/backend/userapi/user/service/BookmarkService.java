@@ -121,32 +121,14 @@ public class BookmarkService {
      */
     @Transactional(readOnly = true)
     public List<DefaultContentResponse> getRecentBookmarkList(Long userId) {
-        List<Bookmark> bookmarks = bookmarkRepository.findRecentBookmarks(
+        // 1. Theta Join으로 Content 직접 조회 (최신순 정렬됨)
+        List<Content> contents = bookmarkRepository.findRecentBookmarkedContents(
             userId,
             PageRequest.of(0, 5)
         );
 
-        if (bookmarks.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> contentIds = bookmarks.stream()
-                                         .map(Bookmark::getContentId)
-                                         .collect(Collectors.toList());
-
-        // Fetch contents
-        List<Content> contents = contentRepository.findAllById(contentIds);
-        Map<Long, Content> contentMap = contents.stream()
-                                                .collect(Collectors.toMap(Content::getId, c -> c));
-
-        // 북마크 순서대로 Content 정렬
-        List<Content> sortedContents = bookmarks.stream()
-                .map(b -> contentMap.get(b.getContentId()))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-
-        // ContentService의 변환 로직 사용 (닉네임 조회 포함)
-        return contentService.convertToDefaultContentResponses(sortedContents);
+        // 2. ContentService의 변환 로직 사용 (닉네임 조회 포함)
+        return contentService.convertToDefaultContentResponses(contents);
     }
     
     /**
