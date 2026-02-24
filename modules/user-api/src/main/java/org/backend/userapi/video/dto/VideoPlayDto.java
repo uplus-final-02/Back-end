@@ -1,10 +1,17 @@
 package org.backend.userapi.video.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import common.entity.Tag;
+import common.enums.ContentStatus;
+import common.enums.VideoStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.backend.userapi.content.dto.ContentDetailResponse;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -12,46 +19,58 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class VideoPlayDto {
 
-  // [1] 기본 식별자
-  private Long videoId;
-  private String title;
-  private String description;
+    // [1] 영상 기본 메타데이터
+    private Long videoId;
+    private String title;
+    private String description;
 
-  // [2] 재생 URL (Source 객체 대신 단순 문자열)
-  private String url;
+    private Long viewCount;
+    private Long durationSec;
+    private LocalDateTime createdAt;
+    private VideoStatus status;
 
-  // [3] 이어보기 상태
-  private PlaybackState playbackState;
+    private List<String> tags;
 
-  // [4] 시리즈 정보
-  private Context context;
+    // [2] 업로더 정보
+    private String uploaderType;
+    private String uploaderNickname;
 
-  // --- Inner Classes ---
+    // [3] 재생 URL (Source 객체 대신 단순 문자열)
+    private String url;
 
-  @Getter
-  @Builder
-  @AllArgsConstructor
-  @NoArgsConstructor
-  public static class PlaybackState {
+    // [4] 이어보기 상태 (개인화 데이터)
+    private boolean IsBookmarked;
+    private PlaybackState playbackState;
 
-    private long startPositionSec;
-    private String lastUpdated;
-  }
+    // [5] 시리즈 연동 정보
+    private Context context;
 
-  @Getter
-  @Builder
-  @AllArgsConstructor
-  @NoArgsConstructor
-  public static class Context {
+    // --- Inner Classes ---
 
-    private boolean isSeries;
-    private Long contentsId;
-    private Integer episodeNumber;
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class PlaybackState {
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private Long nextVideoId;
+        private long startPositionSec;
+        private String lastUpdated;
+    }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private Long prevVideoId;
-  }
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class Context {
+
+        private boolean isSeries;
+        private Long contentsId;
+        private Integer episodeNumber;
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private Long nextVideoId;
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private Long prevVideoId;
+    }
 }

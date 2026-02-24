@@ -1,20 +1,27 @@
 package org.backend.userapi.user.service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.backend.userapi.common.exception.BookmarkNotFoundException;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
-import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse.BookmarkItemResponse;
+import org.backend.userapi.user.dto.response.BookmarkPlaylistResponse;
+import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import common.enums.ContentStatus;
 import content.entity.Content;
+import content.entity.Video;
+import content.entity.WatchHistory;
 import content.repository.ContentRepository;
+import content.repository.VideoRepository;
+import content.repository.WatchHistoryRepository;
 import interaction.entity.Bookmark;
 import interaction.repository.BookmarkRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,18 +34,18 @@ public class BookmarkService {
     private final BookmarkRepository bookmarkRepository;
     private final ContentRepository contentRepository;
     private final UserRepository userRepository;
-
+    private final VideoRepository videoRepository;
+    private final WatchHistoryRepository watchHistoryRepository;
+    
     /**
      * AE2-44: 찜하기 등록
      */
     @Transactional
     public void addBookmark(Long userId, Long contentId) {
-        // 1. 중복 체크
         if (bookmarkRepository.existsByUserIdAndContentId(userId, contentId)) {
             return;
         }
 
-        // 2. 존재 여부 검증 (객체 대신 존재 확인만 수행)
         if (!userRepository.existsById(userId)) {
             throw new IllegalArgumentException("사용자를 찾을 수 없습니다.");
         }
@@ -46,22 +53,36 @@ public class BookmarkService {
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."));
 
-        // 3. 찜 저장 (수정된 Entity 구조: ID 직접 저장)
         bookmarkRepository.save(Bookmark.builder()
-                .userId(userId)    // 객체(user) 대신 ID(userId) 전달
-                .contentId(contentId) // 객체(content) 대신 ID(contentId) 전달
+                .userId(userId)
+                .contentId(contentId)
                 .build());
 
-        // 4. 콘텐츠 테이블의 북마크 총 수 증가
         content.updateBookmarkCount(content.getBookmarkCount() + 1);
     }
-
+    
+    /**
+     * AE2-214: 찜하기 삭제
+     */
+    @Transactional
+    public void removeBookmark(Long userId, Long contentId) {
+        if (!bookmarkRepository.existsByUserIdAndContentId(userId, contentId)) {
+            throw new BookmarkNotFoundException("찜하지 않은 콘텐츠입니다."); 
+        }
+        bookmarkRepository.deleteByUserIdAndContentId(userId, contentId);
+        
+        contentRepository.findById(contentId).ifPresent(content ->{
+            if(content.getBookmarkCount() > 0) {
+                content.updateBookmarkCount(content.getBookmarkCount() - 1);
+            }
+        });
+    }
+    
     /**
      * AE2-43: 찜 목록 조회 (Cursor 기반 페이징)
      */
     @Transactional(readOnly = true)
     public BookmarkListResponse getMyBookmarks(Long userId, Long cursorId, int size) {
-        // 1. 북마크 목록 먼저 조회
         List<Bookmark> bookmarks = bookmarkRepository.findByUserIdWithCursor(
                 userId, cursorId, PageRequest.of(0, size + 1));
 
@@ -70,16 +91,13 @@ public class BookmarkService {
             bookmarks = bookmarks.subList(0, size);
         }
 
-        // 2. 조회된 북마크들에서 contentId 목록 추출
         List<Long> contentIds = bookmarks.stream()
                 .map(Bookmark::getContentId)
                 .toList();
 
-        // 3. 연관된 콘텐츠 정보 한꺼번에 조회 (IN 쿼리 사용)
         Map<Long, Content> contentMap = contentRepository.findAllById(contentIds).stream()
                 .collect(Collectors.toMap(Content::getId, c -> c));
 
-        // 4. DTO 변환 (contentMap에서 정보 매핑)
         List<BookmarkItemResponse> items = bookmarks.stream().map(b -> {
             Content content = contentMap.get(b.getContentId());
             return new BookmarkItemResponse(
@@ -101,10 +119,9 @@ public class BookmarkService {
 
     /**
      * AE2-61: 홈 화면 - 최근 찜한 콘텐츠 목록 api
-     * 최근 북마크한 5개만 가져옴
      */
+    @Transactional(readOnly = true)
     public List<RecentBookmarkResponse> getRecentBookmarkList(Long userId) {
-        // 1. 최근 북마크 5개 조회 (Content 정보 없음, ID만 있음)
         List<Bookmark> bookmarks = bookmarkRepository.findRecentBookmarks(
             userId,
             PageRequest.of(0, 5)
@@ -114,22 +131,17 @@ public class BookmarkService {
             return Collections.emptyList();
         }
 
-        // 2. 조회된 북마크에서 contentId 리스트 추출
         List<Long> contentIds = bookmarks.stream()
                                          .map(Bookmark::getContentId)
                                          .collect(Collectors.toList());
 
-        // 3. contentId들로 Content 정보 한 번에 조회 (IN 쿼리 발생)
-        //    -> Map<ContentId, Content> 형태로 변환하여 매칭 속도 높임 (O(1))
         Map<Long, Content> contentMap = contentRepository.findAllById(contentIds).stream()
                                                          .collect(Collectors.toMap(Content::getId, content -> content));
 
-        // 4. Bookmark + Content 정보 조립하여 DTO 변환
         return bookmarks.stream()
                         .map(bookmark -> {
                             Content content = contentMap.get(bookmark.getContentId());
 
-                            // 만약 Content가 삭제되었을 경우 대비 (null check)
                             String title = (content != null) ? content.getTitle() : "삭제된 콘텐츠";
                             String thumbnailUrl = (content != null) ? content.getThumbnailUrl() : "";
 
@@ -142,5 +154,101 @@ public class BookmarkService {
                                                          .build();
                         })
                         .collect(Collectors.toList());
+    }
+    
+    /**
+     * [신규] 찜 목록 연속 재생 (유튜브 재생목록 스타일)
+     * - 시리즈는 전체 에피소드로 전개(Flatten), 진행률 동적 계산 적용
+     */
+    @Transactional(readOnly = true)
+    public BookmarkPlaylistResponse getBookmarkPlaylist(Long userId) {
+        
+        // 1. 유저의 찜 목록을 '오래된 순(ASC)'으로 가져옴
+        List<Bookmark> bookmarks = bookmarkRepository.findPlaylistByUserIdDesc(userId, PageRequest.of(0, 50));
+        
+        if (bookmarks.isEmpty()) {
+            return new BookmarkPlaylistResponse(Collections.emptyList(), 0);
+        }
+
+        List<Long> contentIds = bookmarks.stream().map(Bookmark::getContentId).toList();
+
+        // 2. 찜한 콘텐츠들에 속한 '모든 비디오'를 조회 (Bulk 조회)
+        List<Video> allVideos = videoRepository.findAllByContentIdInOrderByEpisodeNoAsc(contentIds);
+        List<Long> videoIds = allVideos.stream().map(Video::getId).toList();
+
+        // 3. 해당 비디오들에 대한 유저의 '시청 기록' 조회 (Bulk 조회)
+        List<WatchHistory> histories = watchHistoryRepository.findByUserIdAndVideoIdIn(userId, videoIds);
+        
+        // 4. Map으로 변환하여 매핑 속도를 O(1)로 최적화
+        Map<Long, WatchHistory> historyMap = histories.stream()
+                .collect(Collectors.toMap(h -> h.getVideo().getId(), h -> h));
+
+        // 5. 데이터 조립 (Flattening - 시리즈를 낱개 비디오로 펼치기)
+        List<BookmarkPlaylistResponse.PlaylistItem> playlist = new ArrayList<>();
+        int order = 1;
+
+        for (Bookmark bookmark : bookmarks) {
+            List<Video> seriesVideos = allVideos.stream()
+                    .filter(v -> v.getContent().getId().equals(bookmark.getContentId()))
+                    .toList();
+
+            for (Video video : seriesVideos) {
+                if (video.getContent().getStatus() == ContentStatus.DELETED) {
+                    continue; 
+                }
+
+                WatchHistory history = historyMap.get(video.getId());
+                
+                // 에피소드 제목 조립 ("1화 - 부제")
+                String episodeTitle = null;
+                if (video.getTitle() != null && !video.getTitle().isBlank()) {
+                    episodeTitle = video.getEpisodeNo() + "화 - " + video.getTitle();
+                } else {
+                    episodeTitle = video.getEpisodeNo() + "화";
+                }
+
+                // 썸네일 로직 (회차 썸네일 우선, 없으면 콘텐츠 대표 썸네일)
+                String thumbUrl = video.getThumbnailUrl();
+                if (thumbUrl == null || thumbUrl.isBlank()) {
+                    thumbUrl = video.getContent().getThumbnailUrl();
+                }
+
+                // VideoFile 엔티티에서 영상 정보 추출
+                String videoUrl = "";
+                int duration = 0;
+                if (video.getVideoFile() != null) {
+                    videoUrl = video.getVideoFile().getHlsUrl() != null ? 
+                               video.getVideoFile().getHlsUrl() : video.getVideoFile().getOriginalUrl();
+                    duration = video.getVideoFile().getDurationSec();
+                }
+
+                // 시청 위치 및 진행률(%) 직접 계산
+                int lastPosition = (history != null && history.getLastPositionSec() != null) 
+                                   ? history.getLastPositionSec() : 0;
+                
+                int progressPercent = 0;
+                if (duration > 0) {
+                    progressPercent = (int) Math.round((double) lastPosition / duration * 100);
+                }
+
+                // 단건 판별 로직
+                boolean isSingleVideo = (video.getTitle() == null && video.getEpisodeNo() <= 1);
+
+                playlist.add(new BookmarkPlaylistResponse.PlaylistItem(
+                    order++,                                          
+                    video.getContent().getId(),                       
+                    isSingleVideo ? null : video.getId(),             
+                    video.getContent().getTitle(),                    
+                    isSingleVideo ? null : episodeTitle,              
+                    thumbUrl,                                         
+                    videoUrl,                                         
+                    duration,                                         
+                    lastPosition,                                     
+                    progressPercent                                   
+                ));
+            }
+        }
+
+        return new BookmarkPlaylistResponse(playlist, playlist.size());
     }
 }

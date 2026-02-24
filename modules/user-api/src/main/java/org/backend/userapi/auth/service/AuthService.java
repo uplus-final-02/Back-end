@@ -16,6 +16,14 @@ import org.backend.userapi.common.exception.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.entity.Tag;
+import common.enums.AuthProvider;
+import common.enums.UserStatus;
+import common.repository.TagRepository;
+import core.security.jwt.JwtTokenProvider;
+import core.security.principal.JwtPrincipal;
+import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.RefreshToken;
 import user.entity.User;
@@ -27,6 +35,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -259,11 +268,17 @@ public class AuthService {
 
     @Transactional
     public void logout() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getPrincipal() == null) {
+    	Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    	if (auth == null || auth.getPrincipal() == null || "anonymousUser".equals(auth.getPrincipal())) {
             throw new InvalidCredentialsException("인증 정보가 없습니다.");
         }
-        JwtPrincipal principal = (JwtPrincipal) auth.getPrincipal();
+
+        Object principalObj = auth.getPrincipal();
+        
+        if (!(principalObj instanceof JwtPrincipal principal)) {
+            throw new InvalidCredentialsException("인증 정보가 올바르지 않습니다.");
+        }
+        
         refreshTokenService.deleteByUserId(principal.getUserId());
     }
 
