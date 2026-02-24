@@ -10,6 +10,9 @@ import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.user.service.BookmarkService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -37,9 +40,12 @@ public class ContentController {
     @GetMapping("/home/basic")
     public ApiResponse<List<DefaultContentResponse>> getContents(
             @RequestParam(required = false) String uploaderType,
-            @RequestParam(required = false) String tag
+            @RequestParam(required = false) String tag,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size
     ) {
-        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, pageable);
         return ApiResponse.success(response);
     }
 

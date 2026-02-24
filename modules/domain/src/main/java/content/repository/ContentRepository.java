@@ -2,6 +2,8 @@ package content.repository;
 
 import common.enums.ContentStatus;
 import content.entity.Content;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -36,5 +38,20 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("status") ContentStatus status,
             @Param("uploaderType") String uploaderType,
             @Param("tag") String tag
+    );
+
+    @Query("SELECT DISTINCT c FROM Content c " +
+            "WHERE (:status IS NULL OR c.status = :status) " +
+            "AND (:uploaderType IS NULL " +
+            "     OR (:uploaderType = 'ADMIN' AND c.uploaderId IS NULL) " +
+            "     OR (:uploaderType = 'USER' AND c.uploaderId IS NOT NULL)) " +
+            "AND (:tag IS NULL OR :tag = '' " +
+            "     OR EXISTS (SELECT 1 FROM c.contentTags sub_ct JOIN sub_ct.tag sub_t " +
+            "                WHERE sub_t.name = :tag AND sub_t.isActive = true))")
+    Slice<Content> findContentsWithFilters(
+            @Param("status") ContentStatus status,
+            @Param("uploaderType") String uploaderType,
+            @Param("tag") String tag,
+            Pageable pageable
     );
 }

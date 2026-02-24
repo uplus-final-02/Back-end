@@ -8,7 +8,6 @@ import content.entity.Video;
 import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
-import content.repository.ContentTagRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +18,8 @@ import org.backend.userapi.content.dto.EpisodeResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 public class ContentService {
 
     private final ContentRepository contentRepository;
-    private final ContentTagRepository contentTagRepository;
     private final WatchHistoryRepository watchHistoryRepository;
     private final UserRepository userRepository;
     private final VideoRepository videoRepository;
@@ -82,82 +81,17 @@ public class ContentService {
                 .collect(Collectors.toList());
     }
 
-    // 기본 콘텐츠 리스트 조회
-//    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag) {
-//        List<Content> contents;
-//        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
-//
-//        // 제공자별 필터링
-//        if ("ADMIN".equalsIgnoreCase(uploaderType)) {
-//            // 관리자 업로드: uploaderId가 NULL인 것 조회
-//            contents = contentRepository.findByUploaderIdIsNull(sort);
-//        } else if ("USER".equalsIgnoreCase(uploaderType)) {
-//            // 일반 유저 업로드: uploaderId가 NULL이 아닌 것 조회
-//            contents = contentRepository.findByUploaderIdIsNotNull(sort);
-//        } else {
-//            // 전체 조회
-//            contents = contentRepository.findAll(sort);
-//        }
-//
-//        // 상태 필터링 (ACTIVE 상태만) 및 태그 필터링 (태그도 ACTIVE 상태만)
-//        contents = contents.stream()
-//                .filter(content -> content.getStatus() == ContentStatus.ACTIVE)
-//                .filter(content -> {
-//                    if (tag != null && !tag.isEmpty()) {
-//                        return content.getTags().stream()
-//                                .filter(Tag::getIsActive)
-//                                .anyMatch(t -> t.getName().equalsIgnoreCase(tag));
-//                    }
-//                    return true;
-//                })
-//                .collect(Collectors.toList());
-//
-//        if (contents.isEmpty()) {
-//            return Collections.emptyList();
-//        }
-//
-//        // 1. uploaderId 목록 수집 (중복 제거 및 null 제외)
-//        Set<Long> uploaderIds = contents.stream()
-//                .map(Content::getUploaderId)
-//                .filter(Objects::nonNull)
-//                .collect(Collectors.toSet());
-//
-//        // 2. User 일괄 조회 (findAllById)
-//        Map<Long, String> uploaderNicknameMap = new HashMap<>();
-//        if (!uploaderIds.isEmpty()) {
-//            List<User> uploaders = userRepository.findAllById(new ArrayList<>(uploaderIds));
-//            for (User u : uploaders) {
-//                uploaderNicknameMap.put(u.getId(), u.getNickname());
-//            }
-//        }
-//
-//        // 3. DTO 변환 (Map에서 닉네임 조회)
-//        return contents.stream()
-//                .map(content -> {
-//                    // uploaderId가 null이면 "관리자", 아니면 닉네임 조회
-//                    String uploaderName = "관리자";
-//                    if (content.getUploaderId() != null) {
-//                        uploaderName = uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
-//                    }
-//
-//                    // 태그 필터링 (ACTIVE 상태만)
-//                    List<Tag> activeTags = content.getTags().stream()
-//                            .filter(Tag::getIsActive)
-//                            .collect(Collectors.toList());
-//
-//                    // 오버로딩된 from 메소드 사용 (필터링된 태그 전달)
-//                    return DefaultContentResponse.from(content, uploaderName, activeTags);
-//                })
-//                .collect(Collectors.toList());
-//    }
-    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag) {
+    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, Pageable pageable) {
 
         // 1. DB 레벨 필터링: 'ACTIVE' 상태, 제공자, 태그 조건이 모두 적용된 데이터 조회 (N+1 방지)
-        List<Content> contents = contentRepository.findContentsWithFilters(
+        Slice<Content> contentSlice = contentRepository.findContentsWithFilters(
                 ContentStatus.ACTIVE, // 🔥 상태 파라미터 명시적 전달
                 uploaderType,
-                tag
+                tag,
+                pageable
         );
+
+        List<Content> contents = contentSlice.getContent();
 
         if (contents.isEmpty()) {
             return Collections.emptyList();

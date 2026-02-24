@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,8 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.Collections;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -59,7 +59,7 @@ class ContentControllerTest {
                 .build();
         List<DefaultContentResponse> responseList = Collections.singletonList(response);
 
-        given(contentService.getDefaultContents(null, null)).willReturn(responseList);
+        given(contentService.getDefaultContents(eq(null), eq(null), any(Pageable.class))).willReturn(responseList);
 
         // when & then
         mockMvc.perform(get("/api/contents/home/basic")
@@ -82,7 +82,7 @@ class ContentControllerTest {
                 .build();
         List<DefaultContentResponse> responseList = Collections.singletonList(response);
 
-        given(contentService.getDefaultContents(eq(uploaderType), eq(null))).willReturn(responseList);
+        given(contentService.getDefaultContents(eq(uploaderType), eq(null), any(Pageable.class))).willReturn(responseList);
 
         // when & then
         mockMvc.perform(get("/api/contents/home/basic")
@@ -106,7 +106,7 @@ class ContentControllerTest {
                 .build();
         List<DefaultContentResponse> responseList = Collections.singletonList(response);
 
-        given(contentService.getDefaultContents(eq(null), eq(tag))).willReturn(responseList);
+        given(contentService.getDefaultContents(eq(null), eq(tag), any(Pageable.class))).willReturn(responseList);
 
         // when & then
         mockMvc.perform(get("/api/contents/home/basic")
@@ -131,7 +131,7 @@ class ContentControllerTest {
                 .build();
         List<DefaultContentResponse> responseList = Collections.singletonList(response);
 
-        given(contentService.getDefaultContents(eq(uploaderType), eq(tag))).willReturn(responseList);
+        given(contentService.getDefaultContents(eq(uploaderType), eq(tag), any(Pageable.class))).willReturn(responseList);
 
         // when & then
         mockMvc.perform(get("/api/contents/home/basic")
