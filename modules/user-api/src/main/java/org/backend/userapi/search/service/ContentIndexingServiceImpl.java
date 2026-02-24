@@ -1,11 +1,12 @@
 package org.backend.userapi.search.service;
 
-import common.entity.Tag;
-import content.entity.Content;
-import content.entity.ContentTag; 
-import content.repository.ContentRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.repository.ContentSearchRepository;
 import org.springframework.data.domain.Page;
@@ -13,7 +14,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.HighlightQuery;
 import org.springframework.data.elasticsearch.core.query.highlight.Highlight;
@@ -24,13 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
+import content.entity.Content;
+import content.repository.ContentRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -84,39 +81,59 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     @Override
-    public Page<ContentDocument> search(String keyword, Pageable pageable) {
-        if (!StringUtils.hasText(keyword)) {
-            return Page.empty(pageable);
-        }
+    public Page<ContentDocument> search(String keyword, String category, String genre, String tag, Pageable pageable) {
+    	
+    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(category) && 
+                !StringUtils.hasText(genre) && !StringUtils.hasText(tag)) {
+                log.info("검색어와 필터가 모두 비어있어 빈 결과를 반환합니다.");
+                return new PageImpl<>(List.of(), pageable, 0); 
+            }
+    	
+        // 1. 하이라이트 설정 보존
+    	HighlightParameters hp = HighlightParameters.builder()
+                .withPreTags("<em>").withPostTags("</em>").build();
+        Highlight highlight = new Highlight(hp, List.of(new HighlightField("title"), new HighlightField("description")));
 
-        HighlightParameters highlightParameters = HighlightParameters.builder()
-                .withPreTags("<em>")
-                .withPostTags("</em>")
-                .build();
-
-        HighlightField titleField = new HighlightField("title");
-        HighlightField descField = new HighlightField("description");
-
-        Highlight highlight = new Highlight(highlightParameters, List.of(titleField, descField));
-        
+        // 2. 동적 Bool 쿼리 (Must: 키워드 가중치 / Filter: 카테고리, 태그)
         NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.multiMatch(m -> m
-                        .fields("title^3", "tags^2", "description")
-                        .query(keyword)))
+                .withQuery(q -> q.bool(b -> {
+                    // 키워드 검색 (점수 반영)
+                    if (StringUtils.hasText(keyword)) {
+                        b.must(m -> m.multiMatch(mm -> mm
+                                .fields("title^3", "tags^2", "description")
+                                .query(keyword)));
+                    }
+
+                    // 카테고리 필터 (정확도 점수 미반영, 캐싱 활용)
+                    if (StringUtils.hasText(category)) {
+                        b.filter(f -> f.term(t -> t.field("type").value(category.toUpperCase())));
+                    }
+
+                    // 장르/태그 필터 (태그 리스트 내 검색)
+                    if (StringUtils.hasText(genre)) {
+                        b.filter(f -> f.term(t -> t.field("tags").value(genre)));
+                    }
+                    if (StringUtils.hasText(tag)) {
+                        b.filter(f -> f.term(t -> t.field("tags").value(tag)));
+                    }
+
+                    // 활성 콘텐츠만 검색 (공통 필터)
+                    b.filter(f -> f.term(t -> t.field("status").value("ACTIVE")));
+                    
+                    return b;
+                }))
                 .withPageable(pageable)
                 .withHighlightQuery(new HighlightQuery(highlight, null))
                 .build();
 
+        // 3. 결과 처리 및 하이라이트 매핑
         SearchHits<ContentDocument> searchHits = elasticsearchOperations.search(query, ContentDocument.class);
 
         List<ContentDocument> contents = searchHits.stream()
                 .map(hit -> {
                     ContentDocument doc = hit.getContent();
-                    List<String> titleHighlight = hit.getHighlightField("title");
-                    if (!titleHighlight.isEmpty()) doc.setHighlightTitle(titleHighlight.get(0));
-                    
-                    List<String> descHighlight = hit.getHighlightField("description");
-                    if (!descHighlight.isEmpty()) doc.setHighlightDescription(descHighlight.get(0));
+                    doc.setHighlightTitle(hit.getHighlightField("title").stream().findFirst().orElse(null));
+                    doc.setHighlightDescription(hit.getHighlightField("description").stream().findFirst().orElse(null));
                     return doc;
                 })
                 .toList();
