@@ -1,20 +1,18 @@
 package org.backend.userapi.auth.service;
 
+import com.auth0.jwt.interfaces.DecodedJWT;
 import common.entity.Tag;
 import common.enums.AuthProvider;
 import common.enums.UserStatus;
 import common.repository.TagRepository;
+import core.security.exception.JwtInvalidTokenException;
+import core.security.exception.JwtTokenExpiredException;
 import core.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.auth.dto.LoginRequest;
-import org.backend.userapi.auth.dto.LoginResponse;
-import org.backend.userapi.auth.dto.SignupRequest;
-import org.backend.userapi.auth.dto.SignupResponse;
-import org.backend.userapi.auth.jwt.UserPrincipal;
-import org.backend.userapi.common.exception.DuplicateEmailException;
-import org.backend.userapi.common.exception.DuplicateNicknameException;
-import org.backend.userapi.common.exception.InvalidTagException;
-import org.backend.userapi.common.exception.InvalidCredentialsException;
+import org.backend.userapi.auth.dto.*;
+import core.security.principal.JwtPrincipal;
+import org.backend.userapi.auth.oauth.OAuthUserInfo;
+import org.backend.userapi.common.exception.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,13 +21,10 @@ import user.entity.RefreshToken;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
-import user.repository.RefreshTokenRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
-import org.backend.userapi.auth.dto.ReissueRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -42,56 +37,173 @@ public class AuthService {
     private final TagRepository tagRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-//    private final RefreshTokenRepository refreshTokenRepository;
-
     private final RefreshTokenService refreshTokenService;
-    
-    /*
-     * 회원가입
+    private final EmailVerificationService emailVerificationService;
+
+    // ══════════════════════════════════════════════════════════════
+    //  STEP 1: 이메일 인증코드 발송
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * 이메일 중복/소셜 충돌 검사 후 인증코드 발송.
+     */
+    public void sendEmailVerificationCode(String email) {
+        validateEmailConflicts(email);
+        emailVerificationService.sendCode(email);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  STEP 2: 이메일 인증코드 검증 → Setup Token 발급
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * 인증코드 검증 성공 시 Setup Token 발급.
+     * 비밀번호 해시를 토큰에 담아 DB 저장 없이 다음 단계로 전달합니다.
+     */
+    public SetupTokenResponse verifyEmailCode(EmailVerifyCodeRequest request) {
+        emailVerificationService.verifyCode(request.email(), request.code());
+
+        String passwordHash = passwordEncoder.encode(request.password());
+        String setupToken = jwtTokenProvider.generateSetupToken(
+                AuthProvider.EMAIL.name(), request.email(), passwordHash, null, null);
+
+        return new SetupTokenResponse(setupToken, jwtTokenProvider.getSetupTokenTtlSeconds());
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  STEP 3: 닉네임 설정 → Setup Token 갱신 (이메일/소셜 공통)
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * 닉네임 중복 검사 후, 닉네임이 추가된 새 Setup Token을 발급합니다.
+     */
+    public SetupTokenResponse setNickname(String setupToken, NicknameSetupRequest request) {
+        DecodedJWT decoded = extractSetupToken(setupToken);
+
+        validateDuplicateNickname(request.nickname());
+
+        String newSetupToken = jwtTokenProvider.generateSetupToken(
+                decoded.getClaim("provider").asString(),
+                decoded.getClaim("email").asString(),
+                decoded.getClaim("passwordHash").asString(),
+                decoded.getClaim("providerSubject").asString(),
+                request.nickname()
+        );
+
+        return new SetupTokenResponse(newSetupToken, jwtTokenProvider.getSetupTokenTtlSeconds());
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  STEP 4: 태그 선택 → 유저 최종 생성 + JWT 발급 (이메일/소셜 공통)
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Setup Token의 정보로 유저를 최종 생성하고 JWT를 발급합니다.
+     * 이메일 가입과 소셜 가입 모두 이 엔드포인트를 공유합니다.
      */
     @Transactional
-    public SignupResponse signup(SignupRequest request) {
-        // 1. 검증
-        validateDuplicateEmail(request.email());
-        validateDuplicateNickname(request.nickname());
+    public LoginResponse completeSignup(String setupToken, TagSetupRequest request) {
+        DecodedJWT decoded = extractSetupToken(setupToken);
+
+        // 닉네임 단계 완료 여부 확인
+        String nickname = decoded.getClaim("nickname").asString();
+        if (nickname == null || nickname.isBlank()) {
+            throw new InvalidSetupTokenException("닉네임 설정 단계를 먼저 완료해주세요.");
+        }
+
+        String provider        = decoded.getClaim("provider").asString();
+        String email           = decoded.getClaim("email").asString();
+        String passwordHash    = decoded.getClaim("passwordHash").asString();
+        String providerSubject = decoded.getClaim("providerSubject").asString();
+
+        // 태그 검증
         validateTagCount(request.tagIds());
         List<Tag> tags = validateAndGetTags(request.tagIds());
 
-        // 2. 비밀번호 암호화
-        String encodedPassword = passwordEncoder.encode(request.password());
-
-        // 3. User 저장
-        User user = User.builder()
-                .nickname(request.nickname())
-                .build();
+        // User 생성
+        User user = User.builder().nickname(nickname).build();
         userRepository.save(user);
 
-        // 4. AuthAccount 저장
-        AuthAccount authAccount = AuthAccount.builder()
-                .user(user)
-                .authProvider(AuthProvider.EMAIL)
-                .authProviderSubject(request.email())
-                .email(request.email())
-                .passwordHash(encodedPassword)
-                .build();
+        // AuthAccount 생성 (provider에 따라 분기)
+        AuthProvider authProvider = AuthProvider.valueOf(provider);
+        AuthAccount authAccount;
+        if (authProvider == AuthProvider.EMAIL) {
+            authAccount = AuthAccount.builder()
+                    .user(user)
+                    .authProvider(AuthProvider.EMAIL)
+                    .authProviderSubject(email)
+                    .email(email)
+                    .passwordHash(passwordHash)
+                    .build();
+        } else {
+            authAccount = AuthAccount.builder()
+                    .user(user)
+                    .authProvider(authProvider)
+                    .authProviderSubject(providerSubject)
+                    .email(email)
+                    .build();
+        }
         authAccountRepository.save(authAccount);
 
-        // 5. UserPreferredTag 일괄 저장
+        // UserPreferredTag 저장
         List<UserPreferredTag> preferredTags = tags.stream()
-                .map(tag -> UserPreferredTag.builder()
-                        .user(user)
-                        .tag(tag)
-                        .build())
+                .map(tag -> UserPreferredTag.builder().user(user).tag(tag).build())
                 .toList();
         userPreferredTagRepository.saveAll(preferredTags);
 
-        // 6. 응답 반환
-        List<String> tagNames = tags.stream()
-                .map(Tag::getName)
-                .toList();
-
-        return new SignupResponse(user.getId(), user.getNickname(), tagNames);
+        return issueJwt(user, email);
     }
+
+    // ══════════════════════════════════════════════════════════════
+    //  소셜 로그인 (Google / Kakao / Naver 공통)
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * OAuth 유저 정보로 로그인 또는 신규 가입 플로우를 처리합니다.
+     *
+     * @param authProvider 소셜 제공자 (GOOGLE, KAKAO, NAVER)
+     * @param userInfo     OAuth에서 받은 유저 정보
+     * @return 기존 유저: JWT 포함 응답 / 신규 유저: Setup Token 포함 응답
+     */
+    @Transactional
+    public SocialLoginResponse socialLogin(AuthProvider authProvider, OAuthUserInfo userInfo) {
+        return authAccountRepository
+                .findByAuthProviderAndAuthProviderSubject(authProvider, userInfo.providerSubject())
+                .map(existing -> {
+                    // 기존 유저 → 바로 로그인
+                    existing.updateLastLoginAt();
+                    User user = existing.getUser();
+
+                    if (user.getUserStatus() != UserStatus.ACTIVE) {
+                        throw new InvalidCredentialsException("비활성화된 계정입니다.");
+                    }
+
+                    LoginResponse jwt = issueJwt(user, existing.getEmail());
+                    return SocialLoginResponse.existingUser(
+                            jwt.tokenType(), jwt.accessToken(), jwt.accessTokenTtlSeconds(),
+                            jwt.refreshToken(), jwt.refreshTokenTtlSeconds()
+                    );
+                })
+                .orElseGet(() -> {
+                    // 신규 유저 → EMAIL 계정과의 충돌 확인 후 Setup Token 발급
+                    if (userInfo.email() != null) {
+                        validateSocialEmailConflict(userInfo.email());
+                    }
+
+                    String setupToken = jwtTokenProvider.generateSetupToken(
+                            authProvider.name(),
+                            userInfo.email(),
+                            null,
+                            userInfo.providerSubject(),
+                            null
+                    );
+                    return SocialLoginResponse.newUser(setupToken, jwtTokenProvider.getSetupTokenTtlSeconds());
+                });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  이메일 로그인 (기존과 동일)
+    // ══════════════════════════════════════════════════════════════
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
@@ -105,88 +217,23 @@ public class AuthService {
         }
 
         User user = authAccount.getUser();
-
         if (user.getUserStatus() != UserStatus.ACTIVE) {
             throw new InvalidCredentialsException("비활성화된 계정입니다.");
         }
 
         authAccount.updateLastLoginAt();
-
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(),
-                authAccount.getEmail(),
-                user.getNickname(),
-                user.getUserRole().name()
-        );
-
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
-
-        LocalDateTime expiresAt = jwtTokenProvider.getRefreshTokenExpiresAt();
-        
-        refreshTokenService.upsert(user.getId(), refreshToken);
-
-
-        return new LoginResponse(
-                "Bearer",
-                accessToken,
-                jwtTokenProvider.getAccessTokenTtlSeconds(),
-                refreshToken,
-                jwtTokenProvider.getRefreshTokenTtlSeconds()
-        );
+        return issueJwt(user, authAccount.getEmail());
     }
 
-    // ── 검증 메서드 ──
+    // ══════════════════════════════════════════════════════════════
+    //  토큰 재발급 / 로그아웃 (기존과 동일)
+    // ══════════════════════════════════════════════════════════════
 
-    /*
-     * 이메일 중복 체크
-     * EMAIL provider + email 조합으로 auth_accounts 테이블에 이미 존재하는지 확인
-     */
-    private void validateDuplicateEmail(String email) {
-        if (authAccountRepository.existsByAuthProviderAndAuthProviderSubject(AuthProvider.EMAIL, email)) {
-            throw new DuplicateEmailException("이미 사용 중인 이메일입니다.");
-        }
-    }
-
-    /*
-     * 닉네임 중복 체크
-     * users 테이블에 동일 닉네임이 존재하는지 확인
-     */
-    private void validateDuplicateNickname(String nickname) {
-        if (userRepository.existsByNickname(nickname)) {
-            throw new DuplicateNicknameException("이미 사용 중인 닉네임입니다.");
-        }
-    }
-
-    /*
-     * 선호 태그 개수 검증 (3~5개)
-     */
-    private void validateTagCount(List<Long> tagIds) {
-        if (tagIds.size() < 3 || tagIds.size() > 5) {
-            throw new InvalidTagException("선호 태그는 3개 이상 5개 이하로 선택해야 합니다.");
-        }
-    }
-
-    /*
-     * 태그 ID 유효성 검증
-     * DB에 실제 존재하는 태그인지 확인하고, 유효한 Tag 목록을 반환
-     */
-    private List<Tag> validateAndGetTags(List<Long> tagIds) {
-        List<Tag> tags = tagRepository.findAllByIdIn(tagIds);
-        if (tags.size() != tagIds.size()) {
-            throw new InvalidTagException("유효하지 않은 태그 ID가 포함되어 있습니다.");
-        }
-        return tags;
-    }
-    
     @Transactional
     public LoginResponse reissue(ReissueRequest request) {
-        String refreshToken = request.refreshToken();
+        Long userId = jwtTokenProvider.extractUserIdFromRefreshToken(request.refreshToken());
 
-        // JWT 검증, 만료
-        Long userId = jwtTokenProvider.extractUserIdFromRefreshToken(refreshToken);
-
-        // DB 저장값과 일치 검증
-        RefreshToken saved = refreshTokenService.validateStoredTokenAndGet(userId, refreshToken);
+        RefreshToken saved = refreshTokenService.validateStoredTokenAndGet(userId, request.refreshToken());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("사용자 정보를 찾을 수 없습니다."));
@@ -198,27 +245,17 @@ public class AuthService {
         AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(),
-                authAccount.getEmail(),
-                user.getNickname(),
-                user.getUserRole().name()
-        );
-
+        String newAccessToken  = jwtTokenProvider.generateAccessToken(
+                user.getId(), authAccount.getEmail(), user.getNickname(), user.getUserRole().name());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
-	    // 기존 rotate 대신 upsert 사용
-	    refreshTokenService.upsert(userId, newRefreshToken);
+        refreshTokenService.upsert(userId, newRefreshToken);
 
         return new LoginResponse(
-                "Bearer",
-                accessToken,
-                jwtTokenProvider.getAccessTokenTtlSeconds(),
-                newRefreshToken,
-                jwtTokenProvider.getRefreshTokenTtlSeconds()
+                "Bearer", newAccessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
+                newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
         );
     }
-
 
     @Transactional
     public void logout() {
@@ -226,9 +263,79 @@ public class AuthService {
         if (auth == null || auth.getPrincipal() == null) {
             throw new InvalidCredentialsException("인증 정보가 없습니다.");
         }
-
-        UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
+        JwtPrincipal principal = (JwtPrincipal) auth.getPrincipal();
         refreshTokenService.deleteByUserId(principal.getUserId());
     }
 
+    // ══════════════════════════════════════════════════════════════
+    //  Private helpers
+    // ══════════════════════════════════════════════════════════════
+
+    /** Setup Token 검증 및 디코딩. 만료/위변조 시 InvalidSetupTokenException으로 변환. */
+    private DecodedJWT extractSetupToken(String rawToken) {
+        try {
+            return jwtTokenProvider.validateAndGetSetupToken(rawToken);
+        } catch (JwtTokenExpiredException e) {
+            throw new InvalidSetupTokenException("가입 세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
+        } catch (JwtInvalidTokenException e) {
+            throw new InvalidSetupTokenException("유효하지 않은 가입 토큰입니다.");
+        }
+    }
+
+    /** JWT 발급 + Refresh Token DB 저장 */
+    private LoginResponse issueJwt(User user, String email) {
+        String accessToken  = jwtTokenProvider.generateAccessToken(
+                user.getId(), email, user.getNickname(), user.getUserRole().name());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        refreshTokenService.upsert(user.getId(), refreshToken);
+
+        return new LoginResponse(
+                "Bearer", accessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
+                refreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+        );
+    }
+
+    /** 이메일 가입 시: EMAIL 중복 + 소셜 충돌 통합 검사 */
+    private void validateEmailConflicts(String email) {
+        List<AuthAccount> existing = authAccountRepository.findAllByEmail(email);
+        for (AuthAccount acc : existing) {
+            if (acc.getAuthProvider() == AuthProvider.EMAIL) {
+                throw new DuplicateEmailException("이미 이메일로 가입된 계정입니다.");
+            } else {
+                throw new SocialProviderConflictException(
+                        "해당 이메일은 " + acc.getAuthProvider().getDescription()
+                        + " 계정으로 이미 가입되어 있습니다. "
+                        + acc.getAuthProvider().getDescription() + " 로그인을 이용해주세요.");
+            }
+        }
+    }
+
+    /** 소셜 가입 시: EMAIL 제공자와의 충돌만 검사 */
+    private void validateSocialEmailConflict(String email) {
+        authAccountRepository.findByAuthProviderAndEmail(AuthProvider.EMAIL, email)
+                .ifPresent(acc -> {
+                    throw new SocialProviderConflictException(
+                            "해당 이메일은 이미 이메일 계정으로 가입되어 있습니다. 이메일 로그인을 이용해주세요.");
+                });
+    }
+
+    private void validateDuplicateNickname(String nickname) {
+        if (userRepository.existsByNickname(nickname)) {
+            throw new DuplicateNicknameException("이미 사용 중인 닉네임입니다.");
+        }
+    }
+
+    private void validateTagCount(List<Long> tagIds) {
+        if (tagIds.size() < 3 || tagIds.size() > 5) {
+            throw new InvalidTagException("선호 태그는 3개 이상 5개 이하로 선택해야 합니다.");
+        }
+    }
+
+    private List<Tag> validateAndGetTags(List<Long> tagIds) {
+        List<Tag> tags = tagRepository.findAllByIdIn(tagIds);
+        if (tags.size() != tagIds.size()) {
+            throw new InvalidTagException("유효하지 않은 태그 ID가 포함되어 있습니다.");
+        }
+        return tags;
+    }
 }

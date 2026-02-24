@@ -45,13 +45,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 //            Long userId = Long.valueOf(com.auth0.jwt.JWT.decode(token).getSubject());
 //        	Long userId = jwtTokenProvider.extractUserId(token); // verify 포함 버전이면 OK
         	 DecodedJWT jwt = jwtTokenProvider.validateAndGet(token, null);
-        	
-        	// refresh 차단
+
+        	// refresh / setup 토큰은 필터에서 처리하지 않음
+        	// - refresh: 재발급 전용, 일반 요청에 사용 불가
+        	// - setup: 회원가입 단계 전용, 서비스 레이어에서 직접 검증
 			String type = jwt.getClaim("type").asString();
-			 	if ("refresh".equals(type)) {
-			 		throw new JwtInvalidTokenException("액세스 토큰이 필요합니다.");
+			if (type != null) {
+				filterChain.doFilter(request, response);
+				return;
 			}
-        	
+
 		 	Long userId = Long.parseLong(jwt.getSubject());
             String role = jwt.getClaim("role").asString();
                 	

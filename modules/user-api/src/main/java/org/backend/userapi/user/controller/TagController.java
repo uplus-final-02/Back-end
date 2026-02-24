@@ -2,7 +2,7 @@ package org.backend.userapi.user.controller; // 패키지명 확인!
 
 import lombok.RequiredArgsConstructor;
 
-import org.backend.userapi.auth.jwt.UserPrincipal;
+import core.security.principal.JwtPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.backend.userapi.user.service.UserTagPreferenceService;
@@ -18,7 +18,7 @@ public class TagController {
     // URL: http://localhost:8081/api/users/me/preferred-tags
     @PutMapping("/api/users/me/preferred-tags")
     public ApiResponse<Void> updatePreferredTags(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @AuthenticationPrincipal JwtPrincipal userPrincipal,
             @RequestBody PreferredTagUpdateRequest request
     ) {
         userTagPreferenceService.updatePreferredTags(userPrincipal.getUserId(), request);

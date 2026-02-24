@@ -2,7 +2,7 @@ package org.backend.userapi.content.controller;
 
 import lombok.RequiredArgsConstructor;
 
-import org.backend.userapi.auth.jwt.UserPrincipal;
+import core.security.principal.JwtPrincipal;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;
@@ -46,7 +46,7 @@ public class ContentController {
     // 3. 최근 찜 목록
     @GetMapping("/home/bookmark-list")
     public ApiResponse<List<RecentBookmarkResponse>> getBookmarkList(
-        @AuthenticationPrincipal UserPrincipal userPrincipal
+        @AuthenticationPrincipal JwtPrincipal userPrincipal
     ) {
         // userPrincipal이 null이 아닐 때만 동작 (Security 설정에 따라 다름)
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(userPrincipal.getUserId()));

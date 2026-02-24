@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
 import org.backend.userapi.user.service.BookmarkService;
-import org.backend.userapi.auth.jwt.UserPrincipal; // ✅ SecurityContext principal
+import core.security.principal.JwtPrincipal;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +17,7 @@ public class BookmarkController {
     @PostMapping("/api/histories/bookmarks/{contentId}")
     public ApiResponse<Void> addBookmark(
             @PathVariable Long contentId,
-            @AuthenticationPrincipal UserPrincipal userPrincipal
+            @AuthenticationPrincipal JwtPrincipal userPrincipal
     ) {
         bookmarkService.addBookmark(userPrincipal.getUserId(), contentId);
         return new ApiResponse<>(200, "Success", null);
@@ -25,7 +25,7 @@ public class BookmarkController {
 
     @GetMapping("/api/users/me/bookmarks")
     public ApiResponse<BookmarkListResponse> getBookmarks(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @AuthenticationPrincipal JwtPrincipal userPrincipal,
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "10") int size
     ) {
