@@ -123,7 +123,7 @@ public class VideoService {
 
         return new VideoSimpleMetaData(
             tuple.get("contentId", Long.class),
-            tuple.get("durationiSec", Integer.class)
+            tuple.get("durationSec", Integer.class)
         );
     }
 
