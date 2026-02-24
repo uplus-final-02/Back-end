@@ -30,7 +30,7 @@ public class ContentDocument {
     private List<String> tags;
 
     @Field(type = FieldType.Keyword)
-    private String category;
+    private String contenttype;
     
     @Field(type = FieldType.Keyword)
     private String status;
