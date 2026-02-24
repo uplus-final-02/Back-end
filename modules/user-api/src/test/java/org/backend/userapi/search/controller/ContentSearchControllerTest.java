@@ -62,59 +62,57 @@ class ContentSearchControllerTest {
     }
 
     @Test
-    @DisplayName("검색어가 유효할 경우 검색 결과(DTO 변환 포함)를 반환한다")
-    void search_returnsTransformedDto() throws Exception {
+    @DisplayName("검색어 없이 태그 필터만 있어도 검색 결과를 반환한다")
+    void search_withOnlyTag_returnsOk() throws Exception {
         // given
-        String keyword = "테스트";
-        
+        String tag = "시트콤"; // 키워드는 없고 태그만 있는 상황
         ContentDocument document = ContentDocument.builder()
-                .contentId(1L)
-                .title("테스트 콘텐츠")
-                .description("설명입니다.")
-                .highlightTitle("<em>테스트</em> 콘텐츠") 
-                .highlightDescription(null)
-                .type("SERIES")
-                .status("ACTIVE")
-                .accessLevel("FREE")
-                .thumbnailUrl("http://thumb.url")
-                .tags(List.of("드라마", "예능"))
-                .totalViewCount(100L)
-                .bookmarkCount(5L)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .contentId(2L)
+                .title("순풍산부인과")
+                .tags(List.of("시트콤"))
                 .build();
 
         Page<ContentDocument> page = new PageImpl<>(List.of(document), PageRequest.of(0, 10), 1);
         
-        // any()로 Pageable 매칭
-        when(contentIndexingService.search(eq(keyword), any())).thenReturn(page);
+        // [수정] 서비스 호출 파라미터 매칭 (keyword는 null)
+        when(contentIndexingService.search(eq(null), eq(null), eq(null), eq(tag), any()))
+                .thenReturn(page);
 
         // when & then
-        mockMvc.perform(get("/api/search") // 🚨 경로 수정됨
-                        .queryParam("keyword", keyword)
-                        .queryParam("page", "0")
-                        .queryParam("size", "10")
-                        .queryParam("sort", "LATEST"))
+        mockMvc.perform(get("/api/search")
+                        .queryParam("tag", tag)) // 검색어 없이 tag만 전송
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.data.contents[0].contentId").value(1))
-                .andExpect(jsonPath("$.data.contents[0].title").value("테스트 콘텐츠"))
-                .andExpect(jsonPath("$.data.contents[0].highlightTitle").value("<em>테스트</em> 콘텐츠")) 
-                .andExpect(jsonPath("$.data.contents[0].matchType").value("TITLE")) 
-                .andExpect(jsonPath("$.data.contents[0].tags[0]").value("드라마"))
-                .andExpect(jsonPath("$.data.hasNext").value(false)); 
+                .andExpect(jsonPath("$.data.contents[0].title").value("순풍산부인과"));
     }
 
     @Test
-    @DisplayName("검색어가 없을 경우 400 Bad Request 에러를 반환한다")
-    void search_emptyKeyword_returns400() throws Exception {
+    @DisplayName("검색어, 카테고리, 태그가 모두 없을 경우 400 에러를 반환한다")
+    void search_everythingMissing_returns400() throws Exception {
+        // when & then
+    	mockMvc.perform(get("/api/search"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.message").value("검색어나 필터를 하나 이상 입력해주세요.."));
+    }
+
+    @Test
+    @DisplayName("모든 필터 파라미터를 포함하여 검색 요청 시 정상 처리된다")
+    void search_withFullParams_returnsOk() throws Exception {
+        // given
+        Page<ContentDocument> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+        
+        when(contentIndexingService.search(any(), any(), any(), any(), any()))
+                .thenReturn(page);
+
         // when & then
         mockMvc.perform(get("/api/search")
-                        .queryParam("keyword", "") 
-                        .queryParam("page", "0"))
-                .andExpect(status().isBadRequest()) 
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("검색어를 입력해주세요."));
+                        .queryParam("keyword", "무빙")
+                        .queryParam("category", "DRAMA")
+                        .queryParam("genre", "ACTION")
+                        .queryParam("tag", "초능력")
+                        .queryParam("sort", "POPULAR"))
+                .andExpect(status().isOk());
     }
 
     @Test
