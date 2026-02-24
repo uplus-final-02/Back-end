@@ -21,7 +21,7 @@ public class ViewCountService {
     private static final String VIEW_HISTORY_KEY_PREFIX = "view:history:";
 
     /**
-     * 영상 조회수 증가 처리 (10분 TTL 중복 방지)
+     * 영상 조회수 증가 처리
      */
     public void incrementViewCount(Long contentId, Long videoId, Long userId, Integer durationSec) {
         String historyKey = VIEW_HISTORY_KEY_PREFIX + videoId + ":" + userId;

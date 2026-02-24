@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import jakarta.persistence.Tuple;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,8 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
       WHERE v.id = :videoId
    """)
   Optional<Tuple> findMetaDataById(@Param("videoId") Long videoId);
+
+  @Modifying(clearAutomatically = true)
+  @Query("UPDATE Video v SET v.viewCount = v.viewCount + :delta WHERE v.id = :id")
+  void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
 }

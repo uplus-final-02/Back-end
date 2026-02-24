@@ -21,6 +21,12 @@ spring:
     out-of-order: true # 순차 처리 비활성화(버전 상관없이 적용되지 않은 파일 적용 시도)
     baseline-on-migrate: false  # DB 스키마가 존재하지 않는다면 V1부터 적용
 
+  task:
+    scheduling:
+      pool:
+        size: 5
+      thread-name-prefix: userapi-scheduler-
+
 server:
   port: 8080
 
