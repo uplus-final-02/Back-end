@@ -16,13 +16,13 @@ import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.EpisodeResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
-import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
+import user.repository.UserNicknameInfo;
 import user.repository.UserRepository;
 
 import java.time.LocalDateTime;
@@ -40,7 +40,7 @@ public class ContentService {
     private final UserRepository userRepository;
     private final VideoRepository videoRepository;
 
-    public List<WatchingContentResponse> getWatchingContents(Long userId) {
+    public List<DefaultContentResponse> getWatchingContents(Long userId) {
         // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
         LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
 
@@ -67,18 +67,13 @@ public class ContentService {
             return Collections.emptyList();
         }
 
-        // 3. DTO 변환 (별도의 조회 쿼리 없이 바로 변환 가능)
-        return distinctHistoryMap.values().stream()
-                .map(wh -> WatchingContentResponse.builder()
-                        .contentId(wh.getVideo().getContent().getId())
-                        .title(wh.getVideo().getContent().getTitle())
-                        .thumbnailUrl(wh.getVideo().getContent().getThumbnailUrl())
-                        .lastVideoId(wh.getVideo().getId())
-                        .lastVideoTitle(wh.getVideo().getTitle())
-                        .currentPositionSec(wh.getLastPositionSec())
-                        .lastWatchedAt(wh.getLastWatchedAt())
-                        .build())
+        // 3. Content 추출
+        List<Content> contents = distinctHistoryMap.values().stream()
+                .map(wh -> wh.getVideo().getContent())
                 .collect(Collectors.toList());
+
+        // 4. 변환 로직 호출
+        return convertToDefaultContentResponses(contents);
     }
 
     public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, Pageable pageable) {
@@ -93,14 +88,22 @@ public class ContentService {
 
         List<Content> contents = contentSlice.getContent();
 
+        // 2. 변환 로직 호출
+        return convertToDefaultContentResponses(contents);
+    }
+
+    /**
+     * Content 리스트를 DefaultContentResponse 리스트로 변환 (닉네임 조회 포함)
+     */
+    public List<DefaultContentResponse> convertToDefaultContentResponses(List<Content> contents) {
         if (contents.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // 2. User 닉네임 일괄 조회 (in 쿼리 최적화)
+        // 1. User 닉네임 일괄 조회
         Map<Long, String> uploaderNicknameMap = getUploaderNicknameMap(contents);
 
-        // 3. DTO 변환 및 반환
+        // 2. DTO 변환
         return contents.stream()
                 .map(content -> convertToDto(content, uploaderNicknameMap))
                 .collect(Collectors.toList());
@@ -122,8 +125,13 @@ public class ContentService {
         }
 
         // IN 쿼리로 유저를 일괄 조회한 뒤 바로 Map으로 수집
-        return userRepository.findAllById(uploaderIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getNickname));
+        List<UserNicknameInfo> results = userRepository.findNicknamesByIds(uploaderIds);
+        
+        return results.stream()
+                .collect(Collectors.toMap(
+                        UserNicknameInfo::getId,
+                        UserNicknameInfo::getNickname
+                ));
     }
 
     /**

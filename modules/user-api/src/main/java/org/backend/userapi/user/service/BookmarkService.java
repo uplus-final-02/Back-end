@@ -1,16 +1,14 @@
 package org.backend.userapi.user.service;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.backend.userapi.common.exception.BookmarkNotFoundException;
+import org.backend.userapi.content.dto.DefaultContentResponse;
+import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
 import org.backend.userapi.user.dto.response.BookmarkListResponse.BookmarkItemResponse;
 import org.backend.userapi.user.dto.response.BookmarkPlaylistResponse;
-import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +34,7 @@ public class BookmarkService {
     private final UserRepository userRepository;
     private final VideoRepository videoRepository;
     private final WatchHistoryRepository watchHistoryRepository;
+    private final ContentService contentService;
     
     /**
      * AE2-44: 찜하기 등록
@@ -121,39 +120,15 @@ public class BookmarkService {
      * AE2-61: 홈 화면 - 최근 찜한 콘텐츠 목록 api
      */
     @Transactional(readOnly = true)
-    public List<RecentBookmarkResponse> getRecentBookmarkList(Long userId) {
-        List<Bookmark> bookmarks = bookmarkRepository.findRecentBookmarks(
+    public List<DefaultContentResponse> getRecentBookmarkList(Long userId) {
+        // 1. Theta Join으로 Content 직접 조회 (최신순 정렬됨)
+        List<Content> contents = bookmarkRepository.findRecentBookmarkedContents(
             userId,
             PageRequest.of(0, 5)
         );
 
-        if (bookmarks.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<Long> contentIds = bookmarks.stream()
-                                         .map(Bookmark::getContentId)
-                                         .collect(Collectors.toList());
-
-        Map<Long, Content> contentMap = contentRepository.findAllById(contentIds).stream()
-                                                         .collect(Collectors.toMap(Content::getId, content -> content));
-
-        return bookmarks.stream()
-                        .map(bookmark -> {
-                            Content content = contentMap.get(bookmark.getContentId());
-
-                            String title = (content != null) ? content.getTitle() : "삭제된 콘텐츠";
-                            String thumbnailUrl = (content != null) ? content.getThumbnailUrl() : "";
-
-                            return RecentBookmarkResponse.builder()
-                                                         .bookmarkId(bookmark.getId())
-                                                         .contentId(bookmark.getContentId())
-                                                         .title(title)
-                                                         .thumbnailUrl(thumbnailUrl)
-                                                         .bookmarkedAt(bookmark.getCreatedAt())
-                                                         .build();
-                        })
-                        .collect(Collectors.toList());
+        // 2. ContentService의 변환 로직 사용 (닉네임 조회 포함)
+        return contentService.convertToDefaultContentResponses(contents);
     }
     
     /**

@@ -39,7 +39,11 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    
+
+    testRuntimeOnly 'com.h2database:h2'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.7' // JUnit 5(Jupiter) 테스트 프레임워크 환경에서 Docker 컨테이너
+    testImplementation 'com.redis:testcontainers-redis:2.2.0' // Testcontainers 프레임워크 위에서 구동되는 Redis 전용 확장 모듈
+
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 }
