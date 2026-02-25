@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -54,4 +55,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("tag") String tag,
             Pageable pageable
     );
+  
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
+      void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
 }
