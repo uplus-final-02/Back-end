@@ -26,6 +26,11 @@ spring:
       pool:
         size: 5
       thread-name-prefix: userapi-scheduler-
+      
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 server:
   port: 8080
@@ -33,15 +38,24 @@ server:
 # JWT / OAuth / S3 등은 환경변수로 받는 형태로 두는 것을 권장합니다.
 app:
   jwt:
-    secret: ${JWT_SECRET:e/z5VcoVp2f4CVe/DQYKeY0khCf4ts0IbduYdeCGejI=}
+    secret: ${JWT_SECRET}
     access-token-ttl-seconds: ${JWT_ACCESS_TTL:1800}
     refresh-token-ttl-seconds: ${JWT_REFRESH_TTL:1209600}
+    setup-token-ttl-seconds: ${JWT_SETUP_TTL:600}    # 10분 (회원가입 세션)
 
   oauth2:
     google:
-      client-id: ${GOOGLE_CLIENT_ID:}
-      client-secret: ${GOOGLE_CLIENT_SECRET:}
-      redirect-uri: ${GOOGLE_REDIRECT_URI:}
+      client-id: ${GOOGLE_CLIENT_ID}
+      client-secret: ${GOOGLE_CLIENT_SECRET}
+      redirect-uri: ${GOOGLE_REDIRECT_URI}
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID}
+      client-secret: ${KAKAO_CLIENT_SECRET}
+      redirect-uri: ${KAKAO_REDIRECT_URI}
+    naver:
+      client-id: ${NAVER_CLIENT_ID}
+      client-secret: ${NAVER_CLIENT_SECRET}
+      redirect-uri: ${NAVER_REDIRECT_URI}
 
   storage:
     s3:
