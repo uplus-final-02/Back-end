@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
                 @UniqueConstraint(name = "uq_tags_name", columnNames = "name")
         },
         indexes = {
-                @Index(name = "idx_tags_type", columnList = "type")
+                @Index(name = "idx_tags_priority", columnList = "priority")
         }
 )
 public class Tag {
