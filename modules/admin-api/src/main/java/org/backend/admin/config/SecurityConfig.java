@@ -1,4 +1,4 @@
-package org.backend.config;
+package org.backend.admin.config;
 
 
 import core.security.handler.JwtAccessDeniedHandler;
