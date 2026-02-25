@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Getter
@@ -28,6 +30,9 @@ import java.time.LocalDateTime;
         @Index(name = "idx_watch_histories_completed", columnList = "content_id, completed_at")
     }
 )
+
+@SQLDelete(sql = "UPDATE watch_histories SET deleted_at = NOW() WHERE history_id = ?")
+@SQLRestriction("deleted_at IS NULL")
 public class WatchHistory extends BaseTimeEntity {
 
     @Id
@@ -58,6 +63,9 @@ public class WatchHistory extends BaseTimeEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     // ★ Builder 패턴 적용 (생성자)
     @Builder
     public WatchHistory(Long userId, Video video, HistoryStatus status, Integer lastPositionSec, LocalDateTime lastWatchedAt, LocalDateTime completedAt) {
@@ -87,5 +95,15 @@ public class WatchHistory extends BaseTimeEntity {
     public void markAsCompleted() {
         this.status = HistoryStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
+    }
+
+    public void updatePlayback(Integer lastPositionSec, HistoryStatus status) {
+        this.lastPositionSec = lastPositionSec;
+        this.status = status;
+        this.lastWatchedAt = LocalDateTime.now();
+
+        if (status == HistoryStatus.COMPLETED) {
+            this.completedAt = LocalDateTime.now();
+        }
     }
 }

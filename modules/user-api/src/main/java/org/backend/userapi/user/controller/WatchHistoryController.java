@@ -23,7 +23,7 @@ public class WatchHistoryController {
 
   @GetMapping
   public ApiResponse<WatchHistoryListResponse> getMyWatchHistory(
-      @RequestParam(name = "page", defaultValue = "0") int page,
+      @RequestParam(name = "cursor", required = false) Long cursor,
       @RequestParam(name = "size", defaultValue = "20") int size,
       @AuthenticationPrincipal JwtPrincipal jwtPrincipal
   ) {
@@ -31,10 +31,10 @@ public class WatchHistoryController {
     Long userId = jwtPrincipal.getUserId();
 
     // 페이징 설정
-    PageRequest pageRequest = PageRequest.of(page, size);
+    PageRequest pageRequest = PageRequest.of(0, size);
 
     // 서비스 호출
-    WatchHistoryListResponse response = watchHistoryService.getWatchHistories(userId, pageRequest);
+    WatchHistoryListResponse response = watchHistoryService.getWatchHistories(userId, cursor, pageRequest);
 
     // 결과 반환
     return ApiResponse.success(response);

@@ -1,6 +1,11 @@
 package org.backend.userapi.user.service;
 
 import common.enums.HistoryStatus;
+import content.repository.ContentTagRepository;
+import content.repository.WatchHistoryRepository;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.WatchHistoryDto;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
@@ -8,8 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import user.entity.History;
-import user.repository.HistoryRepository;
+import content.entity.WatchHistory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,14 +23,29 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class WatchHistoryService {
 
-  private final HistoryRepository historyRepository;
+  private final WatchHistoryRepository watchHistoryRepository;
+  private final ContentTagRepository contentTagRepository;
 
-  public WatchHistoryListResponse getWatchHistories(Long userId, Pageable pageable) {
+  public WatchHistoryListResponse getWatchHistories(Long userId, Long cursor, Pageable pageable) {
 
-    // Repository에서 Slice 타입으로 데이터 조회
-    Slice<History> slice = historyRepository.findSliceByUserIdOrderByUpdatedAtDesc(userId, pageable);
+    Slice<WatchHistory> slice = watchHistoryRepository.findHistoriesByCursor(userId, cursor, pageable);
 
-    // Entity 리스트를 DTO 리스트로 변환
+    List<Long> contentIds = slice.getContent().stream()
+        .map(WatchHistory::getContentId)
+        .distinct()
+        .collect(Collectors.toList());
+
+    Map<Long, List<String>> tagMap = new HashMap<>();
+    if (!contentIds.isEmpty()) {
+      List<Object[]> tagResults = contentTagRepository.findTagNamesByContentIds(contentIds);
+      for (Object[] result : tagResults) {
+        Long cId = (Long) result[0]; // content.id
+        String tagName = (String) result[1]; // t.name
+
+        tagMap.computeIfAbsent(cId, k -> new ArrayList<>()).add(tagName);
+      }
+    }
+
     List<WatchHistoryDto> dtoList = slice.getContent().stream().map(history -> {
 
       // 영상 길이
@@ -35,39 +54,27 @@ public class WatchHistoryService {
         duration = history.getVideo().getVideoFile().getDurationSec();
       }
 
-      // 카테고리 가져오기
-      List<String> category = new java.util.ArrayList<>();
-
-      if (history.getContent().getContentTags() != null && !history.getContent().getContentTags().isEmpty()) {
-        // 모든 태그 이름을 꺼내서 List로 만듭니다.
-        category = history.getContent().getContentTags().stream()
-            .map(contentTag -> contentTag.getTag().getName())
-            .collect(Collectors.toList());
-      } else {
-        // 태그가 하나도 없으면 기본값 세팅
-        category.add("기타");
-      }
+      // 카테고리
+      List<String> tagNames = tagMap.getOrDefault(history.getContentId(), new ArrayList<>());
+      String category = tagNames.isEmpty() ? null : String.join(", ", tagNames);
 
       // 시청 진행률(%)
       int lastPosition = history.getLastPositionSec() != null ? history.getLastPositionSec() : 0;
       int progressPercent = 0;
-
       if (duration > 0) {
         progressPercent = (int) (((double) lastPosition / duration) * 100);
-        if (progressPercent > 100) {
-          progressPercent = 100;
-        }
+        if (progressPercent > 100) progressPercent = 100;
       }
 
       return WatchHistoryDto.builder()
           .historyId(history.getId())
-          .contentId(history.getContent().getId())
+          .contentId(history.getContentId())
           .episodeId(history.getVideo().getId())
-          .title(history.getContent().getTitle())
+          .title(history.getVideo().getContent().getTitle())
           .episodeTitle(history.getVideo().getTitle())
           .episodeNumber(history.getVideo().getEpisodeNo())
-          .thumbnailUrl(history.getContent().getThumbnailUrl())
-          .contentType(history.getContent().getType().name())
+          .thumbnailUrl(history.getVideo().getContent().getThumbnailUrl())
+          .contentType(history.getVideo().getContent().getType().name())
           .category(category)
           .lastPosition(history.getStatus() == HistoryStatus.STARTED ? null : lastPosition)
           .duration(duration)
@@ -79,7 +86,11 @@ public class WatchHistoryService {
     }).collect(Collectors.toList());
 
     // 커서 생성
-    String nextCursor = slice.hasNext() ? String.valueOf(pageable.getPageNumber() + 1) : null;
+    String nextCursor = null;
+    if (slice.hasNext() && !dtoList.isEmpty()) {
+      Long lastHistoryId = dtoList.get(dtoList.size() - 1).getHistoryId();
+      nextCursor = String.valueOf(lastHistoryId);
+    }
 
     return WatchHistoryListResponse.builder()
         .watchHistory(dtoList)
@@ -90,10 +101,10 @@ public class WatchHistoryService {
 
   @Transactional
   public void deleteWatchHistory(Long userId, Long historyId) {
-    History history = historyRepository.findByIdAndUserId(historyId, userId)
+    WatchHistory history = watchHistoryRepository.findByIdAndUserId(historyId, userId)
         .orElseThrow(() -> new IllegalArgumentException("시청 이력을 찾을 수 없습니다."));
 
-    historyRepository.delete(history);
+    watchHistoryRepository.delete(history);
   }
 
 }

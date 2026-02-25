@@ -20,7 +20,7 @@ public class WatchHistoryDto {
   private Integer episodeNumber;
   private String thumbnailUrl;
   private String contentType;
-  private List<String> category;
+  private String category;
   private Integer lastPosition;
   private Integer duration;
   private Integer progressPercent;
