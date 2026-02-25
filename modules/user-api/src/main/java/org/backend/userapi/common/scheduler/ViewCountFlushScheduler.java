@@ -1,4 +1,4 @@
-package org.backend.userapi.video.scheduler;
+package org.backend.userapi.common.scheduler;
 
 import content.repository.ContentRepository;
 import content.repository.VideoRepository;

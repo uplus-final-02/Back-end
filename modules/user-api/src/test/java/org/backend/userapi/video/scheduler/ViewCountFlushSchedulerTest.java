@@ -9,6 +9,7 @@ import content.entity.Video;
 import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoRepository;
+import org.backend.userapi.common.scheduler.ViewCountFlushScheduler;
 import org.backend.userapi.search.repository.ContentSearchRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
