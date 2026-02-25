@@ -1,6 +1,7 @@
 package org.backend.userapi.common.exception;
 
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.membership.exception.UplusUserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -97,6 +98,13 @@ public class GlobalExceptionHandler {
     //찜 삭제 전용 404 예외 처리
     @ExceptionHandler(BookmarkNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleBookmarkNotFound(BookmarkNotFoundException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, e.getMessage(), null));
+    }
+    
+    @ExceptionHandler(UplusUserNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUplusNotFound(UplusUserNotFoundException e) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, e.getMessage(), null));
