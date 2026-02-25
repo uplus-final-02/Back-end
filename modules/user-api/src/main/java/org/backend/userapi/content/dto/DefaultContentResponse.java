@@ -38,7 +38,7 @@ public class DefaultContentResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    private List<ContentDetailResponse.TagResponse> tags;
+    private List<TagResponse> tags;
 
     @Getter
     @Builder
@@ -47,14 +47,14 @@ public class DefaultContentResponse {
     public static class TagResponse {
         private Long tagId;
         private String name;
-        private String type;
+        private Long priority;
         private Boolean isActive;
 
-        public static ContentDetailResponse.TagResponse from(Tag tag) {
-            return ContentDetailResponse.TagResponse.builder()
+        public static TagResponse from(Tag tag) {
+            return TagResponse.builder()
                     .tagId(tag.getId())
                     .name(tag.getName())
-                    .type(tag.getType())
+                    .priority(tag.getPriority())
                     .isActive(tag.getIsActive())
                     .build();
         }
