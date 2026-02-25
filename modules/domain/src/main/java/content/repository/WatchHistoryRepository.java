@@ -2,6 +2,7 @@ package content.repository;
 
 import content.entity.WatchHistory;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,4 +28,15 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
     );
     
     List<WatchHistory> findByUserIdAndVideoIdIn(Long userId, List<Long> videoIds);
+
+    @Query("SELECT wh FROM WatchHistory wh " +
+        "JOIN FETCH wh.video v " +
+        "LEFT JOIN FETCH v.videoFile vf " +
+        "JOIN FETCH v.content c " +
+        "WHERE wh.userId = :userId " +
+        "AND (:cursor IS NULL OR wh.id < :cursor) " +
+        "ORDER BY wh.id DESC")
+    Slice<WatchHistory> findHistoriesByCursor(@Param("userId") Long userId, @Param("cursor") Long cursor, Pageable pageable);
+
+    Optional<WatchHistory> findByIdAndUserId(Long id, Long userId);
 }

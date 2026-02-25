@@ -12,4 +12,7 @@ public interface ContentTagRepository extends JpaRepository<ContentTag, Long> {
 
     @Query("SELECT t.name FROM ContentTag ct JOIN ct.tag t WHERE ct.content.id = :contentId AND t.isActive = true")
     List<String> findTagNamesByContentId(@Param("contentId") Long contentId);
+
+    @Query("SELECT ct.content.id, t.name FROM ContentTag ct JOIN ct.tag t WHERE ct.content.id IN :contentIds AND t.isActive = true")
+    List<Object[]> findTagNamesByContentIds(@Param("contentIds") List<Long> contentIds);
 }
