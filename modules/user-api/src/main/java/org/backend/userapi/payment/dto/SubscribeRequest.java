@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotNull;
 import common.enums.PaymentMethod;
 
 public record SubscribeRequest(
-        @NotNull PaymentProvider provider,
+        @NotNull String provider,
         @NotNull PaymentMethod method
 ) {
 }

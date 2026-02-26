@@ -1,9 +1,13 @@
 package org.backend.userapi.membership.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.backend.userapi.common.exception.ConflictException;
 import org.backend.userapi.membership.dto.UplusVerificationRequest;
 import org.backend.userapi.membership.dto.UplusVerificationResponse;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.User;
@@ -14,6 +18,7 @@ import user.repository.UserUplusVerifiedRepository;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -29,7 +34,7 @@ public class UplusMembershipService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        String phoneNumber = request.getPhoneNumber();
+        String phoneNumber = normalize(request.getPhoneNumber());
         
         boolean isUplusMember = telecomMemberRepository
                 .existsByPhoneNumberAndStatus(phoneNumber, "ACTIVE");
@@ -39,24 +44,42 @@ public class UplusMembershipService {
         }
         
         LocalDateTime now = LocalDateTime.now();
-
-        UserUplusVerified verified = userUplusVerifiedRepository.findById(userId)
-                .orElse(null);
         
-        if (verified == null) {
-            // 최초 인증
-            verified = UserUplusVerified.createVerified(user, phoneNumber, now);
-            userUplusVerifiedRepository.save(verified);
-        } else {
-            // 이미 레코드가 있으면 다시 인증 처리
-            verified.verify(phoneNumber, now);
+        UserUplusVerified existingByPhone =
+                userUplusVerifiedRepository.findByPhoneNumber(phoneNumber).orElse(null);
+
+        if (existingByPhone != null) {
+            Long existingUserId = existingByPhone.getUser().getId();
+            if (!existingUserId.equals(userId)) {
+                throw new ConflictException("이미 다른 계정에서 인증된 전화번호입니다.");
+            }
         }
         
+        UserUplusVerified verified = userUplusVerifiedRepository.findByUser_Id(userId)
+                .orElse(null);
+         
+        if (verified == null) {
+            verified = UserUplusVerified.createVerified(user, phoneNumber, now);
+            userUplusVerifiedRepository.save(verified); 
+        } else {
+            verified.verify(phoneNumber, now); 
+        }
+        
+        try {
+            userUplusVerifiedRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("이미 다른 계정에서 인증된 전화번호입니다.");
+        }
+
         return UplusVerificationResponse.builder()
                 .isVerified(true)
                 .phoneNumber(phoneNumber)
                 .verifiedAt(verified.getVerifiedAt())
                 .build();
+    }
+    
+    private String normalize(String phoneNumber) {
+        return phoneNumber == null ? null : phoneNumber.replace("-", "").trim();
     }
     
 }
