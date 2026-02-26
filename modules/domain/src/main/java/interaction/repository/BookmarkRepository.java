@@ -1,5 +1,6 @@
 package interaction.repository;
 
+import content.entity.Content;
 import interaction.entity.Bookmark;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,4 +33,10 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
     
     @Query("SELECT b FROM Bookmark b WHERE b.userId = :userId ORDER BY b.createdAt ASC")
     List<Bookmark> findPlaylistByUserIdDesc(@Param("userId") Long userId, Pageable pageable);
-    }
+
+    // [추가] Theta Join을 사용하여 Content를 직접 조회 (최신순 정렬)
+    @Query("SELECT c FROM Bookmark b, Content c " +
+           "WHERE b.userId = :userId AND b.contentId = c.id " +
+           "ORDER BY b.createdAt DESC")
+    List<Content> findRecentBookmarkedContents(@Param("userId") Long userId, Pageable pageable);
+}

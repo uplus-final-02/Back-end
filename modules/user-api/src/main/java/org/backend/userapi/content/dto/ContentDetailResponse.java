@@ -41,14 +41,14 @@ public class ContentDetailResponse {
     public static class TagResponse {
         private Long tagId;
         private String name;
-        private String type;
+        private Long priority;
         private Boolean isActive;
 
         public static TagResponse from(Tag tag) {
             return TagResponse.builder()
                     .tagId(tag.getId())
                     .name(tag.getName())
-                    .type(tag.getType())
+                    .priority(tag.getPriority())
                     .isActive(tag.getIsActive())
                     .build();
         }

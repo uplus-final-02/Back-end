@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import user.entity.User;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,4 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u.id FROM User u WHERE u.userRole = :role")
     List<Long> findIdsByUserRole(@Param("role") UserRole role);
+
+    // [수정] Interface Projection 사용 (Object[] -> UserNicknameInfo)
+    @Query("SELECT u.id AS id, u.nickname AS nickname FROM User u WHERE u.id IN :ids")
+    List<UserNicknameInfo> findNicknamesByIds(@Param("ids") Collection<Long> ids);
 }
