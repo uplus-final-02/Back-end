@@ -13,6 +13,10 @@ spring:
   kafka:
     bootstrap-servers: kafka:9092
 
+  mail:
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+
   elasticsearch:
     uris: http://elasticsearch:9200
     username: ${ES_USERNAME:elastic}
