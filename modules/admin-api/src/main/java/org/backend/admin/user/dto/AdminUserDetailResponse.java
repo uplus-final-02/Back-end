@@ -1,8 +1,6 @@
 package org.backend.admin.user.dto;
 
-import common.enums.PlanType;
-import common.enums.SubscriptionStatus;
-import common.enums.UserStatus;
+import common.enums.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,8 +31,8 @@ public record AdminUserDetailResponse(
     public record PaymentInfo(
             Long paymentId,
             Integer amount,
-            String paymentStatus,
-            String paymentProvider,
+            PaymentStatus paymentStatus,
+            PaymentMethod paymentMethod,
             LocalDateTime requestAt,
             LocalDateTime approvedAt
     ) {}
