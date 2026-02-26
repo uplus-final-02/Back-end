@@ -1,5 +1,6 @@
 package org.backend.userapi.user.service;
 
+import common.enums.SubscriptionStatus;
 import common.enums.UserStatus;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -8,6 +9,7 @@ import org.backend.userapi.user.dto.response.ProfileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.entity.AuthAccount;
+import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
@@ -18,7 +20,6 @@ import user.repository.UserRepository;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-
 public class ProfileService {
   private final UserRepository userRepository;
   private final AuthAccountRepository authAccountRepository;
@@ -46,7 +47,10 @@ public class ProfileService {
         .collect(Collectors.toList());
 
     // 구독 상태 확인 ("SUBSCRIBED" / "NONE")
-    boolean isSubscribed = subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE);
+    boolean isSubscribed = subscriptionsRepository.findByUser_Id(userId)
+    	    .map(Subscriptions::isAvailable)
+    	    .orElse(false);
+
     String subStatus = isSubscribed ? "SUBSCRIBED" : "NONE";
 
     // 유플러스 인증 여부
