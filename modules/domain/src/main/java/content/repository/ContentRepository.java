@@ -59,4 +59,12 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+
+    /**
+     * 특정 시간(10분 전 등) 이후에 수정된 콘텐츠만 조회 (타겟팅 최적화)
+     * @param lastUpdatedAt 기준 시각
+     * @param pageable 페이징 정보 (CHUNK_SIZE)
+     * @return 변경된 콘텐츠의 Slice
+     */
+    Slice<Content> findByUpdatedAtGreaterThanEqual(LocalDateTime lastUpdatedAt, Pageable pageable);
 }
