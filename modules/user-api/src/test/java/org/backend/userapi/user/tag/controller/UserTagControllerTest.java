@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
-import org.backend.userapi.user.controller.TagController;
+import org.backend.userapi.user.controller.UserTagController;
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
 import org.backend.userapi.user.service.UserTagPreferenceService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,20 +35,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import core.security.principal.JwtPrincipal;
 
 @ExtendWith(MockitoExtension.class)
-class TagControllerTest {
+class UserTagControllerTest {
 
     @Mock
     private UserTagPreferenceService userTagPreferenceService;
 
     @InjectMocks
-    private TagController tagController;
+    private UserTagController userTagController;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(tagController)
+        mockMvc = MockMvcBuilders.standaloneSetup(userTagController)
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {
@@ -56,9 +56,9 @@ class TagControllerTest {
                     }
 
                     @Override
-                    public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer, 
-                                                NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-                    	JwtPrincipal mockPrincipal = Mockito.mock(JwtPrincipal.class);
+                    public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+                                                  NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+                        JwtPrincipal mockPrincipal = Mockito.mock(JwtPrincipal.class);
                         Mockito.when(mockPrincipal.getUserId()).thenReturn(1L);
                         return mockPrincipal;
                     }
