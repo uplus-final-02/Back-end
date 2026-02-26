@@ -51,13 +51,15 @@ public class SecurityConfig {
                     "/api/auth/reissue"
                 ).permitAll()
                 .requestMatchers("/api/auth/logout").authenticated()
+                .requestMatchers("/api/membership/**").authenticated()
                 .requestMatchers(
                     "/api/histories/bookmarks/**",
                     "/api/users/me/bookmarks/**",
-                    "/api/users/me/preferred-tags"
+                    "/api/users/me/preferred-tags",
+                    "/api/contents/recommended"
                 ).authenticated()
                 .anyRequest().permitAll()
-            )
+                )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

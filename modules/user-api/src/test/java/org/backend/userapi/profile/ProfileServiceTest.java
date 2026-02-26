@@ -15,7 +15,10 @@ import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
+import user.entity.Subscriptions;
+import common.enums.SubscriptionStatus;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Optional;
 
@@ -54,8 +57,13 @@ class ProfileServiceTest {
     // 태그는 빈 리스트 반환
     given(userPreferredTagRepository.findAllByUserIdWithTag(userId)).willReturn(Collections.emptyList());
     // 구독 상태는 true(ACTIVE) 반환
-    given(subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE)).willReturn(true);
+    Subscriptions mockSubscription = Subscriptions.builder()
+    	    .subscriptionStatus(SubscriptionStatus.ACTIVE)
+    	    .expiredAt(LocalDateTime.now().plusDays(1)) // 만료 안 됨
+    	    .build();
 
+    	given(subscriptionsRepository.findByUser_Id(userId))
+    	    .willReturn(Optional.of(mockSubscription));
     // 2. When (서비스 실행)
     ProfileResponse result = profileService.getMyProfile(userId);
 

@@ -1,0 +1,50 @@
+{
+  "properties": {
+    "title": {
+      "type": "text",
+      "analyzer": "nori_analyzer",
+      "search_analyzer": "nori_analyzer"
+    },
+    "description": {
+      "type": "text",
+      "analyzer": "nori_analyzer",
+      "search_analyzer": "nori_analyzer"
+    },
+    "tags": {
+      "type": "keyword"
+    },
+    "contenttype": {
+      "type": "keyword"
+    },
+    "status": {
+      "type": "keyword"
+    },
+    "accessLevel": {
+      "type": "keyword"
+    },
+    "thumbnailUrl": {
+      "type": "keyword",
+      "index": false
+    },
+    "totalViewCount": {
+      "type": "long"
+    },
+    "bookmarkCount": {
+      "type": "long"
+    },
+    "createdAt": {
+      "type": "date",
+      "format": "strict_date_hour_minute_second_millis"
+    },
+    "updatedAt": {
+      "type": "date",
+      "format": "strict_date_hour_minute_second_millis"
+    },
+    "tagVector": {
+      "type": "dense_vector",
+      "dims": 100,
+      "index": true,
+      "similarity": "cosine"
+    }
+  }
+}

@@ -2,7 +2,7 @@ package org.backend.userapi.search.document;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient; 
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.elasticsearch.annotations.*;
 
 import java.time.LocalDateTime;
@@ -15,6 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 @Document(indexName = "contents_v1", createIndex = true)
 @Setting(settingPath = "elasticsearch/content-settings.json")
+@Mapping(mappingPath = "elasticsearch/content-mapping.json")
 public class ContentDocument {
 
     @Id
@@ -31,29 +32,33 @@ public class ContentDocument {
 
     @Field(type = FieldType.Keyword)
     private String contenttype;
-    
+
     @Field(type = FieldType.Keyword)
     private String status;
-    
+
     @Field(type = FieldType.Keyword)
     private String accessLevel;
-    
+
     @Field(type = FieldType.Keyword, index = false)
     private String thumbnailUrl;
-    
+
     @Field(type = FieldType.Long)
     private Long totalViewCount;
-    
+
     @Field(type = FieldType.Long)
     private Long bookmarkCount;
-    
+
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime createdAt;
-    
+
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime updatedAt;
 
-    @Transient 
+    // HNSW 벡터 인덱싱용 (mapping JSON에서 dense_vector로 정의)
+    // @Field 미사용: dense_vector는 Spring Data ES 애노테이션 미지원 → content-mapping.json이 직접 관리
+    private float[] tagVector;
+
+    @Transient
     private String highlightTitle;
 
     @Transient
