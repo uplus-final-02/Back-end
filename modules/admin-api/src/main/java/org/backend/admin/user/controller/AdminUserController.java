@@ -20,7 +20,6 @@ public class AdminUserController {
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        // 정렬은 repository JPQL에서 u.createdAt desc로 고정했기 때문에 pageable sort는 무시되어도 됩니다.
         return adminUserService.getUsers(search, pageable);
     }
 }
