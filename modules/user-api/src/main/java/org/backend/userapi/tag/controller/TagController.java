@@ -31,7 +31,7 @@ public class TagController {
     @Operation(summary = "태그 목록 조회", description = "섹션(LEVEL)에 따라 활성화된 태그 목록을 필터링하여 조회합니다.")
     @GetMapping("/api/tags")
     public ApiResponse<List<TagResponse>> getTags(
-            @RequestParam TagSection section
+            @RequestParam(defaultValue = "LEVEL_2") TagSection section
     ) {
         List<TagResponse> tags = tagService.getTagsByPriorities(section.getTargetPriorities());
         return new ApiResponse<>(200, "태그 목록 조회 성공", tags);
