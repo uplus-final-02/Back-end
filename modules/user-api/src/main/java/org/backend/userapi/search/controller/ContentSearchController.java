@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils; // 💡 null safe 유틸 사용
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -44,7 +46,8 @@ public class ContentSearchController {
             @RequestParam(required = false) String tag,
             @RequestParam(defaultValue = "RELATED") String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size
+            @RequestParam(defaultValue = "15") int size,
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
     	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category) && !StringUtils.hasText(genre)) {
     	    throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
@@ -60,7 +63,9 @@ public class ContentSearchController {
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, sortObj);
         
-    	Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, pageable);
+        Long userId = (jwtPrincipal != null) ? jwtPrincipal.getUserId() : null;
+        
+    	Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, userId, pageable);
         
         // keyword를 넘겨주어 matchType(TITLE, TAG 등) 판별
     	return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
