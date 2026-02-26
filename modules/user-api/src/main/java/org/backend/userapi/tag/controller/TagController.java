@@ -2,8 +2,8 @@ package org.backend.userapi.tag.controller;
 
 import java.util.List;
 
-import common.entity.Tag;
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.tag.dto.TagResponse;
 
 import org.backend.userapi.tag.service.TagService;
 import org.backend.userapi.user.dto.request.PreferredTagUpdateRequest;
@@ -30,10 +30,10 @@ public class TagController {
     // URL: http://localhost:8081/api/tags?section=LEVEL_1
     @Operation(summary = "태그 목록 조회", description = "섹션(LEVEL)에 따라 활성화된 태그 목록을 필터링하여 조회합니다.")
     @GetMapping("/api/tags")
-    public ApiResponse<List<Tag>> getTags(
+    public ApiResponse<List<TagResponse>> getTags(
             @RequestParam TagSection section
     ) {
-        List<Tag> tags = tagService.getTagsByPriorities(section.getTargetPriorities());
+        List<TagResponse> tags = tagService.getTagsByPriorities(section.getTargetPriorities());
         return new ApiResponse<>(200, "태그 목록 조회 성공", tags);
     }
 
