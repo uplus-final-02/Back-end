@@ -44,6 +44,20 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse<>(400, e.getMessage(), null));
     }
 
+    @ExceptionHandler(TooManyEmailRequestsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooManyEmailRequests(TooManyEmailRequestsException e) {
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(EmailSendFailedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmailSendFailed(EmailSendFailedException e) {
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, e.getMessage(), null));
+    }
+
     @ExceptionHandler(InvalidSetupTokenException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidSetupToken(InvalidSetupTokenException e) {
         return ResponseEntity
