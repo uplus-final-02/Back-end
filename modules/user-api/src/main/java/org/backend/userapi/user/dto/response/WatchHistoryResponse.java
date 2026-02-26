@@ -1,7 +1,6 @@
 package org.backend.userapi.user.dto.response;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class WatchHistoryDto {
+public class WatchHistoryResponse {
   private Long historyId;
   private Long contentId;
   private Long episodeId;

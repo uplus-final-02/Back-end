@@ -47,4 +47,10 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
         @Param("userId") Long userId,
         @Param("since") LocalDateTime since
     );
+
+    @Query("SELECT wh FROM WatchHistory wh " +
+        "JOIN FETCH wh.video v " +
+        "JOIN FETCH v.content c " +
+        "WHERE wh.userId = :userId")
+    List<WatchHistory> findAllByUserIdForStatistics(@Param("userId") Long userId);
 }
