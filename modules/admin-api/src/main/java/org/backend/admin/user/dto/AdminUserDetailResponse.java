@@ -1,6 +1,7 @@
 package org.backend.admin.user.dto;
 
-import common.enums.AuthProvider;
+import common.enums.PlanType;
+import common.enums.SubscriptionStatus;
 import common.enums.UserStatus;
 
 import java.time.LocalDateTime;
@@ -23,8 +24,8 @@ public record AdminUserDetailResponse(
 
     public record SubscriptionInfo(
             Long subscriptionId,
-            String planType,
-            String subscriptionStatus,
+            PlanType planType,
+            SubscriptionStatus subscriptionStatus,
             LocalDateTime startedAt,
             LocalDateTime expiresAt
     ) {}
