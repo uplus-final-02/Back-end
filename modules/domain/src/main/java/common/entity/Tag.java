@@ -15,12 +15,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "tags",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_tags_name", columnNames = "name")
-    },
-    indexes = {
-        @Index(name = "idx_tags_type", columnList = "type")
-    }
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_tags_name", columnNames = "name")
+        },
+        indexes = {
+                @Index(name = "idx_tags_priority", columnList = "priority")
+        }
 )
 public class Tag {
 
@@ -39,13 +39,13 @@ public class Tag {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "type", nullable = false, length = 20)
-    private String type;
+    @Column(name = "priority", nullable = false, length = 20)
+    private Long priority;
 
     @Builder
-    public Tag(String name, Boolean isActive, String type) {
+    public Tag(String name, Boolean isActive, Long priority) {
         this.name = name;
         this.isActive = isActive != null ? isActive : true;
-        this.type = type;
+        this.priority = priority;
     }
 }
