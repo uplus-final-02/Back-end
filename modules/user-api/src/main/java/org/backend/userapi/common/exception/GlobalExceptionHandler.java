@@ -1,5 +1,8 @@
 package org.backend.userapi.common.exception;
 
+import core.security.exception.JwtInvalidTokenException;
+import core.security.exception.JwtTokenExpiredException;
+import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -26,6 +29,41 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(SocialProviderConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSocialProviderConflict(SocialProviderConflictException e) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(InvalidVerificationCodeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidVerificationCode(InvalidVerificationCodeException e) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(InvalidSetupTokenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidSetupToken(InvalidSetupTokenException e) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(JwtTokenExpiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleJwtTokenExpired(JwtTokenExpiredException e) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, e.getMessage(), null));
+    }
+
+    @ExceptionHandler(JwtInvalidTokenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleJwtInvalidToken(JwtInvalidTokenException e) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, e.getMessage(), null));
     }
 
     @ExceptionHandler(InvalidTagException.class)

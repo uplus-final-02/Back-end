@@ -6,10 +6,11 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
-import org.backend.userapi.content.dto.WatchingContentResponse;
 import org.backend.userapi.content.service.ContentService;
-import org.backend.userapi.user.dto.response.RecentBookmarkResponse;
 import org.backend.userapi.user.service.BookmarkService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -25,27 +26,31 @@ public class ContentController {
     private final BookmarkService bookmarkService;
 
     // 1. 시청 중인 콘텐츠
-    @GetMapping("/home/watching")
-    public ApiResponse<List<WatchingContentResponse>> getWatchingContents(
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-        ) {
-        List<WatchingContentResponse> response = contentService.getWatchingContents(jwtPrincipal.getUserId());
+    @GetMapping("/home/watching-list")
+    public ApiResponse<List<DefaultContentResponse>> getWatchingContentList(
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        List<DefaultContentResponse> response = contentService.getWatchingContents(jwtPrincipal.getUserId());
         return ApiResponse.success(response);
     }
 
-    // 2. 기본 콘텐츠 목록 (카테고리별)
-    @GetMapping("/home/basic")
-    public ApiResponse<List<DefaultContentResponse>> getContents(
-            @RequestParam(required = false) String category
+    // 2. 기본 콘텐츠 목록 (제공자별 - uploaderType, 태그별 - tag)
+    @GetMapping("/home/default-list")
+    public ApiResponse<List<DefaultContentResponse>> getDefaultContentList(
+            @RequestParam(required = false) String uploaderType,
+            @RequestParam(required = false) String tag,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size
     ) {
-        List<DefaultContentResponse> response = contentService.getContents(category);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, pageable);
         return ApiResponse.success(response);
     }
 
     // 3. 최근 찜 목록
     @GetMapping("/home/bookmark-list")
-    public ApiResponse<List<RecentBookmarkResponse>> getBookmarkList(
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    public ApiResponse<List<DefaultContentResponse>> getBookmarkList(
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         // userPrincipal이 null이 아닐 때만 동작 (Security 설정에 따라 다름)
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(jwtPrincipal.getUserId()));
@@ -58,8 +63,8 @@ public class ContentController {
     }
 
     // 5. 에피소드 조회
-    @GetMapping("/{contentId}/episodes")
-    public ResponseEntity<EpisodesResponse> getContentEpisodes(@PathVariable Long contentId) {
+    @GetMapping("/{contentId}/episodes-list")
+    public ResponseEntity<EpisodesResponse> getContentEpisodeList(@PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentEpisodes(contentId));
     }
-} 
+}

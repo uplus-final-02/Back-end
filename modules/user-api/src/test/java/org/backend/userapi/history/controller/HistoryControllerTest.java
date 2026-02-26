@@ -2,6 +2,7 @@ package org.backend.userapi.history.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import common.enums.HistoryStatus;
+import core.security.principal.JwtPrincipal;
 import org.backend.userapi.common.exception.GlobalExceptionHandler;
 import org.backend.userapi.common.exception.VideoNotFoundException;
 import org.backend.userapi.history.dto.SavePointRequest;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,6 +25,10 @@ import static org.mockito.BDDMockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.*;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 @ExtendWith(MockitoExtension.class)
 public class HistoryControllerTest {
@@ -34,11 +40,27 @@ public class HistoryControllerTest {
     @InjectMocks
     private HistoryController historyController;
 
+    private final Long mockUserId = 1L;
+
     @BeforeEach
     void setUp() {
-        // Spring Context 없이 직접 컨트롤러를 MockMvc에 등록
+        // 커스텀 Argument Resolver 구현
+        HandlerMethodArgumentResolver jwtPrincipalArgumentResolver = new HandlerMethodArgumentResolver() {
+            @Override
+            public boolean supportsParameter(MethodParameter parameter) {
+                return parameter.getParameterType().equals(JwtPrincipal.class);
+            }
+
+            @Override
+            public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+                                          NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+                return new JwtPrincipal(mockUserId); // 테스트용 가짜 JwtPrincipal 반환
+            }
+        };
+
         mockMvc = MockMvcBuilders.standaloneSetup(historyController)
-                                 .setControllerAdvice(new GlobalExceptionHandler()) // 실제 핸들러 사용
+                                 .setControllerAdvice(new GlobalExceptionHandler())
+                                 .setCustomArgumentResolvers(jwtPrincipalArgumentResolver) // Resolver 등록
                                  .build();
     }
 
