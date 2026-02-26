@@ -59,7 +59,7 @@ class ProfileServiceTest {
     // 구독 상태는 true(ACTIVE) 반환
     Subscriptions mockSubscription = Subscriptions.builder()
     	    .subscriptionStatus(SubscriptionStatus.ACTIVE)
-    	    .expiredAt(LocalDateTime.now().plusDays(1)) // 만료 안 됨
+    	    .expiresAt(LocalDateTime.now().plusDays(1)) // 만료 안 됨
     	    .build();
 
     	given(subscriptionsRepository.findByUser_Id(userId))
