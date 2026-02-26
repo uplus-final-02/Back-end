@@ -8,4 +8,7 @@ import java.util.List;
 public interface TagRepository extends JpaRepository<Tag, Long> {
 
     List<Tag> findAllByIdIn(List<Long> ids);
+
+    List<Tag> findByIsActiveTrueAndPriorityIn(List<Long> priorities);
+
 }
