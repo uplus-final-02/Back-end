@@ -2,7 +2,10 @@ package user.repository;
 
 import common.enums.AuthProvider;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import user.entity.AuthAccount;
+import user.repository.projection.AdminLoginMethodProjection;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,4 +27,15 @@ public interface AuthAccountRepository extends JpaRepository<AuthAccount, Long> 
     Optional<AuthAccount> findByUser_Id(Long userId);
 
     Optional<AuthAccount> findFirstByUserIdAndEmailIsNotNull(Long userId);
+
+    @Query("""
+        select
+            a.user.id as userId,
+            a.authProvider as authProvider,
+            coalesce(a.email, a.authProviderSubject) as identifier
+        from AuthAccount a
+        where a.user.id in :userIds
+        order by a.user.id asc
+        """)
+    List<AdminLoginMethodProjection> findLoginMethodsByUserIds(@Param("userIds") List<Long> userIds);
 }
