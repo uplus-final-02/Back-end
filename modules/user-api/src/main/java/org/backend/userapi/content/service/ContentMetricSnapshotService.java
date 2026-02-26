@@ -66,32 +66,43 @@ public class ContentMetricSnapshotService {
                                                   .map(Content::getId)
                                                   .toList();
 
-            // 3. 직전 스냅샷 데이터 일괄 조회 (Delta 계산용)
-            List<ContentMetricSnapshot> previousSnapshots = snapshotRepository.findByIdBucketStartAtAndContentIdIn(
-                previousBucketStartAt, contentIds
-            );
-            Map<Long, ContentMetricSnapshot> previousSnapshotMap = previousSnapshots.stream()
-                                                                                    .collect(Collectors.toMap(s -> s.getId().getContentId(), Function.identity()));
-
+            // 3. 직전 스냅샷이 아닌 '가장 최근 스냅샷' 일괄 조회
+            List<ContentMetricSnapshot> latestSnapshots = snapshotRepository.findLatestSnapshotsByContentIds(contentIds);
+            Map<Long, ContentMetricSnapshot> latestSnapshotMap = latestSnapshots.stream()
+                                                                                .collect(Collectors.toMap(s -> s.getId().getContentId(), Function.identity()));
             List<ContentMetricSnapshot> newSnapshots = new ArrayList<>(targetContents.size());
 
-            // 4. 콘텐츠별 지표 증분(Delta) 계산
+            // 4. 콘텐츠별 지표 증분(Delta) 계산 및 Baseline(기준점) 검증
             for (Content content : targetContents) {
                 Long contentId = content.getId();
-
-                // 직전 버킷 누적 지표 로드 (미존재 시 0 처리)
-                ContentMetricSnapshot prevSnapshot = previousSnapshotMap.get(contentId);
-                long prevViewCount = (prevSnapshot != null) ? prevSnapshot.getSnapshotViewCount() : 0L;
-                long prevBookmarkCount = (prevSnapshot != null) ? prevSnapshot.getSnapshotBookmarkCount() : 0L;
+                ContentMetricSnapshot lastSnapshot = latestSnapshotMap.get(contentId);
 
                 // 현재 누적 지표 로드
                 long currentViewCount = content.getTotalViewCount();
                 long currentBookmarkCount = content.getBookmarkCount();
-
-                // Delta 산출 (음수 방지 보정)
-                long deltaView = Math.max(0, currentViewCount - prevViewCount);
-                long deltaBookmark = Math.max(0, currentBookmarkCount - prevBookmarkCount);
                 long deltaCompleted = completedMap.getOrDefault(contentId, 0L);
+
+                long deltaView = 0L;
+                long deltaBookmark = 0L;
+
+                if (lastSnapshot == null) {
+                    // [케이스 A] 최초 실행 상태: 이력이 없으므로 현재 값을 기준점(Baseline)으로 삼음 (Delta = 0)
+                    deltaView = 0L;
+                    deltaBookmark = 0L;
+                } else {
+                    long lastViewCount = lastSnapshot.getSnapshotViewCount();
+                    long lastBookmarkCount = lastSnapshot.getSnapshotBookmarkCount();
+
+                    // [케이스 B] 누적 지표 역전 검증: 현재 조회수가 과거보다 작아졌다면 데이터 삭제/초기화로 간주
+                    if (currentViewCount < lastViewCount) {
+                        deltaView = 0L;
+                        deltaBookmark = 0L;
+                    } else {
+                        // [케이스 C] 정상 상태: 시간 간격과 무관하게 순수 변화량 계산
+                        deltaView = currentViewCount - lastViewCount;
+                        deltaBookmark = currentBookmarkCount - lastBookmarkCount;
+                    }
+                }
 
                 // 5. 무효 데이터 필터링 (지표 변화가 없는 경우 제외)
                 if (deltaView == 0 && deltaBookmark == 0 && deltaCompleted == 0) {
