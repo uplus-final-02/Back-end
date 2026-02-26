@@ -11,12 +11,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import user.entity.AuthAccount;
 import user.entity.User;
+import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
 import user.entity.Subscriptions;
-import common.enums.SubscriptionStatus;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
