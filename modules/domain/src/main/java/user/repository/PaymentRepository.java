@@ -8,5 +8,7 @@ import user.entity.Payment;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	
-	Optional<Payment> findTopByUser_IdOrderByRequestAtDesc(Long userId);
+	Optional<Payment> findByOrderId(String orderId);
+
+    boolean existsByOrderId(String orderId);
 }
