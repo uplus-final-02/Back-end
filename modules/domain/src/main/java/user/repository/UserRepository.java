@@ -43,7 +43,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
                       and a.email is not null
                       and a.email like concat('%', :search, '%')
                 )
-            order by u.createdAt desc
+            order by u.createdAt desc, u.id asc
             """,
             countQuery = """
             select count(u)
