@@ -39,4 +39,12 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
     Slice<WatchHistory> findHistoriesByCursor(@Param("userId") Long userId, @Param("cursor") Long cursor, Pageable pageable);
 
     Optional<WatchHistory> findByIdAndUserId(Long id, Long userId);
+
+    // 추천 제외용: 최근 3개월 내 시청한 콘텐츠 ID 목록 (중복 제거)
+    @Query("SELECT DISTINCT wh.contentId FROM WatchHistory wh " +
+        "WHERE wh.userId = :userId AND wh.lastWatchedAt >= :since")
+    List<Long> findRecentWatchedContentIds(
+        @Param("userId") Long userId,
+        @Param("since") LocalDateTime since
+    );
 }

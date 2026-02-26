@@ -28,6 +28,7 @@ import content.entity.Content;
 import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.userapi.recommendation.service.TagVectorService;
 
 @Slf4j
 @Service
@@ -37,6 +38,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private final ContentRepository contentRepository;
     private final ContentSearchRepository contentSearchRepository;
     private final ElasticsearchOperations elasticsearchOperations;
+    private final TagVectorService tagVectorService;
 
     private final AtomicBoolean isIndexing = new AtomicBoolean(false);
     
@@ -191,11 +193,18 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .map(ct -> ct.getTag().getName())
                 .collect(Collectors.toList());
 
+        List<Long> tagIds = content.getContentTags().stream()
+                .map(ct -> ct.getTag().getId())
+                .collect(Collectors.toList());
+
+        // priority 가중치가 반영된 30차원 태그 벡터 빌드
+        float[] tagVector = tagVectorService.buildContentVector(tagIds);
+
         return ContentDocument.builder()
                 .contentId(content.getId())
                 .title(content.getTitle())
                 .description(content.getDescription())
-                .tags(tagNames) // 수정된 태그 리스트 주입
+                .tags(tagNames)
                 .contenttype(content.getType().name())
                 .status(content.getStatus().name())
                 .accessLevel(content.getAccessLevel().name())
@@ -204,6 +213,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .bookmarkCount(content.getBookmarkCount())
                 .createdAt(content.getCreatedAt())
                 .updatedAt(content.getUpdatedAt())
+                .tagVector(tagVector)
                 .build();
     }
 }
