@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import user.entity.AuthAccount;
 import user.entity.User;
+import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
@@ -54,7 +55,7 @@ class ProfileServiceTest {
     // 태그는 빈 리스트 반환
     given(userPreferredTagRepository.findAllByUserIdWithTag(userId)).willReturn(Collections.emptyList());
     // 구독 상태는 true(ACTIVE) 반환
-    given(subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE)).willReturn(true);
+    given(subscriptionsRepository.existsByUser_IdAndSubscriptionStatus(userId, SubscriptionStatus.ACTIVE)).willReturn(true);
 
     // 2. When (서비스 실행)
     ProfileResponse result = profileService.getMyProfile(userId);

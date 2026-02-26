@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import user.entity.AuthAccount;
 import user.entity.User;
 import user.entity.UserPreferredTag;
+import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
@@ -46,7 +47,8 @@ public class ProfileService {
         .collect(Collectors.toList());
 
     // 구독 상태 확인 ("SUBSCRIBED" / "NONE")
-    boolean isSubscribed = subscriptionsRepository.existsByUserIdAndStatus(userId, UserStatus.ACTIVE);
+    boolean isSubscribed =
+            subscriptionsRepository.existsByUser_IdAndSubscriptionStatus(userId, SubscriptionStatus.ACTIVE);
     String subStatus = isSubscribed ? "SUBSCRIBED" : "NONE";
 
     // 유플러스 인증 여부
