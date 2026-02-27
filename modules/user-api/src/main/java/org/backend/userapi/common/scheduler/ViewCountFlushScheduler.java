@@ -30,9 +30,9 @@ public class ViewCountFlushScheduler {
 
     /**
      * 3분마다 Redis에 쌓인 조회수를 DB에 반영(Flush)합니다.
-     * cron: cron: "0 0/3 * * * *" (3분 간격으로 정각 0초에 실행. 예: 0분 0초, 3분 0초, 6분 0초...)
+     * cron: cron: "0 0/5 * * * *" (5분 간격으로 정각 0초에 실행. 예: 0분 0초, 5분 0초, 5분 0초...)
      */
-    @Scheduled(cron = "0 0/3 * * * *")
+    @Scheduled(cron = "0 0/5 * * * *")
     @Transactional
     public void flushViewCountsToDB() {
         log.info("[Scheduler] Redis 조회수 DB 동기화(Flush) 시작");

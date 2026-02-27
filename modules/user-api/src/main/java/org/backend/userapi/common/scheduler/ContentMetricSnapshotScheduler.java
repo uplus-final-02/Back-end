@@ -19,8 +19,9 @@ public class ContentMetricSnapshotScheduler {
     /**
      * 10분마다 실행되는 스냅샷 집계 스케줄러
      * 매 정각, 10분, 20분 ... 50분에 정확히 실행
+     * (변경) 10초에 실행함
      */
-    @Scheduled(cron = "0 0/10 * * * *")
+    @Scheduled(cron = "10 0/10 * * * *")
     public void createMetricSnapshotBucket() {
         LocalDateTime now = LocalDateTime.now();
 

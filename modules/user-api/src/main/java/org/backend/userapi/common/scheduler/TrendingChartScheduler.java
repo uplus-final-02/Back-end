@@ -15,7 +15,7 @@ import java.time.temporal.ChronoUnit;
 public class TrendingChartScheduler {
     private final TrendingContentService trendingContentService;
 
-    @Scheduled(cron = "0 0 * * * *")
+    @Scheduled(cron = "20 0 * * * *")
     public void buildTrendingChart() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime currentBucket = now.truncatedTo(ChronoUnit.HOURS);
