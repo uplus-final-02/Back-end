@@ -1,4 +1,4 @@
-package org.backend.userapi.user.controller; 
+package org.backend.userapi.user.controller;
 
 
 import org.backend.userapi.common.dto.ApiResponse;
@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "태그 API", description = "사용자 선호 태그 관리")
 @RestController
 @RequiredArgsConstructor
-public class TagController {
+public class UserTagController {
 
     private final UserTagPreferenceService userTagPreferenceService;
 

@@ -14,12 +14,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.backend.userapi.recommendation.service.TagVectorService;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.repository.ContentSearchRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +41,7 @@ import common.enums.ContentType;
 import content.entity.Content;
 import content.entity.ContentTag;
 import content.repository.ContentRepository;
+import user.repository.UserPreferredTagRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ContentIndexingServiceImplTest {
@@ -52,8 +55,18 @@ class ContentIndexingServiceImplTest {
     @Mock
     private ElasticsearchOperations elasticsearchOperations;
 
+    @Mock
+    private TagVectorService tagVectorService;
+
+    @Mock
+    private UserPreferredTagRepository userPreferredTagRepository;
+
     @InjectMocks
     private ContentIndexingServiceImpl contentIndexingService;
+
+    // 💡 [수정] ArgumentCaptor 제네릭 에러를 원천 차단하기 위해 필드로 선언
+    @Captor
+    private ArgumentCaptor<List<ContentDocument>> documentListCaptor;
 
     @Test
     @DisplayName("전체 인덱싱 시 findAllWithTags()를 호출하고 문서를 저장한다")
@@ -61,21 +74,20 @@ class ContentIndexingServiceImplTest {
         // Given
         Content content = sampleContent(10L, "테스트 제목");
         
-        // Repository가 반환할 Mock 데이터 설정
         when(contentRepository.findAllWithTags()).thenReturn(List.of(content));
+        when(tagVectorService.buildContentVector(any())).thenReturn(new float[100]);
 
         // When
         contentIndexingService.indexAllContents();
 
         // Then
-        ArgumentCaptor<List<ContentDocument>> captor = ArgumentCaptor.forClass(List.class);
-        verify(contentSearchRepository).saveAll(captor.capture());
-        List<ContentDocument> saved = captor.getValue();
+        // 💡 [수정] 필드에 선언된 captor 사용
+        verify(contentSearchRepository).saveAll(documentListCaptor.capture());
+        List<ContentDocument> saved = documentListCaptor.getValue();
 
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getContentId()).isEqualTo(10L);
         assertThat(saved.get(0).getTitle()).isEqualTo("테스트 제목");
-        // sampleContent에서 주입한 태그가 잘 들어갔는지 확인
         assertThat(saved.get(0).getTags()).contains("테스트태그"); 
     }
 
@@ -95,9 +107,10 @@ class ContentIndexingServiceImplTest {
         // Given
     	Pageable pageable = PageRequest.of(0, 20);
 
-        // When - 모든 필터가 null 또는 공백인 경우
-    	Page<ContentDocument> result = contentIndexingService.search("   ", null, null, null, pageable);
-    	// Then
+        // When
+    	Page<ContentDocument> result = contentIndexingService.search("   ", null, null, null, null, pageable);
+    	
+        // Then
         assertThat(result).isEmpty();
         verifyNoInteractions(elasticsearchOperations);
     }
@@ -108,7 +121,7 @@ class ContentIndexingServiceImplTest {
         // Given
         Pageable pageable = PageRequest.of(0, 20);
         String keyword = "드라마";
-        String tag = "의학"; // 추가된 필터
+        String tag = "의학"; 
         
         ContentDocument doc = ContentDocument.builder()
                 .contentId(1L)
@@ -124,28 +137,22 @@ class ContentIndexingServiceImplTest {
         when(searchHits.getTotalHits()).thenReturn(1L);
         when(searchHits.stream()).thenReturn(List.of(hit).stream());
 
-        // [수정] 모든 파라미터를 받는 search 메서드 모킹
         when(elasticsearchOperations.search(any(NativeQuery.class), eq(ContentDocument.class)))
                 .thenReturn(searchHits);
 
         // When
-        // [수정] 파라미터 순서: keyword, category, genre, tag, pageable
-        Page<ContentDocument> result = contentIndexingService.search(keyword, null, null, tag, pageable);
+        Page<ContentDocument> result = contentIndexingService.search(keyword, null, null, tag, null, pageable);
 
         // Then
         assertThat(result.getContent()).hasSize(1);
-        // [핵심] NativeQuery 내부의 BoolQuery에 필터가 잘 조립되었는지는 통합 테스트 영역이지만, 
-        // 여기서는 서비스 메서드가 예외 없이 실행되는지 확인합니다.
         verify(elasticsearchOperations).search(any(NativeQuery.class), eq(ContentDocument.class));
     }
 
     @Test
     @DisplayName("인덱싱 상태 조회 시 초기 상태를 반환한다")
     void getIndexingStatus_returnsInitialStatus() {
-        // When
         Map<String, Object> status = contentIndexingService.getIndexingStatus();
 
-        // Then
         assertThat(status).containsEntry("status", "IDLE");
         assertThat(status).doesNotContainKey("error");
     }
@@ -164,12 +171,9 @@ class ContentIndexingServiceImplTest {
         assertThat(contentIndexingService.countIndexedContents()).isEqualTo(42L);
     }
 
-    // 🚨 [핵심 수정] 중간 엔티티(ContentTag) 반영을 위한 헬퍼 메서드
     private Content sampleContent(Long id, String title) {
-        // 1. 태그 생성
         Tag tag = Tag.builder().name("테스트태그").build();
 
-        // 2. 변수명을 'targetContent'로 하여 패키지명(content)과의 충돌을 원천 차단
         Content targetContent = Content.builder()
                 .type(ContentType.SERIES)
                 .title(title)
@@ -180,21 +184,14 @@ class ContentIndexingServiceImplTest {
                 .accessLevel(ContentAccessLevel.FREE)
                 .build();
         
-        // 3. ID 주입 (필드명이 'id'인지 확인 필요)
         ReflectionTestUtils.setField(targetContent, "id", id);
 
-        // 4. ContentTag Mock 생성
-        // 💡 상단에 import content.entity.ContentTag; 가 정확히 되어 있는지 확인하세요.
         ContentTag mockContentTag = mock(ContentTag.class); 
         when(mockContentTag.getTag()).thenReturn(tag);
 
-        // 5. [매우 중요] 엔티티의 실제 필드명을 확인하세요!
-        // 💡 Content 엔티티 안에 'private List<ContentTag> contentTags;' 필드가 실제로 있나요?
-        // 💡 만약 필드명이 'tags'라면 아래 "contentTags"를 "tags"로 바꿔야 빌드(테스트)가 통과됩니다.
         try {
             ReflectionTestUtils.setField(targetContent, "contentTags", new java.util.ArrayList<>(List.of(mockContentTag)));
         } catch (Exception e) {
-            // 필드명이 다를 경우를 대비한 방어 로직 (실제 프로젝트 필드명으로 수정 권장)
             ReflectionTestUtils.setField(targetContent, "tags", new java.util.ArrayList<>(List.of(mockContentTag)));
         }
 

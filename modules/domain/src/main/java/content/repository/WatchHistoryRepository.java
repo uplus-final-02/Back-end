@@ -53,4 +53,11 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
         "JOIN FETCH v.content c " +
         "WHERE wh.userId = :userId")
     List<WatchHistory> findAllByUserIdForStatistics(@Param("userId") Long userId);
+    // 추천 패널티용: 최근 시청 콘텐츠 ID + 시청 상태 (동일 콘텐츠 중복 포함, Java에서 최고 상태 선택)
+    @Query("SELECT wh.contentId, wh.status FROM WatchHistory wh " +
+        "WHERE wh.userId = :userId AND wh.lastWatchedAt >= :since")
+    List<Object[]> findRecentWatchedContentWithStatus(
+        @Param("userId") Long userId,
+        @Param("since") LocalDateTime since
+    );
 }

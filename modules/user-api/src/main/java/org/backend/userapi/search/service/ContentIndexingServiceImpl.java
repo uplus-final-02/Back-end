@@ -1,18 +1,21 @@
 package org.backend.userapi.search.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.backend.userapi.recommendation.service.TagVectorService;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.repository.ContentSearchRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.HighlightQuery;
@@ -24,11 +27,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import co.elastic.clients.elasticsearch._types.query_dsl.FunctionScoreMode;
+import co.elastic.clients.elasticsearch._types.query_dsl.FieldValueFactorModifier;
+import co.elastic.clients.elasticsearch._types.query_dsl.FunctionBoostMode;
 import content.entity.Content;
 import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.backend.userapi.recommendation.service.TagVectorService;
+import user.repository.UserPreferredTagRepository;
+
 
 @Slf4j
 @Service
@@ -39,12 +46,15 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private final ContentSearchRepository contentSearchRepository;
     private final ElasticsearchOperations elasticsearchOperations;
     private final TagVectorService tagVectorService;
+    private final UserPreferredTagRepository userPreferredTagRepository;
 
     private final AtomicBoolean isIndexing = new AtomicBoolean(false);
     
     private String lastIndexingStatus = "IDLE"; 
     private String lastErrorMessage = null;
     private LocalDateTime lastRunTime = null;
+    
+    private static final float ZERO_VECTOR_EPS = 1e-6f;
 
     @Override
     @Async("indexingExecutor")
@@ -83,52 +93,102 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     @Override
-    public Page<ContentDocument> search(String keyword, String category, String genre, String tag, Pageable pageable) {
-    	
-    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(category) && 
+    public Page<ContentDocument> search(String keyword, String category, String genre, String tag, Long userId, Pageable pageable) {
+        
+        if (!StringUtils.hasText(keyword) && !StringUtils.hasText(category) && 
                 !StringUtils.hasText(genre) && !StringUtils.hasText(tag)) {
                 log.info("검색어와 필터가 모두 비어있어 빈 결과를 반환합니다.");
                 return new PageImpl<>(List.of(), pageable, 0); 
+        }
+
+        // 💡 1. 유저 선호 태그 벡터 준비 (람다식 내부에서 쓰기 위해 미리 변환)
+        List<Float> vectorList = null;
+        if (userId != null && StringUtils.hasText(keyword)) { 
+            List<Long> preferredTagIds = userPreferredTagRepository.findAllByUserIdWithTag(userId)
+                    .stream()
+                    .map(upt -> upt.getTag().getId())
+                    .toList();
+
+            if (!preferredTagIds.isEmpty()) {
+                float[] userVector = tagVectorService.buildUserVector(preferredTagIds);
+                
+                if (!isZeroVector(userVector)) {
+                    vectorList = new ArrayList<>();
+                    for (float v : userVector) {
+                        vectorList.add(v);
+                    }
+                } else {
+                    log.warn("🚀 [검색] userId: {} 의 취향 벡터가 0-벡터로 판명되어 kNN 검색을 제외합니다.", userId);
+                }
             }
-    	
-        // 1. 하이라이트 설정 보존
-    	HighlightParameters hp = HighlightParameters.builder()
+        }
+        
+        final List<Float> finalVectorList = vectorList; // 람다 내부 접근용 final 변수
+        
+        // 2. 하이라이트 설정
+        HighlightParameters hp = HighlightParameters.builder()
                 .withPreTags("<em>").withPostTags("</em>").build();
         Highlight highlight = new Highlight(hp, List.of(new HighlightField("title"), new HighlightField("description")));
 
-        // 2. 동적 Bool 쿼리 (Must: 키워드 가중치 / Filter: 카테고리, 태그)
-        NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.bool(b -> {
-                    // 키워드 검색 (점수 반영)
-                    if (StringUtils.hasText(keyword)) {
-                        b.must(m -> m.multiMatch(mm -> mm
-                                .fields("title^3", "tags^2", "description")
-                                .query(keyword)));
-                    }
+        // 3. 동적 Bool 쿼리 조합
+        NativeQueryBuilder queryBuilder = NativeQuery.builder()
+                .withQuery(q -> q.functionScore(fs -> fs
+                        .query(innerQ -> innerQ.bool(b -> {
+                            // [기본] 키워드 검색
+                            if (StringUtils.hasText(keyword)) {
+                                b.must(m -> m.multiMatch(mm -> mm
+                                        .fields("title^3", "tags^2", "description")
+                                        .query(keyword)));
+                            }
 
-                    // 카테고리 필터 (정확도 점수 미반영, 캐싱 활용)
-                    if (StringUtils.hasText(category)) {
-                        b.filter(f -> f.term(t -> t.field("contenttype").value(category.toUpperCase())));
-                    }
-
-                    // 장르/태그 필터 (태그 리스트 내 검색)
-                    if (StringUtils.hasText(genre)) {
-                        b.filter(f -> f.term(t -> t.field("tags").value(genre)));
-                    }
-                    if (StringUtils.hasText(tag)) {
-                        b.filter(f -> f.term(t -> t.field("tags").value(tag)));
-                    }
-
-                    // 활성 콘텐츠만 검색 (공통 필터)
-                    b.filter(f -> f.term(t -> t.field("status").value("ACTIVE")));
-                    
-                    return b;
-                }))
+                            // [필터] 조건들
+                            if (StringUtils.hasText(category)) {
+                                b.filter(f -> f.term(t -> t.field("contenttype").value(category.toUpperCase())));
+                            }
+                            if (StringUtils.hasText(genre)) {
+                                b.filter(f -> f.term(t -> t.field("tags").value(genre)));
+                            }
+                            if (StringUtils.hasText(tag)) {
+                                b.filter(f -> f.term(t -> t.field("tags").value(tag)));
+                            }
+                            b.filter(f -> f.term(t -> t.field("status").value("ACTIVE")));
+                            
+                            // [하이브리드 kNN 검색] (유효한 벡터일 때만 동작)
+                            if (finalVectorList != null) {
+                                b.should(s -> s.knn(knn -> knn
+                                        .field("tagVector")
+                                        .queryVector(finalVectorList)
+                                        .k(30)
+                                        .numCandidates(100)
+                                        .boost(0.5f) 
+                                ));
+                            }
+                            return b;
+                        }))
+                        .functions(fn -> fn.fieldValueFactor(fvf -> fvf
+                                .field("totalViewCount")
+                                .modifier(FieldValueFactorModifier.Log1p)
+                                .factor(0.1) 
+                                .missing(0.0)
+                        ))
+                        .functions(fn -> fn.fieldValueFactor(fvf -> fvf
+                                .field("bookmarkCount")
+                                .modifier(FieldValueFactorModifier.Log1p)
+                                .factor(0.2) 
+                                .missing(0.0)
+                        ))
+                        .scoreMode(FunctionScoreMode.Sum)
+                        .boostMode(FunctionBoostMode.Sum) 
+                ))
                 .withPageable(pageable)
-                .withHighlightQuery(new HighlightQuery(highlight, null))
-                .build();
+                .withHighlightQuery(new HighlightQuery(highlight, null));
 
-        // 3. 결과 처리 및 하이라이트 매핑
+        if (finalVectorList != null) {
+            log.info("🚀 [하이브리드 검색 가동] userId: {}, 키워드: {}", userId, keyword);
+        }
+
+        // 4. 결과 처리 및 하이라이트 매핑
+        NativeQuery query = queryBuilder.build();
         SearchHits<ContentDocument> searchHits = elasticsearchOperations.search(query, ContentDocument.class);
 
         List<ContentDocument> contents = searchHits.stream()
@@ -215,5 +275,14 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .updatedAt(content.getUpdatedAt())
                 .tagVector(tagVector)
                 .build();
+    }
+    
+    private boolean isZeroVector(float[] vector) {
+        if (vector == null || vector.length == 0) return true;
+        double normSq = 0.0;
+        for (float v : vector) {
+            normSq += (double) v * v;
+        }
+        return normSq <= ZERO_VECTOR_EPS;
     }
 }
