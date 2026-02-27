@@ -95,4 +95,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         return null;
     }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) { // minio 연결 테스트용
+        String path = request.getServletPath();
+        return path.startsWith("/admin/storage");
+    }
 }
