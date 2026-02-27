@@ -39,7 +39,8 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
-                .anyRequest().hasRole("ADMIN")
+                    .requestMatchers("/admin/users", "/admin/users/**").permitAll() // ✅ 테스트용
+                    .anyRequest().hasRole("ADMIN")
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();

@@ -12,6 +12,7 @@ import user.entity.AuthAccount;
 import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserPreferredTag;
+import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;

@@ -11,12 +11,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import user.entity.AuthAccount;
 import user.entity.User;
+import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
 import user.entity.Subscriptions;
-import common.enums.SubscriptionStatus;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -59,7 +59,7 @@ class ProfileServiceTest {
     // 구독 상태는 true(ACTIVE) 반환
     Subscriptions mockSubscription = Subscriptions.builder()
     	    .subscriptionStatus(SubscriptionStatus.ACTIVE)
-    	    .expiredAt(LocalDateTime.now().plusDays(1)) // 만료 안 됨
+    	    .expiresAt(LocalDateTime.now().plusDays(1)) // 만료 안 됨
     	    .build();
 
     	given(subscriptionsRepository.findByUser_Id(userId))
