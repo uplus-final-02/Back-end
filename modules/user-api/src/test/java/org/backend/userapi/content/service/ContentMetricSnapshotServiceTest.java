@@ -93,7 +93,7 @@ class ContentMetricSnapshotServiceTest {
     }
 
     @Test
-    @DisplayName("[Case A] 최초 실행: 이전 스냅샷이 없는 신규 콘텐츠는 Delta가 0인 기준점(Baseline)으로 생성된다")
+    @DisplayName("[Case A] 신규 콘텐츠: Baseline 초기화 환경에서 이전 스냅샷이 없으면 신규 업로드로 간주하고 현재 값을 Delta로 반영한다")
     void shouldHandleNewContentWithoutPreviousSnapshot() {
         // given
         LocalDateTime bucketStart = LocalDateTime.of(2026, 2, 25, 14, 10);
@@ -107,27 +107,27 @@ class ContentMetricSnapshotServiceTest {
         when(contentRepository.findByUpdatedAtGreaterThanEqual(eq(previousBucket), any()))
             .thenReturn(new SliceImpl<>(List.of(newContent)));
 
-        // 최근 스냅샷 없음 (빈 리스트 반환)
+        // 최근 스냅샷 없음 (빈 리스트 반환) -> 신규 콘텐츠임을 의미
         when(snapshotRepository.findLatestSnapshotsByContentIds(any()))
             .thenReturn(List.of());
 
-        // 무효 데이터 필터링(continue)을 통과시키기 위해 completedCount 발생 가정
-        List<Object[]> completedStats = new ArrayList<>();
-        completedStats.add(new Object[]{99L, 1L});
+        // 시청 완료 통계 Mock (없어도 조회수/북마크가 0이 아니므로 필터링을 통과함)
         when(watchHistoryRepository.findCompletedUserCounts(any(), any()))
-            .thenReturn(completedStats);
+            .thenReturn(List.of());
 
         // when
         snapshotService.createSnapshotsForBucket(bucketStart);
 
-        // then: 기존 코드처럼 Delta가 10이 아니라, 방어 로직에 의해 0이어야 함
+        // then: 방어 로직(0)이 아니라, 현재 값 전체가 순수 증분(Delta)으로 인정되어야 함
         verify(snapshotRepository).saveAll(argThat(argument -> {
             List<ContentMetricSnapshot> snapshots = (List<ContentMetricSnapshot>) argument;
             assertThat(snapshots).hasSize(1);
             ContentMetricSnapshot saved = snapshots.get(0);
 
-            assertThat(saved.getDeltaViewCount()).isEqualTo(0L); // 0회차 기준점이므로 0
-            assertThat(saved.getSnapshotViewCount()).isEqualTo(10L); // 누적값은 정상 저장
+            // 현재 값이 그대로 Delta에 반영되는지 검증
+            assertThat(saved.getDeltaViewCount()).isEqualTo(10L);
+            assertThat(saved.getDeltaBookmarkCount()).isEqualTo(2L);
+            assertThat(saved.getSnapshotViewCount()).isEqualTo(10L);
             return true;
         }));
     }
