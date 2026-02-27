@@ -36,6 +36,7 @@ public class WatchHistoryService {
 
   public WatchHistoryListResponse getWatchHistories(Long userId, Long cursor, Pageable pageable) {
 
+    // 데이터 조회 & 콘텐츠 ID 추출
     Slice<WatchHistory> slice = watchHistoryRepository.findHistoriesByCursor(userId, cursor, pageable);
 
     List<Long> contentIds = slice.getContent().stream()
@@ -43,6 +44,7 @@ public class WatchHistoryService {
         .distinct()
         .collect(Collectors.toList());
 
+    // 복수 태그 매핑 (N+1 방지)
     Map<Long, List<String>> tagMap = new HashMap<>();
     if (!contentIds.isEmpty()) {
       List<Object[]> tagResults = contentTagRepository.findTagNamesByContentIds(contentIds);
@@ -117,13 +119,10 @@ public class WatchHistoryService {
 
   public WatchStatisticsResponse getWatchStatistics(Long userId) {
 
-    // 0회/0시간으로 기본 맵(Map) 세팅
     List<Object[]> priorityTags = tagRepository.findPriorityTags();
     Map<Long, GenreStatTracker> statMap = new HashMap<>();
     for (Object[] pt : priorityTags) {
-      Long tId = (Long) pt[0];
-      String tName = (String) pt[1];
-      statMap.put(tId, new GenreStatTracker(tId, tName));
+      statMap.put((Long) pt[0], new GenreStatTracker((Long) pt[0], (String) pt[1]));
     }
 
     List<WatchHistory> histories = watchHistoryRepository.findAllByUserIdForStatistics(userId);
@@ -136,60 +135,62 @@ public class WatchHistoryService {
         .distinct()
         .collect(Collectors.toList());
 
-    Map<Long, TagInfo> primaryTagMap = new HashMap<>();
+    Map<Long, List<TagInfo>> multiTagMap = new HashMap<>();
     if (!contentIds.isEmpty()) {
       List<Object[]> tagResults = contentTagRepository.findPriorityTagDetailsByContentIds(contentIds);
       for (Object[] result : tagResults) {
         Long cId = (Long) result[0];
-        if (!primaryTagMap.containsKey(cId)) {
-          primaryTagMap.put(cId, new TagInfo((Long) result[1], (String) result[2]));
-        }
+        TagInfo tagInfo = new TagInfo((Long) result[1], (String) result[2]);
+        multiTagMap.computeIfAbsent(cId, k -> new ArrayList<>()).add(tagInfo);
       }
     }
 
-    // 데이터 누적
     for (WatchHistory history : histories) {
       boolean isCompleted = history.getStatus() == HistoryStatus.COMPLETED;
       int watchTime = history.getLastPositionSec() != null ? history.getLastPositionSec() : 0;
 
-      // 전체 누적
-      if (isCompleted) totalWatchedCount++;
-      totalWatchTime += watchTime;
+      List<TagInfo> tags = multiTagMap.getOrDefault(history.getContentId(), new ArrayList<>());
 
-      TagInfo tag = primaryTagMap.get(history.getContentId());
-      if (tag != null && statMap.containsKey(tag.getTagId())) {
-        GenreStatTracker tracker = statMap.get(tag.getTagId());
-        if (isCompleted) tracker.watchedCount++;
-        tracker.watchTime += watchTime;
+      if (!tags.isEmpty()) {
+        // 시청 영상 태그 누적
+        for (TagInfo tag : tags) {
+          GenreStatTracker tracker = statMap.get(tag.getTagId());
+          if (tracker != null) {
+            if (isCompleted) tracker.watchedCount++;
+            tracker.watchTime += watchTime;
+          }
+        }
+
+        // 전체 통계 기준값
+        if (isCompleted) totalWatchedCount++;
+        totalWatchTime += watchTime;
       }
     }
 
-    final int finalTotalWatchedCount = totalWatchedCount;
+    int sumOfAllGenreCounts = statMap.values().stream()
+        .mapToInt(tracker -> tracker.watchedCount)
+        .sum();
 
-    // 많이 본 순서로 정렬
+    // 장르별 비율(%) 계산 + 비시청 장르(통계 X) 필터링 + 정렬
     List<GenreStatisticsResponse> statisticsByGenre = statMap.values().stream()
+        .filter(tracker -> tracker.watchedCount > 0)
         .map(tracker -> {
-          double percentage = finalTotalWatchedCount > 0 ?
-              Math.round(((double) tracker.watchedCount / finalTotalWatchedCount) * 1000) / 10.0 : 0.0;
+          double percentage = sumOfAllGenreCounts > 0 ?
+              Math.round(((double) tracker.watchedCount / sumOfAllGenreCounts) * 1000) / 10.0 : 0.0;
 
           return GenreStatisticsResponse.builder()
-              .tagId(tracker.tagId)
-              .tagName(tracker.tagName)
-              .watchedCount(tracker.watchedCount)
-              .watchTime(tracker.watchTime)
-              .percentage(percentage)
-              .build();
+              .tagId(tracker.tagId).tagName(tracker.tagName)
+              .watchedCount(tracker.watchedCount).watchTime(tracker.watchTime)
+              .percentage(percentage).build();
         })
         .sorted((a, b) -> b.getWatchedCount().compareTo(a.getWatchedCount()))
         .collect(Collectors.toList());
-
-    String updatedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString();
 
     return WatchStatisticsResponse.builder()
         .totalWatchedCount(totalWatchedCount)
         .totalWatchTime(totalWatchTime)
         .statisticsByGenre(statisticsByGenre)
-        .updatedAt(updatedAt)
+        .updatedAt(Instant.now().truncatedTo(ChronoUnit.SECONDS).toString())
         .build();
   }
 
