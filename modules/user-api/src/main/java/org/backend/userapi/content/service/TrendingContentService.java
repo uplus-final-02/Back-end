@@ -44,7 +44,7 @@ public class TrendingContentService {
         LocalDateTime startTime = currentBucketTime.minusHours(1);
         LocalDateTime endTime = currentBucketTime;
 
-        log.info("[Trending Chart] 점수 산출 및 Redis 적재 시작 (범위: {} ~ {}", startTime, endTime);
+        log.info("[Trending Chart] 점수 산출 및 Redis 적재 시작 (범위: {} ~ {})", startTime, endTime);
 
         // 1. DB 에서 1시간치 합산 데이터 조회
         List<TrendingStatDto> stats = snapshotRepository.findAggregatedStats(startTime, endTime);
@@ -54,24 +54,34 @@ public class TrendingContentService {
             return;
         }
 
-        // 2. Redis에 한 번에 넣기 위한 TypedTuple 세트 생성
-        Set<ZSetOperations.TypedTuple<String>> tuples = stats.stream()
-             .map(stat -> {
-                 double score = (stat.getTotalDeltaView() * WEIGHT_VIEW)
-                     + (stat.getTotalDeltaCompleted() * WEIGHT_COMPLETED)
-                     + (stat.getTotalDeltaBookmark() * WEIGHT_BOOKMARK);
+        // 최대 저장 개수 제한 (Top 100)
+        final int MAX_TRENDING_SIZE = 100;
 
-                 return new DefaultTypedTuple<>(String.valueOf(stat.getContentId()), score);
-             })
-             .filter(tuple -> tuple.getScore() > 0) // 점수가 있는 것만 선별
-             .collect(Collectors.toSet());
+        // 2. 점수 계산, 필터링, 정렬 및 Top N 추출
+        Set<ZSetOperations.TypedTuple<String>> topTuples = stats.stream()
+                        .map(stat -> {
+                            double score = (stat.getTotalDeltaView() * WEIGHT_VIEW)
+                                + (stat.getTotalDeltaCompleted() * WEIGHT_COMPLETED)
+                                + (stat.getTotalDeltaBookmark() * WEIGHT_BOOKMARK);
 
-        if (!tuples.isEmpty()) {
-            // 3. 기존 데이터 삭제 후 Bulk Insert 수행
-            redisTemplate.delete(TRENDING_KEY);
-            redisTemplate.opsForZSet().add(TRENDING_KEY, tuples);
+                            return new DefaultTypedTuple<>(String.valueOf(stat.getContentId()), score);
+                        })
+                        .filter(tuple -> tuple.getScore() > 0) // 점수가 있는 것만 선별
+                        .sorted(Comparator.comparing(ZSetOperations.TypedTuple::getScore, Comparator.reverseOrder())) // 내림차순 정렬
+                        .limit(MAX_TRENDING_SIZE) // 상위 100개만 제한
+                        .collect(Collectors.toCollection(LinkedHashSet::new)); // 순서 유지를 위해 LinkedHashSet 사용
 
-            log.info("[Trending Chart] {}개의 콘텐츠 순위가 Redis에 적재되었습니다.", stats.size());
+        if (!topTuples.isEmpty()) {
+            // 3. 무중단 데이터 교체를 위한 임시 키 사용 (RENAME)
+            String tempKey = TRENDING_KEY + ":temp";
+
+            // 임시 키에 데이터 적재
+            redisTemplate.opsForZSet().add(tempKey, topTuples);
+
+            // 임시 키를 서비스 키로 원자적(Atomic) 덮어쓰기 (기존 데이터 교체)
+            redisTemplate.rename(tempKey, TRENDING_KEY);
+
+            log.info("[Trending Chart] 상위 {}개의 콘텐츠 순위가 Redis에 무중단 교체되었습니다.", topTuples.size());
         }
     }
 
