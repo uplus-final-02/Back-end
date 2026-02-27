@@ -41,14 +41,14 @@ public interface ContentMetricSnapshotRepository extends JpaRepository<ContentMe
      * @return 콘텐츠별 지표 합산 결과 (TrendingStatDto 인터페이스 프로젝션)
      */
     @Query("""
-        SELECT s.id.contentId as contentId,
-               COALESCE(SUM(s.deltaViewCount), 0) as totalDeltaView,
-               COALESCE(SUM(s.deltaBookmarkCount), 0) as totalDeltaBookmark,
-               COALESCE(SUM(s.deltaCompletedUserCount), 0) as totalDeltaCompleted
-        FROM ContentMetricSnapshot s
-        WHERE s.id.bucketStartAt >= :startTime AND s.id.bucketStartAt < :endTime
-        GROUP BY s.id.contentId
-    """)
+    SELECT s.id.contentId as contentId,
+           COALESCE(SUM(s.deltaViewCount), 0) as totalDeltaView,
+           COALESCE(SUM(s.deltaBookmarkCount), 0) as totalDeltaBookmark,
+           COALESCE(SUM(s.deltaCompletedUserCount), 0) as totalDeltaCompleted
+    FROM ContentMetricSnapshot s
+    WHERE s.id.bucketStartAt > :startTime AND s.id.bucketStartAt <= :endTime
+    GROUP BY s.id.contentId
+""")
     List<TrendingStatDto> findAggregatedStats(@Param("startTime") LocalDateTime startTime,
                                               @Param("endTime") LocalDateTime endTime);
 }
