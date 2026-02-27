@@ -88,21 +88,22 @@ public class ContentMetricSnapshotService {
                 boolean isBaseline = false;
 
                 if (lastSnapshot == null) {
-                    // [케이스 A] 최초 실행 상태: 이력이 없으므로 현재 값을 기준점(Baseline)으로 삼음 (Delta = 0)
-                    deltaView = 0L;
-                    deltaBookmark = 0L;
-                    isBaseline = true; // 기준점임을 명시
+                    // [케이스 A] Baseline 초기화가 완료된 환경에서 lastSnapshot이 없다는 것은 신규 생성된 콘텐츠임을 의미함.
+                    // 현재 누적된 지표 전체를 방금 발생한 순수 증분(Delta)으로 인정함.
+                    deltaView = currentViewCount;
+                    deltaBookmark = currentBookmarkCount;
+                    isBaseline = false;
                 } else {
                     long lastViewCount = lastSnapshot.getSnapshotViewCount();
                     long lastBookmarkCount = lastSnapshot.getSnapshotBookmarkCount();
 
-                    // [케이스 B] 누적 지표 역전 검증: 현재 조회수가 과거보다 작아졌다면 데이터 삭제/초기화로 간주
+                    // [케이스 B] 누적 지표 역전 검증: 데이터 초기화/삭제 발생 시
                     if (currentViewCount < lastViewCount) {
                         deltaView = 0L;
                         deltaBookmark = 0L;
-                        isBaseline = true; // 기준점임을 명시
+                        isBaseline = true;
                     } else {
-                        // [케이스 C] 정상 상태: 시간 간격과 무관하게 순수 변화량 계산
+                        // [케이스 C] 정상 상태: 순수 변화량 계산
                         deltaView = currentViewCount - lastViewCount;
                         deltaBookmark = currentBookmarkCount - lastBookmarkCount;
                     }
