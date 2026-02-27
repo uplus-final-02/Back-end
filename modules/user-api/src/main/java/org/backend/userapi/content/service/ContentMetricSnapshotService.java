@@ -85,10 +85,13 @@ public class ContentMetricSnapshotService {
                 long deltaView = 0L;
                 long deltaBookmark = 0L;
 
+                boolean isBaseline = false;
+
                 if (lastSnapshot == null) {
                     // [케이스 A] 최초 실행 상태: 이력이 없으므로 현재 값을 기준점(Baseline)으로 삼음 (Delta = 0)
                     deltaView = 0L;
                     deltaBookmark = 0L;
+                    isBaseline = true; // 기준점임을 명시
                 } else {
                     long lastViewCount = lastSnapshot.getSnapshotViewCount();
                     long lastBookmarkCount = lastSnapshot.getSnapshotBookmarkCount();
@@ -97,6 +100,7 @@ public class ContentMetricSnapshotService {
                     if (currentViewCount < lastViewCount) {
                         deltaView = 0L;
                         deltaBookmark = 0L;
+                        isBaseline = true; // 기준점임을 명시
                     } else {
                         // [케이스 C] 정상 상태: 시간 간격과 무관하게 순수 변화량 계산
                         deltaView = currentViewCount - lastViewCount;
@@ -105,7 +109,8 @@ public class ContentMetricSnapshotService {
                 }
 
                 // 5. 무효 데이터 필터링 (지표 변화가 없는 경우 제외)
-                if (deltaView == 0 && deltaBookmark == 0 && deltaCompleted == 0) {
+                // 기준점이 아닐 때만(진짜 변화가 없을 때만) continue 처리
+                if (!isBaseline && deltaView == 0 && deltaBookmark == 0 && deltaCompleted == 0) {
                     continue;
                 }
 
