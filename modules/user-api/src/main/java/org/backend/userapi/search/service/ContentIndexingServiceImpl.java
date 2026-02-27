@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import co.elastic.clients.elasticsearch._types.query_dsl.FunctionScoreMode;
 import co.elastic.clients.elasticsearch._types.query_dsl.FieldValueFactorModifier;
 import co.elastic.clients.elasticsearch._types.query_dsl.FunctionBoostMode;
 import content.entity.Content;
@@ -52,6 +53,8 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private String lastIndexingStatus = "IDLE"; 
     private String lastErrorMessage = null;
     private LocalDateTime lastRunTime = null;
+    
+    private static final float ZERO_VECTOR_EPS = 1e-6f;
 
     @Override
     @Async("indexingExecutor")
@@ -108,9 +111,14 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
             if (!preferredTagIds.isEmpty()) {
                 float[] userVector = tagVectorService.buildUserVector(preferredTagIds);
-                vectorList = new ArrayList<>();
-                for (float v : userVector) {
-                    vectorList.add(v);
+                
+                if (!isZeroVector(userVector)) {
+                    vectorList = new ArrayList<>();
+                    for (float v : userVector) {
+                        vectorList.add(v);
+                    }
+                } else {
+                    log.warn("🚀 [검색] userId: {} 의 취향 벡터가 0-벡터로 판명되어 kNN 검색을 제외합니다.", userId);
                 }
             }
         }
@@ -125,7 +133,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         // 3. 동적 Bool 쿼리 조합
         NativeQueryBuilder queryBuilder = NativeQuery.builder()
                 .withQuery(q -> q.functionScore(fs -> fs
-                        // 1️⃣ 기존 조건 유지 (키워드, 필터, 벡터Should)
                         .query(innerQ -> innerQ.bool(b -> {
                             // [기본] 키워드 검색
                             if (StringUtils.hasText(keyword)) {
@@ -146,7 +153,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                             }
                             b.filter(f -> f.term(t -> t.field("status").value("ACTIVE")));
                             
-                            // 💡 하이브리드 벡터 (Should)
+                            // [하이브리드 kNN 검색] (유효한 벡터일 때만 동작)
                             if (finalVectorList != null) {
                                 b.should(s -> s.knn(knn -> knn
                                         .field("tagVector")
@@ -158,22 +165,20 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                             }
                             return b;
                         }))
-                        .functions(fn -> fn
-                                .fieldValueFactor(fvf -> fvf
-                                        .field("totalViewCount")
-                                        .modifier(FieldValueFactorModifier.Log1p)
-                                        .factor(0.1) // 텍스트 검색을 너무 덮지 않도록 0.1 부여
-                                )
-                        )
-                        .functions(fn -> fn
-                                .fieldValueFactor(fvf -> fvf
-                                        .field("bookmarkCount")
-                                        .modifier(FieldValueFactorModifier.Log1p)
-                                        .factor(0.2)
-                                )
-                        )
-                        // 3️⃣ 최종 점수 합산 방식
-                        .boostMode(FunctionBoostMode.Sum)
+                        .functions(fn -> fn.fieldValueFactor(fvf -> fvf
+                                .field("totalViewCount")
+                                .modifier(FieldValueFactorModifier.Log1p)
+                                .factor(0.1) 
+                                .missing(0.0)
+                        ))
+                        .functions(fn -> fn.fieldValueFactor(fvf -> fvf
+                                .field("bookmarkCount")
+                                .modifier(FieldValueFactorModifier.Log1p)
+                                .factor(0.2) 
+                                .missing(0.0)
+                        ))
+                        .scoreMode(FunctionScoreMode.Sum)
+                        .boostMode(FunctionBoostMode.Sum) 
                 ))
                 .withPageable(pageable)
                 .withHighlightQuery(new HighlightQuery(highlight, null));
@@ -270,5 +275,14 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .updatedAt(content.getUpdatedAt())
                 .tagVector(tagVector)
                 .build();
+    }
+    
+    private boolean isZeroVector(float[] vector) {
+        if (vector == null || vector.length == 0) return true;
+        double normSq = 0.0;
+        for (float v : vector) {
+            normSq += (double) v * v;
+        }
+        return normSq <= ZERO_VECTOR_EPS;
     }
 }
