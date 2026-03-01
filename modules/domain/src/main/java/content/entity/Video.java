@@ -62,7 +62,7 @@ public class Video extends BaseTimeEntity {
 
     // Builder 패턴 적용 (생성자)
     @Builder
-    public Video(Long contentId, Integer episodeNo, String title, String description, String thumbnailUrl, VideoStatus status) {
+    public Video(Content content, Integer episodeNo, String title, String description, String thumbnailUrl, VideoStatus status) {
         this.content = content;
         this.episodeNo = episodeNo;
         this.title = title;
