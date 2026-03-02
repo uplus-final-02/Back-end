@@ -43,7 +43,7 @@ public class AdminUserDetailService {
                         p.getId(),
                         p.getAmount(),
                         p.getPaymentStatus(),
-                        p.getPaymentMethod(),
+                        p.getPaymentProvider(),
                         p.getRequestAt(),
                         p.getApprovedAt()
                 ))

@@ -1,7 +1,7 @@
 package user.entity;
 
 import common.entity.BaseTimeEntity;
-import common.enums.PaymentMethod;
+import common.enums.PaymentProvider;
 import common.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -44,7 +44,7 @@ public class Payment extends BaseTimeEntity {
 
   @Enumerated(EnumType.STRING)
   @Column(name = "payment_provider", nullable = false, length = 50)
-  private PaymentMethod paymentMethod;
+  private PaymentProvider paymentProvider;
 
   @Column(name = "request_at", nullable = false)
   private LocalDateTime requestAt;
@@ -57,7 +57,7 @@ public class Payment extends BaseTimeEntity {
                  User user,
                  Integer amount,
                  PaymentStatus paymentStatus,
-                 PaymentMethod paymentMethod,
+                 PaymentProvider paymentProvider,
                  LocalDateTime requestAt,
                  LocalDateTime approvedAt) {
 
@@ -66,7 +66,7 @@ public class Payment extends BaseTimeEntity {
       this.amount = amount != null ? amount : 0;
 
       this.paymentStatus = paymentStatus != null ? paymentStatus : PaymentStatus.FAILED;
-      this.paymentMethod = paymentMethod != null ? paymentMethod : PaymentMethod.CARD;
+      this.paymentProvider = paymentProvider != null ? paymentProvider : PaymentProvider.CARD;
 
       this.requestAt = requestAt != null ? requestAt : LocalDateTime.now();
       this.approvedAt = approvedAt;

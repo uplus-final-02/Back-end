@@ -1,10 +1,12 @@
 package org.backend.userapi.payment.dto;
 
 import jakarta.validation.constraints.NotNull;
-import common.enums.PaymentMethod;
+import lombok.Getter;
+import common.enums.PaymentProvider;
 
-public record SubscribeRequest(
-        @NotNull String provider,
-        @NotNull PaymentMethod method
-) {
+@Getter
+public class SubscribeRequest {
+
+    @NotNull
+    private PaymentProvider paymentProvider;
 }
