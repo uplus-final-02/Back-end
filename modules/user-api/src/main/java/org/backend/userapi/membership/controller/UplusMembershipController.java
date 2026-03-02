@@ -4,6 +4,7 @@ import core.security.principal.JwtPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.membership.dto.CancelSubscriptionResponse;
 import org.backend.userapi.membership.dto.UplusVerificationRequest;
 import org.backend.userapi.membership.dto.UplusVerificationResponse;
 import org.backend.userapi.membership.service.UplusMembershipService;
@@ -12,13 +13,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/membership/uplus")
+@RequestMapping("/api/membership")
 @RequiredArgsConstructor
 public class UplusMembershipController {
 
 	private final UplusMembershipService uplusMembershipService;
 
-	@PostMapping("/verify")
+	@PostMapping("/uplus/verify")
 	public ResponseEntity<ApiResponse<UplusVerificationResponse>> verify(
 	        @Valid @RequestBody UplusVerificationRequest request,
 	        @AuthenticationPrincipal JwtPrincipal principal) {
@@ -29,5 +30,16 @@ public class UplusMembershipController {
 
 		return ResponseEntity.ok(ApiResponse.success(response));
 	}
-    
+	
+	@PostMapping("/cancel")
+	public ResponseEntity<ApiResponse<CancelSubscriptionResponse>> cancel(
+	        @AuthenticationPrincipal JwtPrincipal principal) {
+
+	    Long userId = principal.getUserId();
+
+	    CancelSubscriptionResponse response =
+	            uplusMembershipService.cancelSubscription(userId);
+
+	    return ResponseEntity.ok(ApiResponse.success(response));
+	}
 }

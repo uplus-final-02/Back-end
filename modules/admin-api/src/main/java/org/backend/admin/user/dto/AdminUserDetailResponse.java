@@ -32,7 +32,7 @@ public record AdminUserDetailResponse(
             Long paymentId,
             Integer amount,
             PaymentStatus paymentStatus,
-            PaymentMethod paymentMethod,
+            PaymentProvider paymentProvider,
             LocalDateTime requestAt,
             LocalDateTime approvedAt
     ) {}

@@ -59,13 +59,17 @@ public class Subscriptions extends BaseTimeEntity {
 	           && LocalDateTime.now().isBefore(this.expiresAt);
   }
 
-  public void extendTo(LocalDateTime newExpiresAt) {
-      this.subscriptionStatus = SubscriptionStatus.ACTIVE;
-      this.expiresAt = newExpiresAt;
-  }
+  public void restart(LocalDateTime startedAt, LocalDateTime expiresAt) {
+	    this.subscriptionStatus = SubscriptionStatus.ACTIVE;
+	    this.startedAt = startedAt;
+	    this.expiresAt = expiresAt;
+	}
 
   public void expire() {
       this.subscriptionStatus = SubscriptionStatus.EXPIRED;
   }
 
+  public void cancel() {
+	    this.subscriptionStatus = SubscriptionStatus.CANCELED;
+	}
 }
