@@ -23,7 +23,7 @@ public interface AuthAccountRepository extends JpaRepository<AuthAccount, Long> 
      * 이메일 중복/충돌 검사에 사용합니다.
      */
     List<AuthAccount> findAllByEmail(String email);
-
+    
     Optional<AuthAccount> findByUser_Id(Long userId);
 
     Optional<AuthAccount> findFirstByUserIdAndEmailIsNotNull(Long userId);

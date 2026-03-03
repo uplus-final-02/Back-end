@@ -52,6 +52,7 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers("/api/auth/logout").authenticated()
                 .requestMatchers("/api/membership/**").authenticated()
+                .requestMatchers("/api/payments/**").authenticated()
                 .requestMatchers(
                     "/api/histories/bookmarks/**",
                     "/api/users/me/bookmarks/**",
