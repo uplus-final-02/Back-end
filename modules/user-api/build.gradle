@@ -47,6 +47,8 @@ dependencies {
 
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+	
+	implementation 'software.amazon.awssdk:s3:2.20.162' // aws S3 sdk -> minio와 호환
 }
 
 tasks.named('test') {

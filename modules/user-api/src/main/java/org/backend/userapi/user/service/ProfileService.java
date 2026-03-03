@@ -1,18 +1,17 @@
 package org.backend.userapi.user.service;
 
-import common.enums.SubscriptionStatus;
-import common.enums.UserStatus;
 import java.util.List;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
+
 import org.backend.userapi.user.dto.response.ProfileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserPreferredTag;
-import common.enums.SubscriptionStatus;
 import user.repository.AuthAccountRepository;
 import user.repository.SubscriptionsRepository;
 import user.repository.UserPreferredTagRepository;
@@ -70,4 +69,16 @@ public class ProfileService {
         .lastNicknameChangedAt(user.getUpdatedAt())
         .build();
   }
+  @Transactional 
+  public ProfileResponse updateProfileImage(Long userId, String newImageUrl) {
+      // 1. 유저 조회
+      User user = userRepository.findById(userId)
+          .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+      user.updateProfileImage(newImageUrl); 
+      
+      // 3. 변경된 정보가 반영된 프로필 정보를 다시 조회해서 반환
+      return getMyProfile(userId);
+  }
+  
 }
