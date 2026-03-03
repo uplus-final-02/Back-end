@@ -73,4 +73,13 @@ public class Video extends BaseTimeEntity {
     public void incrementViewCount() {
         this.viewCount++;
     }
+
+    public void updateInfo(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public void updateStatus(VideoStatus status) {
+        this.status = status;
+    }
 }

@@ -39,36 +39,27 @@ public class AdminVideoUploadService {
             throw new UploadNotCompletedException(); // 0바이트도 업로드 미완료
         }
 
-        Content content = contentRepository.findById(req.contentId())
-                .orElseThrow(ContentNotFoundException::new);
+        Video video = videoRepository.findById(req.videoId())
+                .orElseThrow(() -> new RuntimeException("VIDEO_NOT_FOUND"));
 
-        int nextEpisodeNo = videoRepository.findTopByContent_IdOrderByEpisodeNoDesc(req.contentId())
-                .map(v -> v.getEpisodeNo() + 1)
-                .orElse(1);
+        if (!video.getContent().getId().equals(req.contentId())) {
+            throw new RuntimeException("VIDEO_CONTENT_MISMATCH");
+        }
 
-        Video video = Video.builder()
-                .content(content)
-                .episodeNo(nextEpisodeNo)
-                .title(req.title())
-                .description(req.description())
-                .status(VideoStatus.DRAFT)
-                .thumbnailUrl(null)
-                .build();
+        if (video.getStatus() != VideoStatus.DRAFT) {
+            throw new RuntimeException("VIDEO_NOT_DRAFT");
+        }
 
-        videoRepository.save(video);
+        video.updateInfo(req.title(), req.description());
 
-        VideoFile vf = VideoFile.builder()
-                .video(video)
-                .originalUrl(req.objectKey())
-                .hlsUrl(null)
-                .durationSec(0)
-                .transcodeStatus(TranscodeStatus.WAITING)
-                .build();
+        VideoFile vf = videoFileRepository.findByVideoId(video.getId())
+                .orElseThrow(() -> new RuntimeException("VIDEO_FILE_NOT_FOUND"));
 
-        videoFileRepository.save(vf);
+        vf.updateOriginalKey(req.objectKey());
+        vf.updateTranscodeStatus(TranscodeStatus.WAITING);
 
         return new AdminVideoUploadConfirmResponse(
-                content.getId(),
+                video.getContent().getId(),
                 video.getId(),
                 vf.getId(),
                 vf.getOriginalUrl(),
@@ -79,6 +70,9 @@ public class AdminVideoUploadService {
     private void validate(AdminVideoUploadConfirmRequest req) {
         if (req == null || req.contentId() == null) {
             throw new IllegalArgumentException("contentId는 필수입니다.");
+        }
+        if (req.videoId() == null) {
+            throw new IllegalArgumentException("videoId는 필수입니다."); // ✅ 추가
         }
         if (!StringUtils.hasText(req.objectKey())) {
             throw new IllegalArgumentException("objectKey는 필수입니다.");
