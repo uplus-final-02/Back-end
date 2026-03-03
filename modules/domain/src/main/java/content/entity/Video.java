@@ -3,10 +3,7 @@ package content.entity;
 import common.entity.BaseTimeEntity;
 import common.enums.VideoStatus;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Getter
@@ -32,6 +29,7 @@ public class Video extends BaseTimeEntity {
     @Column(name = "video_id")
     private Long id;
 
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "content_id", nullable = false)
     private Content content;
