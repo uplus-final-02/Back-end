@@ -95,7 +95,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String resolveToken(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+        	String t = bearerToken.substring(7).trim();
+            return t.isEmpty() ? null : t;
         }
         return null;
     }
@@ -103,11 +104,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) { // admin 테스트용
         String path = request.getServletPath();
+<<<<<<< HEAD
 
         return path.startsWith("/admin/users")
                 || path.startsWith("/admin/storage")
                 || path.startsWith("/admin/uploads/videos")
                 || path.startsWith("/admin/videos")
                 || path.startsWith("/admin/series");
+=======
+        return path.equals("/admin/login")
+                || path.equals("/admin/login/")
+                || path.startsWith("/admin/storage");
+>>>>>>> 1e301a5 (feat(admin): 관리자 로그인api)
     }
 }
