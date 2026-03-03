@@ -1,15 +1,12 @@
 package org.backend.admin.video.service;
 
+import common.enums.*;
 import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
-import common.enums.ContentAccessLevel;
-import common.enums.ContentType;
-import common.enums.TranscodeStatus;
-import common.enums.VideoStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +33,7 @@ public class AdminVideoDraftService {
                 .title("UNTITLED")
                 .description(null)
                 .thumbnailUrl("")
+                .status(ContentStatus.HIDDEN)
                 .uploaderId(request.uploaderId())
                 .accessLevel(ContentAccessLevel.FREE)
                 .build();
