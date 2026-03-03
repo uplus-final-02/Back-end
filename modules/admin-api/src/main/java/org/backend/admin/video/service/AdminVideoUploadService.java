@@ -72,7 +72,7 @@ public class AdminVideoUploadService {
             throw new IllegalArgumentException("contentId는 필수입니다.");
         }
         if (req.videoId() == null) {
-            throw new IllegalArgumentException("videoId는 필수입니다."); // ✅ 추가
+            throw new IllegalArgumentException("videoId는 필수입니다.");
         }
         if (!StringUtils.hasText(req.objectKey())) {
             throw new IllegalArgumentException("objectKey는 필수입니다.");

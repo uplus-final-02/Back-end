@@ -35,7 +35,7 @@ public class AdminVideoDraftService {
                 .type(ContentType.SINGLE)
                 .title("UNTITLED")
                 .description(null)
-                .thumbnailUrl("") // 또는 "about:blank"
+                .thumbnailUrl("")
                 .uploaderId(request.uploaderId())
                 .accessLevel(ContentAccessLevel.FREE)
                 .build();
@@ -48,16 +48,7 @@ public class AdminVideoDraftService {
                 .description(null)
                 .thumbnailUrl(null)
                 .status(VideoStatus.DRAFT)
-                // ⚠️ Video 엔티티는 Content 연관관계가 필요하니 setter/생성자 구조에 맞춰 세팅
                 .build();
-
-        // 지금 엔티티 구조상 builder에 content가 안 들어가 있으니, 최소 수정이 필요합니다.
-        // 가장 안전한 최소 수정: Video에 content를 세팅하는 메서드 추가 or 생성자에서 받기
-        // 여기서는 "setContent"가 있다고 가정하지 않고, 아래처럼 '수정용 메서드'를 추천합니다.
-        // video.setContent(content);
-
-        // 만약 setContent가 없다면 Video 엔티티에 아래 메서드를 추가하세요:
-        // public void setContent(Content content){ this.content = content; }
         video.setContent(content);
 
         videoRepository.save(video);
