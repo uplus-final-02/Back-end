@@ -21,8 +21,9 @@ spring:
 app:
   storage:
     s3:
-      provider: minio
-      endpoint: ${MINIO_ENDPOINT:http://minio:9000}
-      access-key: ${MINIO_ROOT_USER}
-      secret-key: ${MINIO_ROOT_PASSWORD}
+      provider: ${S3_PROVIDER:minio}
+      endpoint: ${S3_ENDPOINT:http://minio:9000}
+      public-base-url: ${S3_PUBLIC_BASE_URL:http://host.docker.internal:9000}
+      access-key: ${S3_ACCESS_KEY:minioadmin}
+      secret-key: ${S3_SECRET_KEY:minioadmin123}
       bucket: ${S3_BUCKET:app-bucket}

@@ -3,6 +3,7 @@ package org.backend.userapi.user.controller;
 import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
+import org.backend.userapi.user.dto.response.WatchStatisticsResponse;
 import org.backend.userapi.user.service.WatchHistoryService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -52,5 +53,17 @@ public class WatchHistoryController {
 
     // 성공 메시지와 함께 null 데이터 반환
     return ApiResponse.success(null);
+  }
+
+  @GetMapping("/statistics")
+  public ApiResponse<WatchStatisticsResponse> getWatchStatistics(
+      @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+  ) {
+    Long userId = jwtPrincipal.getUserId();
+
+    // 서비스에서 통계 데이터 생성
+    WatchStatisticsResponse response = watchHistoryService.getWatchStatistics(userId);
+
+    return ApiResponse.success(response);
   }
 }
