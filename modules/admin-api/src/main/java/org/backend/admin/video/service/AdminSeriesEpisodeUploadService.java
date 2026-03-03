@@ -2,6 +2,7 @@ package org.backend.admin.video.service;
 
 import common.enums.ContentType;
 import common.enums.TranscodeStatus;
+import common.enums.VideoStatus;
 import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
@@ -47,12 +48,17 @@ public class AdminSeriesEpisodeUploadService {
             throw new IllegalArgumentException("MISMATCH: videoId가 해당 seriesId에 속하지 않습니다.");
         }
 
+        if (video.getStatus() != VideoStatus.DRAFT) {
+            throw new IllegalArgumentException("INVALID_VIDEO_STATUS: DRAFT 상태에서만 confirm 가능합니다.");
+        }
+
         var stat = safeStat(req.objectKey());
         if (stat.size() <= 0) {
             throw new UploadNotCompletedException();
         }
 
         video.updateInfo(req.episodeTitle(), req.episodeDescription());
+        video.updateStatus(VideoStatus.PRIVATE);
 
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
                 .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND"));
