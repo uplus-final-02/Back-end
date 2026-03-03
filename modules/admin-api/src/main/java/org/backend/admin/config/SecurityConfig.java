@@ -8,12 +8,15 @@ import core.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@Order(1)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -30,6 +33,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         return http
+        	.securityMatcher("/admin/**")
             .csrf(csrf -> csrf.disable())
             .httpBasic(basic -> basic.disable())
             .formLogin(form -> form.disable())
@@ -39,6 +43,7 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
+            		.requestMatchers(HttpMethod.POST,"/admin/login").permitAll()
                     .requestMatchers("/admin/users", "/admin/users/**").permitAll() // ✅ 테스트용
                     .requestMatchers("/admin/storage", "/admin/storage/**").permitAll() // ✅ 테스트용
                     .requestMatchers("/admin/uploads/videos", "/admin/uploads/videos/**").permitAll() // ✅ 테스트용

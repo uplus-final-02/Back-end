@@ -6,7 +6,10 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.payment.dto.SubscribeRequest;
 import org.backend.userapi.payment.dto.SubscribeResponse;
 import org.backend.userapi.payment.service.PaymentService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import core.security.principal.JwtPrincipal;
 import jakarta.validation.Valid;
 
 @RestController
@@ -18,12 +21,10 @@ public class PaymentController {
 
     @PostMapping("/subscribe")
     public ApiResponse<SubscribeResponse> subscribe(
-            @RequestAttribute("userId") Long userId,   // 또는 SecurityContext에서 추출
-            @Valid @RequestBody SubscribeRequest request
+        @AuthenticationPrincipal JwtPrincipal principal,
+        @Valid @RequestBody SubscribeRequest request
     ) {
-
-        SubscribeResponse response = paymentService.subscribe(userId, request);
-
+        SubscribeResponse response = paymentService.subscribe(principal.getUserId(), request);
         return ApiResponse.success(response);
     }
 }

@@ -18,3 +18,8 @@ app:
     secret: ${JWT_SECRET:change-me}
     access-token-ttl-seconds: 1800
     refresh-token-ttl-seconds: 1209600
+    
+    
+logging:
+  level:
+    org.springframework.security: DEBUG
