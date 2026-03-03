@@ -33,7 +33,6 @@ public class AdminSeriesEpisodeUploadService {
     public AdminSeriesEpisodeConfirmResponse confirmUpload(Long seriesId, AdminSeriesEpisodeConfirmRequest req) {
         validate(seriesId, req);
 
-        // 1) series(Content) 검증
         Content series = contentRepository.findById(seriesId)
                 .orElseThrow(ContentNotFoundException::new);
 
@@ -41,7 +40,6 @@ public class AdminSeriesEpisodeUploadService {
             throw new IllegalArgumentException("INVALID_CONTENT_TYPE: SERIES 콘텐츠가 아닙니다.");
         }
 
-        // 2) video 검증 (videoId는 presign에서 만든 draft)
         Video video = videoRepository.findById(req.videoId())
                 .orElseThrow(() -> new IllegalArgumentException("VIDEO_NOT_FOUND"));
 
@@ -49,16 +47,13 @@ public class AdminSeriesEpisodeUploadService {
             throw new IllegalArgumentException("MISMATCH: videoId가 해당 seriesId에 속하지 않습니다.");
         }
 
-        // 3) MinIO 업로드 여부 검증
         var stat = safeStat(req.objectKey());
         if (stat.size() <= 0) {
             throw new UploadNotCompletedException();
         }
 
-        // 4) Video 메타 업데이트(에피소드 제목/설명)
         video.updateInfo(req.episodeTitle(), req.episodeDescription());
 
-        // 5) VideoFile 업데이트 (video_id 1:1)
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
                 .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND"));
 
