@@ -7,6 +7,7 @@ import org.backend.userapi.user.dto.response.ProfileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.Subscriptions;
@@ -25,6 +26,8 @@ public class ProfileService {
   private final AuthAccountRepository authAccountRepository;
   private final UserPreferredTagRepository userPreferredTagRepository;
   private final SubscriptionsRepository subscriptionsRepository;
+  
+  private final ObjectStorageService objectStorageService;
 
   public ProfileResponse getMyProfile(Long userId) {
     // 유저 조회
@@ -55,13 +58,22 @@ public class ProfileService {
 
     // 유플러스 인증 여부
     boolean isUPlus = user.getUplusVerified() != null && user.getUplusVerified().isVerified();
+    
+    String dbProfileImageKey = user.getProfileImage(); 
+    String fullProfileImageUrl = null;
 
+    if (dbProfileImageKey != null && !dbProfileImageKey.isEmpty()) {
+        fullProfileImageUrl = objectStorageService.buildPublicUrl(dbProfileImageKey);
+    }
+    
+    
+    
     // DTO 변환
     return ProfileResponse.builder()
         .userId(user.getId())
         .email(email)
         .nickname(user.getNickname())
-        .profileImageUrl(user.getProfileImage())
+        .profileImageUrl(fullProfileImageUrl)
         .subscriptionStatus(subStatus)
         .isUPlusMember(isUPlus)
         .preferredTags(tagDtos)
