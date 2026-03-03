@@ -54,7 +54,7 @@ public class AdminSeriesEpisodeDraftService {
                 .originalUrl(null)              // objectKey는 confirm에서 저장
                 .hlsUrl(null)
                 .durationSec(0)
-                .transcodeStatus(TranscodeStatus.WAITING)
+                .transcodeStatus(TranscodeStatus.PENDING_UPLOAD)
                 .build();
 
         videoFileRepository.save(videoFile);
