@@ -8,6 +8,8 @@ import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
+import core.events.video.VideoTranscodeEventPublisher;
+import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmRequest;
@@ -29,6 +31,8 @@ public class AdminVideoUploadService {
     private final VideoFileRepository videoFileRepository;
 
     private final ObjectStorageService objectStorageService;
+
+    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
 
     @Transactional
     public AdminVideoUploadConfirmResponse confirmUpload(AdminVideoUploadConfirmRequest req) {
@@ -58,6 +62,15 @@ public class AdminVideoUploadService {
 
         vf.updateOriginalKey(req.objectKey());
         vf.updateTranscodeStatus(TranscodeStatus.WAITING);
+
+        videoTranscodeEventPublisher.publish(
+                VideoTranscodeRequestedEvent.of(
+                        video.getContent().getId(),
+                        video.getId(),
+                        vf.getId(),
+                        vf.getOriginalUrl()
+                )
+        );
 
         return new AdminVideoUploadConfirmResponse(
                 video.getContent().getId(),
