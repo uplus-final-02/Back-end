@@ -2,8 +2,10 @@ package org.backend.userapi.content.service;
 
 import content.dto.TrendingStatDto;
 import content.entity.Content;
+import content.entity.TrendingHistory;
 import content.repository.ContentMetricSnapshotRepository;
 import content.repository.ContentRepository;
+import content.repository.TrendingHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.content.dto.DefaultContentResponse;
@@ -28,17 +30,21 @@ public class TrendingContentService {
 
     private final ContentRepository contentRepository;
     private final ContentMetricSnapshotRepository snapshotRepository;
-    private final StringRedisTemplate redisTemplate;
     private final UserRepository userRepository;
+    private final TrendingHistoryRepository trendingHistoryRepository;
 
-    private static final String TRENDING_KEY = "content:trending";
+    //private static final String TRENDING_KEY = "content:trending";
 
     // 가중치 상수
     private static final int WEIGHT_VIEW = 1;
     private static final int WEIGHT_COMPLETED = 3;
     private static final int WEIGHT_BOOKMARK = 5;
 
-    @Transactional(readOnly = true)
+    // 저장할 랭킹 개수
+    private static final int MAX_TRENDING_SIZE = 20;
+
+    // 1시간 점수 불러오기 + 계산 + DB 에 저장 메서드
+    @Transactional
     public void calculateTrendingScores(LocalDateTime currentBucketTime) {
         // 1. 집계 범위 설정 (최근 1시간)
         LocalDateTime startTime = currentBucketTime.minusHours(1);
@@ -46,7 +52,7 @@ public class TrendingContentService {
 
         log.info("[Trending Chart] 점수 산출 및 Redis 적재 시작 (범위: {} ~ {})", startTime, endTime);
 
-        // 1. DB 에서 1시간치 합산 데이터 조회
+        // 2. DB 에서 1시간치 합산 데이터 조회
         List<TrendingStatDto> stats = snapshotRepository.findAggregatedStats(startTime, endTime);
 
         if (stats.isEmpty()) {
@@ -54,78 +60,104 @@ public class TrendingContentService {
             return;
         }
 
-        // 최대 저장 개수 제한 (Top 100)
-        final int MAX_TRENDING_SIZE = 100;
+        // 3. 점수 계산, 필터링, 정렬 및 Top N 추출
+        List<TrendingStatDto> sortedStats = stats.stream()
+                     .filter(stat -> calculateScore(stat) > 0) // 점수가 있는 것만 선별
+                     .sorted((a, b) -> Double.compare(calculateScore(b), calculateScore(a))) // 내림차순 정렬
+                     .limit(MAX_TRENDING_SIZE) // 상위 20개 제한
+                     .toList();
 
-        // 2. 점수 계산, 필터링, 정렬 및 Top N 추출
-        Set<ZSetOperations.TypedTuple<String>> topTuples = stats.stream()
-                        .map(stat -> {
-                            double score = (stat.getTotalDeltaView() * WEIGHT_VIEW)
-                                + (stat.getTotalDeltaCompleted() * WEIGHT_COMPLETED)
-                                + (stat.getTotalDeltaBookmark() * WEIGHT_BOOKMARK);
-
-                            return new DefaultTypedTuple<>(String.valueOf(stat.getContentId()), score);
-                        })
-                        .filter(tuple -> tuple.getScore() > 0) // 점수가 있는 것만 선별
-                        .sorted(Comparator.comparing(ZSetOperations.TypedTuple::getScore, Comparator.reverseOrder())) // 내림차순 정렬
-                        .limit(MAX_TRENDING_SIZE) // 상위 100개만 제한
-                        .collect(Collectors.toCollection(LinkedHashSet::new)); // 순서 유지를 위해 LinkedHashSet 사용
-
-        if (!topTuples.isEmpty()) {
-            // 3. 무중단 데이터 교체를 위한 임시 키 사용 (RENAME)
-            String tempKey = TRENDING_KEY + ":temp";
-
-            // 임시 키에 데이터 적재
-            redisTemplate.opsForZSet().add(tempKey, topTuples);
-
-            // 임시 키를 서비스 키로 원자적(Atomic) 덮어쓰기 (기존 데이터 교체)
-            redisTemplate.rename(tempKey, TRENDING_KEY);
-
-            log.info("[Trending Chart] 상위 {}개의 콘텐츠 순위가 Redis에 무중단 교체되었습니다.", topTuples.size());
+        if (sortedStats.isEmpty()) {
+            log.info("[Trending Chart] 유효한 점수를 획득한 콘텐츠가 없습니다.");
+            return;
         }
+
+        // 4. 엔티티 변환 및 순위 부여
+        List<TrendingHistory> histories = new ArrayList<>();
+        int ranking = 1;
+
+        for (TrendingStatDto stat : sortedStats) {
+            histories.add(TrendingHistory.builder()
+                                         .contentId(stat.getContentId())
+                                         .ranking(ranking++)
+                                         .trendingScore(calculateScore(stat))
+                                         .deltaViewCount(stat.getTotalDeltaView())
+                                         .deltaBookmarkCount(stat.getTotalDeltaBookmark())
+                                         .deltaCompletedCount(stat.getTotalDeltaCompleted())
+                                         .calculatedAt(currentBucketTime) // 논리적 기준 시각
+                                         .build());
+        }
+
+        // 5. DB 일괄 저장
+        trendingHistoryRepository.saveAll(histories);
+
+        log.info("[Trending Chart] 상위 {}개의 콘텐츠 순위가 DB 이력에 적재되었습니다.", histories.size());
     }
 
+    // 점수 계산 메서드
+    private double calculateScore(TrendingStatDto stat) {
+        return (stat.getTotalDeltaView() * WEIGHT_VIEW)
+            + (stat.getTotalDeltaCompleted() * WEIGHT_COMPLETED)
+            + (stat.getTotalDeltaBookmark() * WEIGHT_BOOKMARK);
+    }
+
+    // 저장한 랭킹 불러오기 메서드
     @Transactional(readOnly = true)
     public List<TrendingResponse> getTrendingList(int limit) {
-        // 1. Redis에서 상위 N개 조회
-        Set<ZSetOperations.TypedTuple<String>> typedTuples =
-            redisTemplate.opsForZSet().reverseRangeWithScores(TRENDING_KEY, 0, limit - 1);
+        // 1. 가장 최근에 산출된 트렌딩 기준 시각 조회
+        Optional<LocalDateTime> latestTimeOpt = trendingHistoryRepository.findLatestCalculatedAt();
 
-        if (typedTuples == null || typedTuples.isEmpty()) return List.of();
+        if (latestTimeOpt.isEmpty()) {
+            return List.of(); // 아직 트렌딩 데이터가 한 번도 생성되지 않은 경우
+        }
 
-        List<Long> contentIds = typedTuples.stream()
-                                           .map(tuple -> Long.parseLong(tuple.getValue()))
-                                           .toList();
+        LocalDateTime latestTime = latestTimeOpt.get();
 
-        // 2. DB에서 콘텐츠 정보 조회
+        // 2. 해당 시각의 트렌딩 이력 조회 (랭킹 오름차순) 및 limit 제한
+        List<TrendingHistory> histories = trendingHistoryRepository
+            .findAllByCalculatedAtOrderByRankingAsc(latestTime)
+            .stream()
+            .limit(limit)
+            .toList();
+
+        if (histories.isEmpty()) {
+            return List.of();
+        }
+
+        // 3. 연관된 콘텐츠 데이터 일괄 조회
+        List<Long> contentIds = histories.stream()
+                                         .map(TrendingHistory::getContentId)
+                                         .toList();
+
         List<Content> contents = contentRepository.findAllById(contentIds);
         Map<Long, Content> contentMap = contents.stream()
                                                 .collect(Collectors.toMap(Content::getId, content -> content));
 
-        // 3. 업로더 닉네임 일괄 조회 (ContentService 로직 이식)
+        // 4. 업로더 닉네임 일괄 조회
         Map<Long, String> uploaderNicknameMap = getUploaderNicknameMap(contents);
 
-        // 4. 결과 조립
+        // 5. 응답 결과 조립 (histories의 정렬된 순서 유지)
         List<TrendingResponse> response = new ArrayList<>();
-        int rank = 1;
 
-        for (ZSetOperations.TypedTuple<String> tuple : typedTuples) {
-            Long contentId = Long.parseLong(tuple.getValue());
-            Content content = contentMap.get(contentId);
+        for (TrendingHistory history : histories) {
+            Content content = contentMap.get(history.getContentId());
 
+            // 물리적 FK가 없으므로, 콘텐츠가 삭제되었을 경우를 대비한 방어 로직
             if (content != null) {
-                // uploaderName 결정 로직
                 String uploaderName = (content.getUploaderId() == null)
                     ? "관리자"
                     : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
 
                 response.add(TrendingResponse.builder()
-                             .rank(rank++)
-                             .trendingScore(tuple.getScore())
-                             .content(DefaultContentResponse.from(content, uploaderName))
-                             .build());
+                                             .rank(history.getRanking()) // DB에 기록된 실제 순위 사용
+                                             .trendingScore(history.getTrendingScore())
+                                             .content(DefaultContentResponse.from(content, uploaderName))
+                                             .build());
+            } else {
+                log.warn("[Trending Chart] 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.", history.getContentId());
             }
         }
+
         return response;
     }
 
