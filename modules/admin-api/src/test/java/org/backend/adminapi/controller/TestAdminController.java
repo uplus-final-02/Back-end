@@ -1,4 +1,4 @@
-package org.backend.admin.controller;
+package org.backend.adminapi.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
