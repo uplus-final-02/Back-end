@@ -13,6 +13,17 @@ spring:
   kafka:
     bootstrap-servers: kafka:9092
 
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: transcoder-dev
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+
   elasticsearch:
     uris: http://elasticsearch:9200
     username: ${ES_USERNAME:elastic}
