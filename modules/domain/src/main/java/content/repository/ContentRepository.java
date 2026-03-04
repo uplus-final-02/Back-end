@@ -2,6 +2,8 @@ package content.repository;
 
 import common.enums.ContentStatus;
 import content.entity.Content;
+
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
@@ -59,4 +61,6 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+    
+    Page<Content> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }
