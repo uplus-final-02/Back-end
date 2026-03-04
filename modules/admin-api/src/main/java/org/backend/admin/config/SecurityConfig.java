@@ -1,6 +1,5 @@
 package org.backend.admin.config;
 
-
 import core.security.handler.JwtAccessDeniedHandler;
 import core.security.handler.JwtAuthenticationEntryPoint;
 import core.security.jwt.JwtAuthenticationFilter;
@@ -54,14 +53,7 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
-            	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
-            	    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll()
-            	    .anyRequest().hasRole("ADMIN")
-            	)
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
-    }
-   
+
     @Bean
     @Order(99)
     public SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
