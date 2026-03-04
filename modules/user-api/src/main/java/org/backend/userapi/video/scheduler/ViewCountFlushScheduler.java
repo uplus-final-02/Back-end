@@ -102,7 +102,13 @@ public class ViewCountFlushScheduler {
             } catch (Exception e) {
                 log.error("[Scheduler] DB 조회수 업데이트 실패 (Type: {}, ID: {}, Delta: {})", type, id, viewCountDelta, e);
                 // 업데이트에 실패한 값은 다시 Redis에 복구(보상 트랜잭션)하여 다음 주기에 반영되도록 처리
-                redisTemplate.opsForValue().increment(keyPrefix + id, viewCountDelta);
+                try {
+                    redisTemplate.opsForValue().increment(keyPrefix + id, viewCountDelta);
+                    log.warn("[Scheduler] 보상 트랜잭션 완료 - 다음 사이클에 재시도: type={}, id={}", type, id);
+                } catch (Exception redisEx) {
+                    // Redis도 다운이면 이 delta는 손실 — 로그만 남김
+                    log.error("[Scheduler] 보상 트랜잭션 실패 (Redis 다운) - 조회수 {}건 손실 가능: type={}, id={}", viewCountDelta, type, id);
+                }
             }
         }
 
