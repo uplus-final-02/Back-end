@@ -51,6 +51,7 @@ public class AdminVideoUploadService {
         }
 
         video.updateInfo(req.title(), req.description());
+        video.updateStatus(VideoStatus.PRIVATE);
 
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
                 .orElseThrow(() -> new RuntimeException("VIDEO_FILE_NOT_FOUND"));
