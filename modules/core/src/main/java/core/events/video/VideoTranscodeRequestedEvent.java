@@ -1,21 +1,20 @@
 package core.events.video;
 
-import java.time.Instant;
 import java.util.UUID;
 
 public record VideoTranscodeRequestedEvent(
         String eventId,
-        Instant occurredAt,
+        long occurredAtEpochMillis,
         Long contentId,
         Long videoId,
         Long videoFileId,
         String originalKey,
-        String requestType // "HLS"
+        String requestType
 ) {
     public static VideoTranscodeRequestedEvent of(Long contentId, Long videoId, Long videoFileId, String originalKey) {
         return new VideoTranscodeRequestedEvent(
                 UUID.randomUUID().toString(),
-                Instant.now(),
+                System.currentTimeMillis(),
                 contentId,
                 videoId,
                 videoFileId,
