@@ -1,9 +1,9 @@
 package org.backend.admin.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import common.enums.TranscodeStatus;
 import content.entity.VideoFile;
 import content.repository.VideoFileRepository;
-import common.enums.TranscodeStatus;
 import core.events.video.VideoTranscodeRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,16 +25,15 @@ public class VideoTranscodeKafkaConsumer {
     )
     @Transactional
     public void onMessage(String message) {
-        try {
-            // 1) 역직렬화
-            VideoTranscodeRequestedEvent event =
-                    objectMapper.readValue(message, VideoTranscodeRequestedEvent.class);
+        VideoTranscodeRequestedEvent event;
+        VideoFile vf;
 
-            // 2) VideoFile 조회
-            VideoFile vf = videoFileRepository.findById(event.videoFileId())
+        try {
+            event = objectMapper.readValue(message, VideoTranscodeRequestedEvent.class);
+
+            vf = videoFileRepository.findById(event.videoFileId())
                     .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND: " + event.videoFileId()));
 
-            // 3) 상태 전이: WAITING -> PROCESSING (또는 DONE/FAILED가 아니면 PROCESSING)
             if (vf.getTranscodeStatus() == TranscodeStatus.DONE || vf.getTranscodeStatus() == TranscodeStatus.FAILED) {
                 log.info("[TRANSCODE][SKIP] already finished. videoFileId={}, status={}",
                         vf.getId(), vf.getTranscodeStatus());
@@ -43,13 +42,34 @@ public class VideoTranscodeKafkaConsumer {
 
             vf.updateTranscodeStatus(TranscodeStatus.PROCESSING);
 
-            log.info("[TRANSCODE][CONSUMED] eventId={}, contentId={}, videoId={}, videoFileId={}, status=PROCESSING, originalKey={}",
+            log.info("[TRANSCODE][START] eventId={}, contentId={}, videoId={}, videoFileId={}, originalKey={}",
                     event.eventId(), event.contentId(), event.videoId(), event.videoFileId(), event.originalKey());
 
         } catch (Exception e) {
-            // 여기서 예외를 던지면 Kafka가 재시도(설정에 따라)할 수 있습니다.
             log.error("[TRANSCODE][CONSUME_FAIL] message={}", message, e);
             throw new IllegalStateException("KAFKA_CONSUME_FAILED", e);
+        }
+
+        // 2단계(개발용) 모의 트랜스코딩
+        // - 실제 FFmpeg/업로드 전까지 DONE 흐름만 확인
+        try {
+            Thread.sleep(1500);
+
+            // HLS 결과물 objectKey(있는 척)
+            String mockHlsKey = "videos/hls/" + event.videoFileId() + "/master.m3u8";
+            int mockDurationSec = 120;
+
+            vf.updateHlsKey(mockHlsKey);
+            vf.updateDurationSec(mockDurationSec);
+            vf.updateTranscodeStatus(TranscodeStatus.DONE);
+
+            log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), event.videoFileId(), mockHlsKey, mockDurationSec);
+
+        } catch (Exception e) {
+            vf.updateTranscodeStatus(TranscodeStatus.FAILED);
+            log.error("[TRANSCODE][FAILED] eventId={}, videoFileId={}", event.eventId(), event.videoFileId(), e);
+            throw new IllegalStateException("TRANSCODE_SIMULATION_FAILED", e);
         }
     }
 }
