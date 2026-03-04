@@ -10,9 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.TrendingResponse;
-import org.springframework.data.redis.core.DefaultTypedTuple;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import user.repository.UserNicknameInfo;
@@ -20,7 +17,7 @@ import user.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -33,8 +30,6 @@ public class TrendingContentService {
     private final UserRepository userRepository;
     private final TrendingHistoryRepository trendingHistoryRepository;
 
-    //private static final String TRENDING_KEY = "content:trending";
-
     // 가중치 상수
     private static final int WEIGHT_VIEW = 1;
     private static final int WEIGHT_COMPLETED = 3;
@@ -43,14 +38,21 @@ public class TrendingContentService {
     // 저장할 랭킹 개수
     private static final int MAX_TRENDING_SIZE = 20;
 
-    // 1시간 점수 불러오기 + 계산 + DB 에 저장 메서드
+    // thread-safe 로컬 캐시 (초기값 : 빈 리스트)
+    private final AtomicReference<List<TrendingResponse>> trendingCache = new AtomicReference<>(List.of());
+
+    /**
+     * 최근 1시간의 지표를 합산하여 트렌딩 점수를 산출하고
+     * 상위 N개의 결과를 DB 이력에 적재한 후 캐시를 갱신합니다.
+     * * @param currentBucketTime 논리적 기준 시각 (예: 정각)
+     */
     @Transactional
     public void calculateTrendingScores(LocalDateTime currentBucketTime) {
         // 1. 집계 범위 설정 (최근 1시간)
         LocalDateTime startTime = currentBucketTime.minusHours(1);
         LocalDateTime endTime = currentBucketTime;
 
-        log.info("[Trending Chart] 점수 산출 및 Redis 적재 시작 (범위: {} ~ {})", startTime, endTime);
+        log.info("[Trending Chart] 점수 산출 및 DB 이력 적재 시작 (범위: {} ~ {})", startTime, endTime);
 
         // 2. DB 에서 1시간치 합산 데이터 조회
         List<TrendingStatDto> stats = snapshotRepository.findAggregatedStats(startTime, endTime);
@@ -64,7 +66,7 @@ public class TrendingContentService {
         List<TrendingStatDto> sortedStats = stats.stream()
                      .filter(stat -> calculateScore(stat) > 0) // 점수가 있는 것만 선별
                      .sorted((a, b) -> Double.compare(calculateScore(b), calculateScore(a))) // 내림차순 정렬
-                     .limit(MAX_TRENDING_SIZE) // 상위 20개 제한
+                     .limit(MAX_TRENDING_SIZE) // 상위 개수 제한
                      .toList();
 
         if (sortedStats.isEmpty()) {
@@ -78,32 +80,59 @@ public class TrendingContentService {
 
         for (TrendingStatDto stat : sortedStats) {
             histories.add(TrendingHistory.builder()
-                                         .contentId(stat.getContentId())
-                                         .ranking(ranking++)
-                                         .trendingScore(calculateScore(stat))
-                                         .deltaViewCount(stat.getTotalDeltaView())
-                                         .deltaBookmarkCount(stat.getTotalDeltaBookmark())
-                                         .deltaCompletedCount(stat.getTotalDeltaCompleted())
-                                         .calculatedAt(currentBucketTime) // 논리적 기준 시각
-                                         .build());
+                 .contentId(stat.getContentId())
+                 .ranking(ranking++)
+                 .trendingScore(calculateScore(stat))
+                 .deltaViewCount(stat.getTotalDeltaView())
+                 .deltaBookmarkCount(stat.getTotalDeltaBookmark())
+                 .deltaCompletedCount(stat.getTotalDeltaCompleted())
+                 .calculatedAt(currentBucketTime) // 논리적 기준 시각
+                 .build());
         }
 
         // 5. DB 일괄 저장
         trendingHistoryRepository.saveAll(histories);
-
         log.info("[Trending Chart] 상위 {}개의 콘텐츠 순위가 DB 이력에 적재되었습니다.", histories.size());
+
+        // 6. 캐시 갱신 (DB 적재 완료 직후 실행)
+        refreshCache();
     }
 
-    // 점수 계산 메서드
+    /**
+     * 트렌딩 가중치 점수 계산
+     */
     private double calculateScore(TrendingStatDto stat) {
         return (stat.getTotalDeltaView() * WEIGHT_VIEW)
             + (stat.getTotalDeltaCompleted() * WEIGHT_COMPLETED)
             + (stat.getTotalDeltaBookmark() * WEIGHT_BOOKMARK);
     }
 
-    // 저장한 랭킹 불러오기 메서드
+    /**
+     * 클라이언트 요청 시 로컬 캐시에서 트렌딩 리스트를 반환합니다.
+     * * @param limit 반환할 최대 랭킹 개수
+     * @return 캐시된 트렌딩 응답 리스트
+     */
     @Transactional(readOnly = true)
     public List<TrendingResponse> getTrendingList(int limit) {
+        List<TrendingResponse> cachedList = trendingCache.get();
+
+        // 캐시가 비어있는 경우, 최초 1회 DB load (서버 재시작 직후 등)
+        if (cachedList.isEmpty()) {
+            cachedList = refreshCache();
+        }
+
+        if (cachedList.isEmpty()) {
+            return List.of();
+        }
+
+        // 요청된 limit 크기에 맞게, 일부 랭킹만 반환
+        return (limit >= cachedList.size()) ? cachedList : cachedList.subList(0, limit);
+    }
+
+    /**
+     * DB에서 최신 트렌딩 이력을 조회하여 로컬 캐시를 원자적으로 갱신하고 반환합니다.
+     */
+    public List<TrendingResponse> refreshCache() {
         // 1. 가장 최근에 산출된 트렌딩 기준 시각 조회
         Optional<LocalDateTime> latestTimeOpt = trendingHistoryRepository.findLatestCalculatedAt();
 
@@ -117,7 +146,7 @@ public class TrendingContentService {
         List<TrendingHistory> histories = trendingHistoryRepository
             .findAllByCalculatedAtOrderByRankingAsc(latestTime)
             .stream()
-            .limit(limit)
+            .limit(MAX_TRENDING_SIZE)
             .toList();
 
         if (histories.isEmpty()) {
@@ -137,7 +166,7 @@ public class TrendingContentService {
         Map<Long, String> uploaderNicknameMap = getUploaderNicknameMap(contents);
 
         // 5. 응답 결과 조립 (histories의 정렬된 순서 유지)
-        List<TrendingResponse> response = new ArrayList<>();
+        List<TrendingResponse> newList = new ArrayList<>();
 
         for (TrendingHistory history : histories) {
             Content content = contentMap.get(history.getContentId());
@@ -148,21 +177,24 @@ public class TrendingContentService {
                     ? "관리자"
                     : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
 
-                response.add(TrendingResponse.builder()
-                                             .rank(history.getRanking()) // DB에 기록된 실제 순위 사용
-                                             .trendingScore(history.getTrendingScore())
-                                             .content(DefaultContentResponse.from(content, uploaderName))
-                                             .build());
+                newList.add(TrendingResponse.builder()
+                                 .rank(history.getRanking()) // DB에 기록된 실제 순위 사용
+                                 .trendingScore(history.getTrendingScore())
+                                 .content(DefaultContentResponse.from(content, uploaderName))
+                                 .build());
             } else {
-                log.warn("[Trending Chart] 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.", history.getContentId());
-            }
+                log.warn("[Trending Chart] 캐시 갱신 중: 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.", history.getContentId());            }
         }
 
-        return response;
+        // 원자적 캐시 덮어쓰기
+        trendingCache.set(newList);
+        log.info("[Trending Chart] 로컬 캐시 갱신 완료 ({}건)", newList.size());
+
+        return newList;
     }
 
     /**
-     * Content 리스트에서 uploaderId를 추출하여 닉네임 맵 반환 (ContentService 로직 참고)
+     * Content 리스트에서 uploaderId를 추출하여 닉네임 맵 반환 (ContentService 에서 코드 가져옴)
      */
     private Map<Long, String> getUploaderNicknameMap(List<Content> contents) {
         Set<Long> uploaderIds = contents.stream()
