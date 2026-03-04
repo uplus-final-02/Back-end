@@ -6,6 +6,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum TranscodeStatus {
+    PENDING_UPLOAD("트랜스코딩 대기 예정"),
     WAITING("트랜스코딩 대기중"),
     PROCESSING("트랜스코딩 진행중"),
     DONE("트랜스코딩 완료됨"),

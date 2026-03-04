@@ -44,13 +44,24 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
             	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
+                    .requestMatchers("/admin/users", "/admin/users/**").permitAll() // ✅ 테스트용
+                    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll() // ✅ 테스트용
+                    .requestMatchers("/admin/uploads/videos", "/admin/uploads/videos/**").permitAll() // ✅ 테스트용
+                    .requestMatchers("/admin/videos", "/admin/videos/**").permitAll() // ✅ 테스트용
+                    .requestMatchers("/admin/series", "/admin/series/**").permitAll() // ✅ 테스트용
+            	    .anyRequest().hasRole("ADMIN")
+            	)
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+            	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
             	    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll()
             	    .anyRequest().hasRole("ADMIN")
             	)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
-    
+   
     @Bean
     @Order(99)
     public SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
