@@ -16,7 +16,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@Order(1)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -30,6 +29,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @Order(1)
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         return http
@@ -43,12 +43,21 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
-            		.requestMatchers(HttpMethod.POST,"/admin/login").permitAll()
-                    .requestMatchers("/admin/users", "/admin/users/**").permitAll()
-                    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll() 
-                    .anyRequest().hasRole("ADMIN")
-            )
+            	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
+            	    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll()
+            	    .anyRequest().hasRole("ADMIN")
+            	)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+    
+    @Bean
+    @Order(99)
+    public SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
+        return http
+            .securityMatcher("/**")
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
             .build();
     }
 }
