@@ -4,7 +4,9 @@ import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.common.exception.OAuthLoginException;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,24 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // ── 소셜 로그인 외부 API 실패 → 502 ──────────────────────────────────
+    @ExceptionHandler(OAuthLoginException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOAuthLoginException(OAuthLoginException e) {
+        log.warn("[OAuth] 외부 소셜 로그인 API 실패: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_GATEWAY)
+                .body(new ApiResponse<>(502, e.getMessage(), null));
+    }
+
+    // ── ES/DB 연결 실패 → 503 (Fallback 처리 후에도 전파된 경우 최종 방어) ──
+    @ExceptionHandler(DataAccessResourceFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessResourceFailure(DataAccessResourceFailureException e) {
+        log.warn("[연결 실패] 외부 데이터 소스 연결 실패: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+    }
 
     // ── Redis 연결 실패 → 503 ────────────────────────────────────────
     @ExceptionHandler(RedisConnectionFailureException.class)
