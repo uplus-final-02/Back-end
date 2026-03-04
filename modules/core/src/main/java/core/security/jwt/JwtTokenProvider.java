@@ -43,14 +43,7 @@ public class JwtTokenProvider {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(accessTokenTtlSeconds);
 
-        return JWT.create()
-                .withSubject(String.valueOf(userId))
-                .withIssuedAt(Date.from(now))
-                .withExpiresAt(Date.from(expiresAt))
-                .withClaim("email", email)
-                .withClaim("nickname", nickname)
-                .withClaim("role", role)
-                .sign(algorithm);
+        return generateAccessToken(userId, email, nickname, role, false, false);
     }
 
     public String generateRefreshToken(Long userId) {
@@ -166,4 +159,22 @@ public class JwtTokenProvider {
         DecodedJWT jwt = validateAndGet(refreshToken, "refresh");
         return Long.parseLong(jwt.getSubject());
     }
+    
+    public String generateAccessToken(Long userId, String email, String nickname, String role,
+            boolean paid, boolean uplus) {
+    	
+		Instant now = Instant.now();
+		Instant expiresAt = now.plusSeconds(accessTokenTtlSeconds);
+		
+		return JWT.create()
+		.withSubject(String.valueOf(userId))
+		.withIssuedAt(Date.from(now))
+		.withExpiresAt(Date.from(expiresAt))
+		.withClaim("email", email)
+		.withClaim("nickname", nickname)
+		.withClaim("role", role)
+		.withClaim("paid", paid)
+		.withClaim("uplus", uplus)
+		.sign(algorithm);
+	}
 }

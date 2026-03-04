@@ -50,7 +50,8 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
-
+    private final MembershipCheckService membershipCheckService;
+    
     // ══════════════════════════════════════════════════════════════
     //  STEP 1: 이메일 인증코드 발송
     // ══════════════════════════════════════════════════════════════
@@ -256,8 +257,17 @@ public class AuthService {
         AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-        String newAccessToken  = jwtTokenProvider.generateAccessToken(
-                user.getId(), authAccount.getEmail(), user.getNickname(), user.getUserRole().name());
+        boolean paid = membershipCheckService.isPaid(userId);
+        boolean uplus = membershipCheckService.isUplus(userId);
+
+        String newAccessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(),
+                authAccount.getEmail(),
+                user.getNickname(),
+                user.getUserRole().name(),
+                paid,
+                uplus
+        );
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
         refreshTokenService.upsert(userId, newRefreshToken);
@@ -301,8 +311,22 @@ public class AuthService {
 
     /** JWT 발급 + Refresh Token DB 저장 */
     private LoginResponse issueJwt(User user, String email) {
-        String accessToken  = jwtTokenProvider.generateAccessToken(
-                user.getId(), email, user.getNickname(), user.getUserRole().name());
+    	Long userId = user.getId();
+    	
+    	boolean paid = membershipCheckService.isPaid(userId);
+        boolean uplus = membershipCheckService.isUplus(userId);
+    	
+        String accessToken = jwtTokenProvider.generateAccessToken(
+                userId,
+                email,
+                user.getNickname(),
+                user.getUserRole().name(),
+                paid,
+                uplus
+        );
+        
+//        String accessToken  = jwtTokenProvider.generateAccessToken(
+//                user.getId(), email, user.getNickname(), user.getUserRole().name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
         refreshTokenService.upsert(user.getId(), refreshToken);
 

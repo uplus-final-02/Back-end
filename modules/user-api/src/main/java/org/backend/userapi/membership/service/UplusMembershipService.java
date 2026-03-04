@@ -4,14 +4,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.backend.userapi.common.exception.ConflictException;
+import org.backend.userapi.membership.dto.CancelSubscriptionResponse;
+import org.backend.userapi.membership.dto.SubscriptionMeResponse;
 import org.backend.userapi.membership.dto.UplusVerificationRequest;
 import org.backend.userapi.membership.dto.UplusVerificationResponse;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.enums.SubscriptionStatus;
+import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserUplusVerified;
+import user.repository.SubscriptionsRepository;
 import user.repository.TelecomMemberRepository;
 import user.repository.UserRepository;
 import user.repository.UserUplusVerifiedRepository;
@@ -27,7 +33,7 @@ public class UplusMembershipService {
 	private final UserRepository userRepository;
     private final UserUplusVerifiedRepository userUplusVerifiedRepository;
     private final TelecomMemberRepository telecomMemberRepository;
-   
+    private final SubscriptionsRepository subscriptionsRepository;
     
     public UplusVerificationResponse verify(Long userId, UplusVerificationRequest request) {
 
@@ -82,4 +88,66 @@ public class UplusMembershipService {
         return phoneNumber == null ? null : phoneNumber.replace("-", "").trim();
     }
     
+    @Transactional(readOnly = true)
+    public SubscriptionMeResponse getMySubscription(Long userId) {
+
+        Subscriptions subscription = subscriptionsRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new IllegalArgumentException("구독 정보가 없습니다."));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        SubscriptionStatus status = subscription.getSubscriptionStatus();
+        LocalDateTime expiresAt = subscription.getExpiresAt();
+
+        boolean notExpired = expiresAt != null && expiresAt.isAfter(now);
+
+        
+        boolean paid = notExpired && (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.CANCELED);
+
+        
+        String displayStatus = notExpired ? status.name() : SubscriptionStatus.EXPIRED.name();
+
+        return SubscriptionMeResponse.builder()
+                .subscriptionId(subscription.getId())
+                .grade(subscription.getPlanType())
+                .subscriptionStatus(status)
+                .displayStatus(displayStatus)
+                .startedAt(subscription.getStartedAt())
+                .expiresAt(expiresAt)
+                .paid(paid)
+                .build();
+    }
+    
+    // 구독 해지 관련
+    @Transactional
+    public CancelSubscriptionResponse cancelSubscription(Long userId) {
+
+        Subscriptions subscription = subscriptionsRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new IllegalArgumentException("구독 정보가 없습니다."));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 이미 만료된 경우
+        if (!subscription.getExpiresAt().isAfter(now)) {
+            subscription.expire();
+            throw new IllegalArgumentException("이미 만료된 구독입니다.");
+        }
+
+        // 이미 해지 예약된 상태
+        if (subscription.getSubscriptionStatus() == SubscriptionStatus.CANCELED) {
+            throw new IllegalArgumentException("이미 해지 예약된 구독입니다.");
+        }
+
+        subscription.cancel();
+
+        boolean paid = true;
+
+        return CancelSubscriptionResponse.builder()
+                .subscriptionId(subscription.getId())
+                .grade(subscription.getPlanType())
+                .subscriptionStatus(subscription.getSubscriptionStatus()) 
+                .expiresAt(subscription.getExpiresAt())
+                .paid(paid)
+                .build();
+    }
 }
