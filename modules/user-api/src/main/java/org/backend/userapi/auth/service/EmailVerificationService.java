@@ -6,8 +6,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.exception.EmailSendFailedException;
 import org.backend.userapi.common.exception.InvalidVerificationCodeException;
+import org.backend.userapi.common.exception.RedisServiceUnavailableException;
 import org.backend.userapi.common.exception.TooManyEmailRequestsException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -40,27 +42,43 @@ public class EmailVerificationService {
     /**
      * 이메일 인증코드 발송 (동기).
      * - 1분 이내 재발송 요청 시 429 예외
+     * - Redis 다운 시 쿨다운 체크를 건너뛰고 발송 시도, 코드 저장 실패 시 503 반환
      * - 발송 실패 시 Redis 코드 삭제 후 500 예외 → 클라이언트가 즉시 인지 가능
      */
     public void sendCode(String email) {
-        // 재발송 쿨다운 체크
         String cooldownKey = COOLDOWN_KEY_PREFIX + email;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
-            long remaining = Optional.ofNullable(redisTemplate.getExpire(cooldownKey)).orElse(COOLDOWN_TTL_SECONDS);
-            throw new TooManyEmailRequestsException(
-                String.format("인증코드를 이미 발송했습니다. %d초 후 다시 시도해주세요.", remaining)
-            );
+
+        // 재발송 쿨다운 체크 (Redis 다운 시 건너뜀)
+        try {
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+                long remaining = Optional.ofNullable(redisTemplate.getExpire(cooldownKey))
+                                         .orElse(COOLDOWN_TTL_SECONDS);
+                throw new TooManyEmailRequestsException(
+                    String.format("인증코드를 이미 발송했습니다. %d초 후 다시 시도해주세요.", remaining)
+                );
+            }
+        } catch (TooManyEmailRequestsException e) {
+            throw e; // 비즈니스 예외는 그대로 전파
+        } catch (RedisConnectionFailureException e) {
+            // Redis 다운 시 쿨다운 체크 생략하고 발송 진행
+            // SMTP 자체가 rate limit 역할을 하므로 보안상 허용 가능
+            log.warn("[Redis DOWN] 이메일 쿨다운 확인 실패 - 쿨다운 체크 건너뜀: email={}", email);
         }
 
         String code = generateCode();
 
-        // 인증코드 Redis 저장 (5분)
-        redisTemplate.opsForValue()
-            .set(VERIFY_KEY_PREFIX + email, code, Duration.ofSeconds(CODE_TTL_SECONDS));
-
-        // 쿨다운 Redis 저장 (1분)
-        redisTemplate.opsForValue()
-            .set(cooldownKey, "1", Duration.ofSeconds(COOLDOWN_TTL_SECONDS));
+        // 인증코드 & 쿨다운 Redis 저장 (Redis 다운 시 503 반환)
+        try {
+            redisTemplate.opsForValue()
+                .set(VERIFY_KEY_PREFIX + email, code, Duration.ofSeconds(CODE_TTL_SECONDS));
+            redisTemplate.opsForValue()
+                .set(cooldownKey, "1", Duration.ofSeconds(COOLDOWN_TTL_SECONDS));
+        } catch (RedisConnectionFailureException e) {
+            log.error("[Redis DOWN] 이메일 인증코드 저장 실패 - 인증 서비스 불가: email={}", email);
+            throw new RedisServiceUnavailableException(
+                "인증 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요."
+            );
+        }
 
         // 동기 이메일 발송 - 실패 시 즉시 예외 전파
         sendEmail(email, code);
@@ -68,12 +86,24 @@ public class EmailVerificationService {
 
     /**
      * 인증코드 검증 후 삭제 (1회용).
+     * - Redis 다운 시 503 반환
      *
      * @throws InvalidVerificationCodeException 코드 불일치 또는 만료
+     * @throws RedisServiceUnavailableException Redis 연결 실패
      */
     public void verifyCode(String email, String inputCode) {
         String key = VERIFY_KEY_PREFIX + email;
-        String storedCode = redisTemplate.opsForValue().get(key);
+        String storedCode;
+
+        // Redis 연결 실패 방어
+        try {
+            storedCode = redisTemplate.opsForValue().get(key);
+        } catch (RedisConnectionFailureException e) {
+            log.error("[Redis DOWN] 이메일 인증코드 조회 실패 - 인증 서비스 불가: email={}", email);
+            throw new RedisServiceUnavailableException(
+                "인증 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요."
+            );
+        }
 
         if (storedCode == null) {
             throw new InvalidVerificationCodeException("인증코드가 만료되었습니다. 다시 요청해주세요.");
@@ -82,7 +112,13 @@ public class EmailVerificationService {
             throw new InvalidVerificationCodeException("인증코드가 올바르지 않습니다.");
         }
 
-        redisTemplate.delete(key); // 검증 성공 시 즉시 삭제 (1회용)
+        // 검증 성공 시 즉시 삭제 (1회용) — 삭제 실패는 TTL로 자동 만료되므로 치명적이지 않음
+        try {
+            redisTemplate.delete(key);
+        } catch (RedisConnectionFailureException e) {
+            log.warn("[Redis DOWN] 인증코드 삭제 실패 (TTL 만료로 자동 삭제 예정): email={}", email);
+            // 코드 일치 확인은 완료됐으므로 계속 진행
+        }
     }
 
     // =========================================================
@@ -105,8 +141,12 @@ public class EmailVerificationService {
         } catch (MessagingException | MailException e) {
             log.error("[이메일 발송 실패] to={}, error={}", to, e.getMessage());
             // 발송 실패 시 Redis 코드·쿨다운 삭제 → 사용자가 바로 재요청 가능
-            redisTemplate.delete(VERIFY_KEY_PREFIX + to);
-            redisTemplate.delete(COOLDOWN_KEY_PREFIX + to);
+            try {
+                redisTemplate.delete(VERIFY_KEY_PREFIX + to);
+                redisTemplate.delete(COOLDOWN_KEY_PREFIX + to);
+            } catch (RedisConnectionFailureException redisEx) {
+                log.warn("[Redis DOWN] 이메일 발송 실패 후 코드 삭제도 실패: email={}", to);
+            }
             throw new EmailSendFailedException("이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
     }

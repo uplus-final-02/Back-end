@@ -63,4 +63,6 @@ public class ContentDocument {
 
     @Transient
     private String highlightDescription;
+    
+    private String titleChosung;
 }

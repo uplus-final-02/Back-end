@@ -57,11 +57,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		 	Long userId = Long.parseLong(jwt.getSubject());
             String role = jwt.getClaim("role").asString();
-
+                
             boolean paid = jwt.getClaim("paid").asBoolean() != null && jwt.getClaim("paid").asBoolean();
             boolean uplus = jwt.getClaim("uplus").asBoolean() != null && jwt.getClaim("uplus").asBoolean();
 
-
+            
             log.info("JWT validated subject={}, role={}", userId, role);
             
             JwtPrincipal principal = new JwtPrincipal(userId, paid, uplus);
@@ -87,7 +87,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 );
                 return;
             }
-        }
+        }   
 
         filterChain.doFilter(request, response);
     }
