@@ -56,7 +56,7 @@ public class AdminVideoDraftService {
                 .originalUrl(null)
                 .hlsUrl(null)
                 .durationSec(0)
-                .transcodeStatus(TranscodeStatus.WAITING)
+                .transcodeStatus(TranscodeStatus.PENDING_UPLOAD)
                 .build();
         videoFileRepository.save(vf);
 
