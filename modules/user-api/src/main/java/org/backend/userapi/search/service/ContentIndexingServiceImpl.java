@@ -27,9 +27,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import co.elastic.clients.elasticsearch._types.query_dsl.FunctionScoreMode;
 import co.elastic.clients.elasticsearch._types.query_dsl.FieldValueFactorModifier;
 import co.elastic.clients.elasticsearch._types.query_dsl.FunctionBoostMode;
+import co.elastic.clients.elasticsearch._types.query_dsl.FunctionScoreMode;
+import common.util.ChosungUtil;
 import content.entity.Content;
 import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
@@ -135,10 +136,33 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .withQuery(q -> q.functionScore(fs -> fs
                         .query(innerQ -> innerQ.bool(b -> {
                             // [기본] 키워드 검색
-                            if (StringUtils.hasText(keyword)) {
-                                b.must(m -> m.multiMatch(mm -> mm
-                                        .fields("title^3", "tags^2", "description")
-                                        .query(keyword)));
+                        	if (StringUtils.hasText(keyword)) {
+                                
+                                boolean isChosungQuery = !keyword.matches(".*[가-힣].*");
+                                
+                                b.must(m -> m.bool(bool -> {
+                                    bool.should(s -> s.multiMatch(mm -> mm
+                                            .fields("title^5", "title.ngram^3", "tags^3", "description^2")
+                                            .query(keyword)
+                                    ));
+
+                                    bool.should(s -> s.matchPhrasePrefix(mpp -> mpp
+                                            .field("description")
+                                            .query(keyword)
+                                            .boost(1.5f) 
+                                    ));
+
+                                    if (isChosungQuery) {
+                                        String chosungKeyword = ChosungUtil.extract(keyword);
+                                        bool.should(s -> s.multiMatch(mm -> mm
+                                                .fields("titleChosung^2", "titleChosung.ngram^1")
+                                                .query(chosungKeyword)
+                                        ));
+                                    }
+
+                                    bool.minimumShouldMatch("1");
+                                    return bool;
+                                }));
                             }
 
                             // [필터] 조건들
@@ -231,8 +255,20 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     public List<String> getSuggestions(String keyword) {
         if (!StringUtils.hasText(keyword)) return List.of();
 
+        boolean isChosungQuery = !keyword.matches(".*[가-힣].*");
+
         NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.matchPhrasePrefix(m -> m.field("title").query(keyword)))
+                .withQuery(q -> q.bool(b -> {
+                    b.should(s -> s.match(m -> m.field("title.ngram").query(keyword)));
+
+                    if (isChosungQuery) {
+                        String chosungKeyword = ChosungUtil.extract(keyword);
+                        b.should(s -> s.match(m -> m.field("titleChosung.ngram").query(chosungKeyword)));
+                    }
+                    
+                    b.minimumShouldMatch("1");
+                    return b;
+                }))
                 .withPageable(Pageable.ofSize(10))
                 .build();
 
@@ -263,6 +299,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         return ContentDocument.builder()
                 .contentId(content.getId())
                 .title(content.getTitle())
+                .titleChosung(ChosungUtil.extract(content.getTitle()))
                 .description(content.getDescription())
                 .tags(tagNames)
                 .contenttype(content.getType().name())
