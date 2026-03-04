@@ -137,19 +137,19 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                         .query(innerQ -> innerQ.bool(b -> {
                             // [기본] 키워드 검색
                         	if (StringUtils.hasText(keyword)) {
-                                
                                 boolean isChosungQuery = !keyword.matches(".*[가-힣].*");
                                 
                                 b.must(m -> m.bool(bool -> {
                                     bool.should(s -> s.multiMatch(mm -> mm
                                             .fields("title^5", "title.ngram^3", "tags^3", "description^2")
                                             .query(keyword)
+                                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
                                     ));
 
                                     bool.should(s -> s.matchPhrasePrefix(mpp -> mpp
                                             .field("description")
                                             .query(keyword)
-                                            .boost(1.5f) 
+                                            .boost(1.5f)
                                     ));
 
                                     if (isChosungQuery) {
@@ -157,6 +157,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                                         bool.should(s -> s.multiMatch(mm -> mm
                                                 .fields("titleChosung^2", "titleChosung.ngram^1")
                                                 .query(chosungKeyword)
+                                                .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
                                         ));
                                     }
 
