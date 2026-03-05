@@ -1,6 +1,7 @@
 package org.backend.admin.content.controller;
 
 import org.backend.admin.common.dto.AdminApiResponse;
+import org.backend.admin.content.dto.AdminContentDetailResponse;
 import org.backend.admin.content.dto.AdminContentListResponse;
 import org.backend.admin.content.dto.AdminContentUpdateRequest;
 import org.backend.admin.content.dto.AdminContentUpdateResponse;
@@ -44,4 +45,9 @@ public class AdminContentController {
         return adminContentService.updateMetadata(contentId, request);
     }
     
+    @GetMapping("/{contentId}")
+    public AdminApiResponse<AdminContentDetailResponse> getContentDetail(@PathVariable Long contentId) {
+        AdminContentDetailResponse result = adminContentService.getContentDetail(contentId);
+        return AdminApiResponse.ok("조회 성공", result);
+    }
 }

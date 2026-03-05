@@ -11,5 +11,12 @@ public record AdminContentUpdateRequest(
         String thumbnailUrl,
         List<Long> tagIds, 
         ContentAccessLevel accessLevel,
-        ContentStatus status
-) {}
+        ContentStatus status,
+        EpisodeUpdate episode 
+) {
+    public record EpisodeUpdate(
+            Long videoId,         
+            String title,
+            String description
+    ) {}
+}
