@@ -100,4 +100,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
            "WHERE c.status = 'ACTIVE' " +
            "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
     List<Content> findTopActiveByPopularity(Pageable pageable);
+
+    // ── ES 검색 Fallback (keyword 없음): total count용 ────────────────────
+    @Query("SELECT COUNT(c) FROM Content c WHERE c.status = 'ACTIVE'")
+    long countAllActive();
 }

@@ -368,7 +368,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             } else {
                 // keyword 없음(필터만): category 무시하고 인기순 반환 (Fallback 상황 허용 수준)
                 contents = contentRepository.findTopActiveByPopularity(dbPageable);
-                total = contents.size(); // keyword 없는 경우 count 쿼리 생략
+                total = contentRepository.countAllActive(); // 정확한 total로 hasNext 보장
             }
 
             List<ContentDocument> docs = contents.stream()
