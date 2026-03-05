@@ -1,6 +1,7 @@
 package core.storage;
 
 import java.net.URL;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -25,6 +26,10 @@ public interface ObjectStorageService {
     String buildObjectKey(String prefix, Long contentId, String originalFilename);
 
     ObjectStat statObject(String objectKey);
+
+    void downloadToFile(String objectKey, Path targetFile);
+
+    void uploadFromFile(String objectKey, Path sourceFile, String contentType);
 
     record PresignedUrlResult(
             String objectKey,
