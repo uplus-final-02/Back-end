@@ -13,6 +13,10 @@ RUN ./gradlew :modules:transcoder-worker:bootJar -x test
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /workspace/modules/transcoder-worker/build/libs/*.jar app.jar
 
 ENV TZ=Asia/Seoul
