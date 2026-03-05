@@ -1,6 +1,6 @@
 spring:
   application:
-    name: admin-api
+    name: transcoder-worker
 
   jpa:
     open-in-view: false
@@ -11,16 +11,4 @@ spring:
     enabled: false
 
 server:
-  port: 8080
-
-app:
-  jwt:
-    secret: ${JWT_SECRET:change-me}
-    access-token-ttl-seconds: 1800
-    refresh-token-ttl-seconds: 1209600
-
-
-logging:
-  level:
-    org.springframework.security: DEBUG
-    org.springframework.web: DEBUG
+  port: 0

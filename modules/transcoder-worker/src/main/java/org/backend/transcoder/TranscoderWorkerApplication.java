@@ -5,15 +5,16 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.kafka.annotation.EnableKafka;
 
+@EnableKafka
 @EnableJpaAuditing
 @SpringBootApplication(scanBasePackages = {
-        "org.backend.transcoder",
-        "core",
-        "common", "content"
+        "org.backend.transcoder"
 })
 @EntityScan(basePackages = {
-        "content.entity"
+        "content.entity",
+        "common.entity"
 })
 @EnableJpaRepositories(basePackages = {
         "content.repository"
