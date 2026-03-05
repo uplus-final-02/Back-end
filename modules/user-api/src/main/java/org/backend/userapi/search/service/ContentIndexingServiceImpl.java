@@ -231,8 +231,9 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             return new PageImpl<>(contents, pageable, searchHits.getTotalHits());
 
         } catch (DataAccessException e) {
-            log.warn("[ES DOWN] 검색 ES 연결 실패 → DB LIKE Fallback: keyword={}, category={}", keyword, category);
-            return searchFromDb(keyword, category, pageable);
+            log.warn("[ES DOWN] 검색 ES 연결 실패 → DB LIKE Fallback: keyword={}, category={}, genre={}, tag={}",
+                    keyword, category, genre, tag);
+            return searchFromDb(keyword, category, genre, tag, pageable);
         }
     }
 
@@ -337,8 +338,8 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         return normSq <= ZERO_VECTOR_EPS;
     }
 
-    // ── ES 검색 Fallback: DB LIKE ────────────────────────────────────────
-    private Page<ContentDocument> searchFromDb(String keyword, String category, Pageable pageable) {
+    // ── ES 검색 Fallback: DB LIKE (category/genre/tag 필터 모두 반영) ───────
+    private Page<ContentDocument> searchFromDb(String keyword, String category, String genre, String tag, Pageable pageable) {
         try {
             Pageable dbPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
 
@@ -352,32 +353,39 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 }
             }
 
+            // genre/tag: null 또는 빈 문자열이면 null로 정규화 (JPQL 조건 스킵용)
+            String genreFilter = StringUtils.hasText(genre) ? genre : null;
+            String tagFilter   = StringUtils.hasText(tag)   ? tag   : null;
+
             List<Content> contents;
             long total;
 
             if (StringUtils.hasText(keyword)) {
-                // 정렬 결정: pageable sort에 createdAt 포함 시 LATEST, 그 외 POPULAR(RELATED 포함)
+                // 정렬 결정: pageable sort에 createdAt DESC 단독 존재 시 LATEST, 그 외 POPULAR
                 boolean isLatest = pageable.getSort().stream()
-                        .anyMatch(order -> order.getProperty().equals("createdAt"));
+                        .anyMatch(order -> order.getProperty().equals("createdAt")
+                                && order.isDescending());
 
                 if (isLatest) {
-                    contents = contentRepository.findActiveByTitleLikeLatest(keyword, categoryType, dbPageable);
+                    contents = contentRepository.findActiveByTitleLikeLatest(
+                            keyword, categoryType, genreFilter, tagFilter, dbPageable);
                 } else {
-                    contents = contentRepository.findActiveByTitleLikePopular(keyword, categoryType, dbPageable);
+                    contents = contentRepository.findActiveByTitleLikePopular(
+                            keyword, categoryType, genreFilter, tagFilter, dbPageable);
                 }
-                total = contentRepository.countActiveByTitleLike(keyword, categoryType);
+                total = contentRepository.countActiveByTitleLike(keyword, categoryType, genreFilter, tagFilter);
             } else {
-                // keyword 없음(필터만): category 무시하고 인기순 반환 (Fallback 상황 허용 수준)
+                // keyword 없음(필터만): 인기순 반환 (Fallback 상황 허용 수준)
                 contents = contentRepository.findTopActiveByPopularity(dbPageable);
-                total = contentRepository.countAllActive(); // 정확한 total로 hasNext 보장
+                total = contentRepository.countAllActive();
             }
 
             List<ContentDocument> docs = contents.stream()
                     .map(this::toSimpleDocument)
                     .toList();
 
-            log.info("[ES Fallback] DB LIKE 검색 결과: keyword={}, category={}, 결과={}건, total={}건",
-                    keyword, category, docs.size(), total);
+            log.info("[ES Fallback] DB LIKE 검색 결과: keyword={}, category={}, genre={}, tag={}, 결과={}건, total={}건",
+                    keyword, category, genre, tag, docs.size(), total);
             return new PageImpl<>(docs, pageable, total);
 
         } catch (Exception dbEx) {
