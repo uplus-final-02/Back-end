@@ -88,3 +88,6 @@ app:
     realtime-sync:
       enabled: ${SEARCH_REALTIME_SYNC_ENABLED:true}
       interval-ms: ${SEARCH_REALTIME_SYNC_INTERVAL_MS:30000}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
