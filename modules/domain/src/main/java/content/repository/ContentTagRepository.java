@@ -33,7 +33,5 @@ public interface ContentTagRepository extends JpaRepository<ContentTag, Long> {
      @Query("select ct.tag.id from ContentTag ct where ct.content.id = :contentId")
      List<Long> findTagIdsByContentId(@Param("contentId") Long contentId);
 
-     @Modifying
-     @Query("delete from ContentTag ct where ct.content.id = :contentId")
-     void deleteAllByContentId(@Param("contentId") Long contentId);
+     int deleteAllByContent_Id(Long contentId);
 }

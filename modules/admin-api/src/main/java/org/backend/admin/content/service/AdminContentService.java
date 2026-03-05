@@ -1,6 +1,7 @@
 package org.backend.admin.content.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.backend.admin.content.dto.AdminContentDetailResponse;
 import org.backend.admin.content.dto.AdminContentListResponse;
@@ -22,6 +23,7 @@ import content.repository.VideoRepository;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminContentService {
@@ -54,6 +56,7 @@ public class AdminContentService {
 	// 콘텐츠 메타데이터 업데이트
     @Transactional
     public AdminContentUpdateResponse updateMetadata(Long contentId, AdminContentUpdateRequest req) {
+    	log.info("[MARKER] updateMetadata v=20260305-1432");
     	Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId));
     	
@@ -66,24 +69,32 @@ public class AdminContentService {
         );
     	
     	List<Long> tagIds = req.tagIds();
-        if (tagIds == null || tagIds.isEmpty()) {
-            throw new IllegalArgumentException("tagIds는 최소 1개 이상이어야 합니다.");
-        }
+    	if (tagIds != null) {
+            List<Long> uniqueTagIds = tagIds.stream().distinct().toList();
+            if (uniqueTagIds.isEmpty()) {
+                throw new IllegalArgumentException("tagIds는 최소 1개 이상이어야 합니다.");
+            }
 
-        List<Long> uniqueTagIds = tagIds.stream().distinct().toList();
-        List<Tag> tags = tagRepository.findAllById(uniqueTagIds);
+            List<Tag> tags = tagRepository.findAllById(uniqueTagIds);
+            if (tags.size() != uniqueTagIds.size()) {
+                throw new IllegalArgumentException("존재하지 않는 태그가 포함되어 있습니다.");
+            }
 
-        if (tags.size() != tagIds.stream().distinct().count()) {
-            throw new IllegalArgumentException("존재하지 않는 태그가 포함되어 있습니다.");
-        }
-        
-        contentTagRepository.deleteAllByContentId(contentId);
-        
-        content.getContentTags().clear();
-        
-        for (Tag tag : tags) {
-            content.getContentTags().add(
-            		ContentTag.builder().content(content).tag(tag).build());
+            List<ContentTag> current = content.getContentTags();
+            Set<Long> currentTagIds = current.stream().map(ct -> ct.getTag().getId()).collect(java.util.stream.Collectors.toSet());
+
+            Set<Long> target = new java.util.HashSet<>(uniqueTagIds);
+
+            // 기존 매핑 제거
+            current.removeIf(ct -> !target.contains(ct.getTag().getId())); 
+
+            // 기존에 없던 것만 add
+            Map<Long, Tag> tagMap = tags.stream().collect(java.util.stream.Collectors.toMap(Tag::getId, t -> t));
+            for (Long tid : target) {
+                if (!currentTagIds.contains(tid)) {
+                    current.add(ContentTag.builder().content(content).tag(tagMap.get(tid)).build());
+                }
+            }
         }
         
         AdminContentUpdateRequest.EpisodeUpdate ep = req.episode();
@@ -103,7 +114,10 @@ public class AdminContentService {
             
             String newTitle = (ep.title() != null) ? ep.title() : video.getTitle();
             String newDesc  = (ep.description() != null) ? ep.description() : video.getDescription();
+            
+            log.info("video before title={}, desc={}", video.getTitle(), video.getDescription());
             video.updateInfo(newTitle, newDesc);
+            log.info("video after  title={}, desc={}", video.getTitle(), video.getDescription());
         }
         
         Content saved = contentRepository.save(content);
