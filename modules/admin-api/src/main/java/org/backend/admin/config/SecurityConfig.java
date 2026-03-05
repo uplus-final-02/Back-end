@@ -48,6 +48,7 @@ public class SecurityConfig {
                     .requestMatchers("/admin/uploads/videos", "/admin/uploads/videos/**").permitAll() // ✅ 테스트용
                     .requestMatchers("/admin/videos", "/admin/videos/**").permitAll() // ✅ 테스트용
                     .requestMatchers("/admin/series", "/admin/series/**").permitAll() // ✅ 테스트용
+                    .requestMatchers("/admin/hls", "/admin/hls/**").permitAll() // ✅ 테스트용
             	    .anyRequest().hasRole("ADMIN")
             	)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
