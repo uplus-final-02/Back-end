@@ -60,16 +60,18 @@ public class ContentRealtimeSyncScheduler {
             }
         }
 
-        lastSyncedAt = updatedContents.stream()
-                .map(Content::getUpdatedAt)
-                .filter(updatedAt -> updatedAt != null)
-                .max(LocalDateTime::compareTo)
-                .orElse(LocalDateTime.now());
-
         if (failCount > 0) {
-            log.warn("[ES Sync] 실시간 동기화 부분 실패. success={}, fail={}, lastSyncedAt={}",
+            // 보수 전략:
+            // 실패가 1건이라도 있으면 워터마크(lastSyncedAt)를 전진시키지 않는다.
+            // -> 다음 주기에 같은 구간을 다시 읽어 실패 건 누락을 방지
+            log.warn("[ES Sync] 실시간 동기화 부분 실패. success={}, fail={}, lastSyncedAt 유지={}",
                     successCount, failCount, lastSyncedAt);
         } else {
+            lastSyncedAt = updatedContents.stream()
+                    .map(Content::getUpdatedAt)
+                    .filter(updatedAt -> updatedAt != null)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(LocalDateTime.now());
             log.debug("[ES Sync] 실시간 동기화 완료. syncedCount={}, lastSyncedAt={}",
                     successCount, lastSyncedAt);
         }
