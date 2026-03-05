@@ -29,6 +29,14 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
     
     List<WatchHistory> findByUserIdAndVideoIdIn(Long userId, List<Long> videoIds);
 
+    @Query("""
+        SELECT w.contentId, COUNT(DISTINCT w.userId)
+        FROM WatchHistory w
+        WHERE w.completedAt >= :start AND w.completedAt < :end
+        GROUP BY w.contentId
+     """)
+    List<Object[]> findCompletedUserCounts(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
     @Query("SELECT wh FROM WatchHistory wh " +
         "JOIN FETCH wh.video v " +
         "LEFT JOIN FETCH v.videoFile vf " +
