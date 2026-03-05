@@ -1,4 +1,4 @@
-package org.backend.admin.controller;
+package org.backend.adminapi.controller;
 
 import core.storage.ObjectStorageService;
 import java.time.Duration;
