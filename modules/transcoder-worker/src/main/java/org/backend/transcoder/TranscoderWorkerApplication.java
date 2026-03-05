@@ -1,17 +1,30 @@
 package org.backend.transcoder;
 
+import core.storage.MinioObjectStorageService;
+import core.storage.config.StorageConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.kafka.annotation.EnableKafka;
 
 @EnableKafka
 @EnableJpaAuditing
+
 @SpringBootApplication(scanBasePackages = {
-        "org.backend.transcoder"
+        "org.backend.transcoder",
+        "content.repository",
+        "content.entity",
+        "common.entity"
 })
+
+@Import({
+        StorageConfig.class,
+        MinioObjectStorageService.class
+})
+
 @EntityScan(basePackages = {
         "content.entity",
         "common.entity"

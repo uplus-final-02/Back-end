@@ -1,11 +1,14 @@
 package core.storage;
 
 import core.storage.config.StorageProperties;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MinioClient;
+import io.minio.*;
 import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
+
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -13,8 +16,6 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import io.minio.StatObjectArgs;
-import io.minio.StatObjectResponse;
 
 @Service
 public class MinioObjectStorageService implements ObjectStorageService {
@@ -142,5 +143,38 @@ public class MinioObjectStorageService implements ObjectStorageService {
         while (r.startsWith("/")) r = r.substring(1);
         while (r.endsWith("/")) r = r.substring(0, r.length() - 1);
         return r;
+    }
+
+    @Override
+    public void downloadToFile(String objectKey, Path targetFile) {
+        try (InputStream in = internalMinioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(props.bucket())
+                        .object(objectKey)
+                        .build()
+        )) {
+            Files.createDirectories(targetFile.getParent());
+            Files.copy(in, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            throw new StorageException("MinIO 다운로드 실패: " + objectKey, e);
+        }
+    }
+
+    @Override
+    public void uploadFromFile(String objectKey, Path sourceFile, String contentType) {
+        try (InputStream in = Files.newInputStream(sourceFile)) {
+            long size = Files.size(sourceFile);
+
+            internalMinioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(props.bucket())
+                            .object(objectKey)
+                            .stream(in, size, -1)
+                            .contentType(contentType != null ? contentType : "application/octet-stream")
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new StorageException("MinIO 업로드 실패: " + objectKey, e);
+        }
     }
 }
