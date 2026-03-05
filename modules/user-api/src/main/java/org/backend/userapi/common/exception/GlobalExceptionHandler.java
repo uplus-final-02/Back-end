@@ -4,9 +4,10 @@ import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
-import org.backend.userapi.membership.exception.UplusUserNotFoundException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.backend.userapi.common.exception.OAuthLoginException;
+import org.backend.userapi.membership.exception.UplusUserNotFoundException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +46,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(new ApiResponse<>(503, e.getMessage(), null));
+    }
+
+    // ── ES / 외부 데이터 저장소 연결 실패 → 503 ──────────────────────
+    // 서비스 레이어에서 catch하지 못한 DataAccessResourceFailureException이
+    // Controller까지 올라왔을 때 RuntimeException(500) 대신 503으로 명확히 응답
+    @ExceptionHandler(DataAccessResourceFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessResourceFailure(DataAccessResourceFailureException e) {
+        log.warn("[DataAccess] 외부 데이터 저장소 연결 실패 (ES/DB): {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "검색 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
     }
 
     // ── 존재하지 않는 경로 요청 → 404 ──────────────────────────────────
