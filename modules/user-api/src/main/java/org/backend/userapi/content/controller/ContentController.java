@@ -6,7 +6,9 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
+import org.backend.userapi.content.dto.TrendingResponse;
 import org.backend.userapi.content.service.ContentService;
+import org.backend.userapi.content.service.TrendingContentService;
 import org.backend.userapi.user.service.BookmarkService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @RestController
@@ -24,6 +28,7 @@ public class ContentController {
 
     private final ContentService contentService;
     private final BookmarkService bookmarkService;
+    private final TrendingContentService trendingContentService;
 
     // 1. 시청 중인 콘텐츠
     @GetMapping("/home/watching-list")
@@ -67,4 +72,19 @@ public class ContentController {
     public ResponseEntity<EpisodesResponse> getContentEpisodeList(@PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentEpisodes(contentId));
     }
+
+    @GetMapping("/home/trending")
+    public ApiResponse<List<TrendingResponse>> getTrendingContents(
+        @RequestParam(defaultValue = "10") int limit
+    ) {
+        return new ApiResponse<>(200, "인기 차트 조회 성공", trendingContentService.getTrendingList(limit));
+    }
+
+    @GetMapping("/test/trending/run")
+    public String triggerTrending() {
+        // 현재 시각 기준으로 트렌딩 강제 계산
+        trendingContentService.calculateTrendingScores(LocalDateTime.now().truncatedTo(ChronoUnit.HOURS));
+        return "트렌딩 차트 갱신 완료";
+    }
+
 }
