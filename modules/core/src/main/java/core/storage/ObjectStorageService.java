@@ -24,9 +24,18 @@ public interface ObjectStorageService {
      */
     String buildObjectKey(String prefix, Long contentId, String originalFilename);
 
+    ObjectStat statObject(String objectKey);
+
     record PresignedUrlResult(
             String objectKey,
             URL url,
             Instant expiresAt
+    ) {}
+
+    record ObjectStat(
+            String objectKey,
+            long size,
+            String etag,
+            String contentType
     ) {}
 }

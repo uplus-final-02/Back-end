@@ -44,6 +44,11 @@ public class VideoFile {
         this.transcodeStatus = (transcodeStatus != null) ? transcodeStatus : TranscodeStatus.WAITING;
     }
 
+    // objectKey 저장(컬럼명은 original_url이지만 key로 운용)
+    public void updateOriginalKey(String objectKey) {
+        this.originalUrl = objectKey;
+    }
+
     // 트랜스코딩 상태 업데이트 등 필요한 비즈니스 메서드 추가 가능
     public void updateTranscodeStatus(TranscodeStatus status) {
         this.transcodeStatus = status;

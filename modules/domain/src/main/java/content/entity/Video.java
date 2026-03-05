@@ -3,10 +3,7 @@ package content.entity;
 import common.entity.BaseTimeEntity;
 import common.enums.VideoStatus;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Getter
@@ -32,6 +29,7 @@ public class Video extends BaseTimeEntity {
     @Column(name = "video_id")
     private Long id;
 
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "content_id", nullable = false)
     private Content content;
@@ -62,7 +60,7 @@ public class Video extends BaseTimeEntity {
 
     // Builder 패턴 적용 (생성자)
     @Builder
-    public Video(Long contentId, Integer episodeNo, String title, String description, String thumbnailUrl, VideoStatus status) {
+    public Video(Content content, Integer episodeNo, String title, String description, String thumbnailUrl, VideoStatus status) {
         this.content = content;
         this.episodeNo = episodeNo;
         this.title = title;
@@ -74,5 +72,14 @@ public class Video extends BaseTimeEntity {
     // 비즈니스 로직: 조회수 증가
     public void incrementViewCount() {
         this.viewCount++;
+    }
+
+    public void updateInfo(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
+
+    public void updateStatus(VideoStatus status) {
+        this.status = status;
     }
 }

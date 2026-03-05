@@ -3,13 +3,19 @@ package org.backend.userapi.auth.oauth;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.userapi.common.exception.OAuthLoginException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -38,7 +44,6 @@ public class NaverOAuthService {
     }
 
     private String exchangeCodeForToken(String code, String state, String redirectUri) {
-        // 네이버는 GET 방식으로 토큰 요청
         String url = UriComponentsBuilder.fromUriString(TOKEN_URL)
                 .queryParam("grant_type",    "authorization_code")
                 .queryParam("client_id",     clientId)
@@ -48,10 +53,13 @@ public class NaverOAuthService {
                 .queryParam("state",         state)
                 .toUriString();
 
-        NaverTokenResponse response = restTemplate.getForObject(url, NaverTokenResponse.class);
+        NaverTokenResponse response = callWithRetry(
+            () -> restTemplate.getForObject(url, NaverTokenResponse.class),
+            "Naver"
+        );
 
         if (response == null || response.accessToken() == null) {
-            throw new IllegalStateException("Naver 액세스 토큰 발급에 실패했습니다.");
+            throw new OAuthLoginException("Naver 액세스 토큰 발급에 실패했습니다. 다시 시도해주세요.");
         }
         return response.accessToken();
     }
@@ -59,20 +67,47 @@ public class NaverOAuthService {
     private OAuthUserInfo fetchUserInfo(String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessToken);
+        HttpEntity<Void> request = new HttpEntity<>(headers);
 
-        NaverUserInfoWrapper wrapper = restTemplate.exchange(
-                USER_INFO_URL,
-                HttpMethod.GET,
-                new HttpEntity<>(headers),
-                NaverUserInfoWrapper.class
-        ).getBody();
+        NaverUserInfoWrapper wrapper = callWithRetry(
+            () -> restTemplate.exchange(USER_INFO_URL, HttpMethod.GET, request, NaverUserInfoWrapper.class).getBody(),
+            "Naver"
+        );
 
         if (wrapper == null || wrapper.response() == null) {
-            throw new IllegalStateException("Naver 유저 정보 조회에 실패했습니다.");
+            throw new OAuthLoginException("Naver 유저 정보 조회에 실패했습니다. 다시 시도해주세요.");
         }
 
         NaverUserInfoWrapper.NaverResponse info = wrapper.response();
         return new OAuthUserInfo(info.id(), info.email(), info.name());
+    }
+
+    // ── 재시도 헬퍼 ──
+
+    private <T> T callWithRetry(Supplier<T> apiCall, String providerName) {
+        try {
+            return apiCall.get();
+        } catch (ResourceAccessException e) {
+            log.warn("[{}] 외부 API 응답 없음 - 1회 재시도: {}", providerName, e.getMessage());
+            try {
+                Thread.sleep(500);
+                return apiCall.get();
+            } catch (ResourceAccessException retryEx) {
+                throw new OAuthLoginException(
+                    providerName + " 서버가 응답하지 않습니다. 잠시 후 다시 시도해주세요.", retryEx);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new OAuthLoginException(providerName + " 로그인 처리 중 오류가 발생했습니다.");
+            }
+        } catch (HttpClientErrorException e) {
+            log.warn("[{}] 4xx 응답 - 인가코드 만료 또는 잘못된 요청: {}", providerName, e.getStatusCode());
+            throw new OAuthLoginException(
+                providerName + " 인증 코드가 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.");
+        } catch (HttpServerErrorException e) {
+            log.warn("[{}] 5xx 응답 - 제공자 서버 오류: {}", providerName, e.getStatusCode());
+            throw new OAuthLoginException(
+                providerName + " 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요.");
+        }
     }
 
     // ── Internal response records ──

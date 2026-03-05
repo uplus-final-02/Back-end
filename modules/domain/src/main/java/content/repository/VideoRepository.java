@@ -36,4 +36,6 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
   @Modifying(clearAutomatically = true)
   @Query("UPDATE Video v SET v.viewCount = v.viewCount + :delta WHERE v.id = :id")
   void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+
+  Optional<Video> findTopByContent_IdOrderByEpisodeNoDesc(Long contentId);
 }

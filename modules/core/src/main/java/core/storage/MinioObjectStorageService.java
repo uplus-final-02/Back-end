@@ -3,6 +3,7 @@ package core.storage;
 import core.storage.config.StorageProperties;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import java.net.URL;
 import java.time.Duration;
@@ -12,6 +13,8 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 
 @Service
 public class MinioObjectStorageService implements ObjectStorageService {
@@ -84,6 +87,33 @@ public class MinioObjectStorageService implements ObjectStorageService {
         String ext = extractExtension(originalFilename);
         String uuid = UUID.randomUUID().toString();
         return safePrefix + "/" + contentId + "/" + uuid + ext;
+    }
+
+    @Override
+    public ObjectStat statObject(String objectKey) {
+        try {
+            StatObjectResponse res = internalMinioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(props.bucket())
+                            .object(objectKey)
+                            .build()
+            );
+
+            return new ObjectStat(
+                    objectKey,
+                    res.size(),
+                    res.etag(),
+                    res.contentType()
+            );
+        } catch (ErrorResponseException e) {
+            String code = (e.errorResponse() != null) ? e.errorResponse().code() : null;
+            if ("NoSuchKey".equalsIgnoreCase(code) || "NoSuchObject".equalsIgnoreCase(code)) {
+                throw new ObjectNotFoundException("UPLOAD_NOT_COMPLETED: MinIO에 업로드된 파일이 없습니다. PUT 업로드부터 완료하세요.", e);
+            }
+            throw new StorageException("Object stat 실패(파일 존재/크기 확인): " + objectKey, e);
+        } catch (Exception e) {
+            throw new StorageException("Object stat 실패(파일 존재/크기 확인): " + objectKey, e);
+        }
     }
 
     private int toSeconds(Duration expiry) {
