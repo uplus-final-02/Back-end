@@ -61,38 +61,62 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
 
-    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (인기순) ──────────────
+    // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ────
     @Query("SELECT DISTINCT c FROM Content c " +
            "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
+           "AND (:genre IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+           "AND (:tag IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
            "ORDER BY c.totalViewCount DESC, c.createdAt DESC")
     List<Content> findActiveByTitleLikePopular(
             @Param("keyword") String keyword,
             @Param("category") ContentType category,
+            @Param("genre") String genre,
+            @Param("tag") String tag,
             Pageable pageable);
 
-    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (최신순) ──────────────
+    // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (최신순) ────
     @Query("SELECT DISTINCT c FROM Content c " +
            "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
+           "AND (:genre IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+           "AND (:tag IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
            "ORDER BY c.createdAt DESC, c.id DESC")
     List<Content> findActiveByTitleLikeLatest(
             @Param("keyword") String keyword,
             @Param("category") ContentType category,
+            @Param("genre") String genre,
+            @Param("tag") String tag,
             Pageable pageable);
 
-    // ── ES 검색 Fallback: total count (페이지네이션 정확도용) ──────────────
+    // ── ES 검색 Fallback: total count (genre/tag 필터 포함) ───────────────
     @Query("SELECT COUNT(DISTINCT c) FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "AND (:category IS NULL OR c.type = :category)")
+           "AND (:category IS NULL OR c.type = :category) " +
+           "AND (:genre IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+           "AND (:tag IS NULL OR EXISTS (" +
+           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true))")
     long countActiveByTitleLike(
             @Param("keyword") String keyword,
-            @Param("category") ContentType category);
+            @Param("category") ContentType category,
+            @Param("genre") String genre,
+            @Param("tag") String tag);
 
     // ── 추천 Fallback: 인기순 (조회수 + 북마크 기준) ──────────────────────
     @Query("SELECT DISTINCT c FROM Content c " +

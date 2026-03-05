@@ -5,6 +5,7 @@ import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,8 +39,25 @@ public class ContentRealtimeSyncScheduler {
             return;
         }
 
+        int successCount = 0;
+        int failCount = 0;
+
         for (Content content : updatedContents) {
-            contentIndexingService.indexContent(content.getId());
+            try {
+                contentIndexingService.indexContent(content.getId());
+                successCount++;
+            } catch (DataAccessException e) {
+                // ES 다운 시: 해당 콘텐츠만 건너뛰고 다음 항목 계속 처리
+                // 예외를 전파하지 않아 매 실행마다 에러 로그 폭발 방지
+                failCount++;
+                log.warn("[ES Sync] 콘텐츠 인덱싱 실패 - ES 연결 문제로 건너뜀 (contentId={}): {}",
+                        content.getId(), e.getMessage());
+            } catch (Exception e) {
+                // 그 외 예상치 못한 예외도 catch하여 스케줄러 지속 실행 보장
+                failCount++;
+                log.warn("[ES Sync] 콘텐츠 인덱싱 실패 - 알 수 없는 오류 (contentId={}): {}",
+                        content.getId(), e.getMessage());
+            }
         }
 
         lastSyncedAt = updatedContents.stream()
@@ -48,6 +66,12 @@ public class ContentRealtimeSyncScheduler {
                 .max(LocalDateTime::compareTo)
                 .orElse(LocalDateTime.now());
 
-        log.debug("Realtime content sync completed. syncedCount={}, lastSyncedAt={}", updatedContents.size(), lastSyncedAt);
+        if (failCount > 0) {
+            log.warn("[ES Sync] 실시간 동기화 부분 실패. success={}, fail={}, lastSyncedAt={}",
+                    successCount, failCount, lastSyncedAt);
+        } else {
+            log.debug("[ES Sync] 실시간 동기화 완료. syncedCount={}, lastSyncedAt={}",
+                    successCount, lastSyncedAt);
+        }
     }
 }
