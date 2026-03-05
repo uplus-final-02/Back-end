@@ -1,6 +1,5 @@
 package content.repository;
 
-import common.entity.Tag;
 import content.entity.ContentTag;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

@@ -1,13 +1,17 @@
 package org.backend.admin.content.controller;
 
-import org.backend.admin.auth.service.AdminAuthService;
 import org.backend.admin.common.dto.AdminApiResponse;
 import org.backend.admin.content.dto.AdminContentListResponse;
+import org.backend.admin.content.dto.AdminContentUpdateRequest;
+import org.backend.admin.content.dto.AdminContentUpdateResponse;
 import org.backend.admin.content.service.AdminContentService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,4 +35,13 @@ public class AdminContentController {
         Page<AdminContentListResponse> result = adminContentService.getContents(pageable);
         return AdminApiResponse.ok("조회 성공", result);
     }
+    
+    @PutMapping("/{contentId}/metadata")
+    public AdminContentUpdateResponse updateContentMetadata(
+            @PathVariable Long contentId,
+            @RequestBody AdminContentUpdateRequest request
+    ) {
+        return adminContentService.updateMetadata(contentId, request);
+    }
+    
 }

@@ -22,4 +22,8 @@ public record AdminApiResponse<T>(
     public static <T> AdminApiResponse<T> fail(String code, String message, T data) {
         return new AdminApiResponse<>(false, code, message, data);
     }
+    
+    public static <T> AdminApiResponse<T> created(String message, T data) {
+        return new AdminApiResponse<>(true, "CREATED", message, data);
+    }
 }
