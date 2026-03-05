@@ -6,9 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.common.exception.OAuthLoginException;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
+import org.backend.userapi.payment.exception.PaymentIdempotencyException;
+import org.backend.userapi.payment.exception.PaymentInProgressException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.backend.userapi.common.exception.OAuthLoginException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -163,6 +164,25 @@ public class GlobalExceptionHandler {
             .body(new ApiResponse<>(404, e.getMessage(), null));
     }
     
+    // ── 결제 멱등성 키 누락 (클라이언트 버그) → 400 ──────────────────
+    @ExceptionHandler(PaymentIdempotencyException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePaymentIdempotency(PaymentIdempotencyException e) {
+        log.warn("[Payment] Idempotency-Key 누락: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage(), null));
+    }
+
+    // ── 동일 키로 결제 처리 중 (클라이언트 재시도 대상) → 409 ──────────
+    // 400과 구분: 클라이언트는 키를 바꾸는 게 아니라 잠시 후 재시도해야 함
+    @ExceptionHandler(PaymentInProgressException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePaymentInProgress(PaymentInProgressException e) {
+        log.warn("[Payment] 중복 요청 처리 중: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
         return ResponseEntity
