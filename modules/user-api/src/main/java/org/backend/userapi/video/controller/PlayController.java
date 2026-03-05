@@ -24,17 +24,17 @@ public class PlayController {
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         VideoPlayDto response = videoService.getPlayInfo(videoId, jwtPrincipal);
-        return new ApiResponse<>(200, "재생 정보 조회 성공", response);
+        return new ApiResponse<>(200, response.getStatusDescription(), response);
     }
 
     @PostMapping("/{videoId}/views")
     public ApiResponse<Void> increaseViewCount(
-        @PathVariable Long videoId,
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+            @PathVariable Long videoId,
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         VideoSimpleMetaData metaData = videoService.getContentIdByVideoId(videoId);
         viewCountService.incrementViewCount(
-            metaData.getContentId(), videoId, jwtPrincipal.getUserId(), metaData.getDurationSec()
+                metaData.getContentId(), videoId, jwtPrincipal.getUserId(), metaData.getDurationSec()
         );
         return new ApiResponse<>(200, "조회수 증가 처리 접수", null);
     }
