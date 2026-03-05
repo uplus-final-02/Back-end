@@ -153,6 +153,22 @@ services:
     ports:
       - "${ADMIN_API_PORT}:8080"
 
+  transcoder-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.transcoder-worker
+    container_name: transcoder-worker
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   es_data:

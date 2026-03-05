@@ -8,12 +8,21 @@ dependencies {
     implementation project(':modules:core')
     implementation project(':modules:domain')
 
-    implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-json")
+    implementation("org.springframework.kafka:spring-kafka")
+    implementation "org.springframework.boot:spring-boot-starter-kafka"
 
-    runtimeOnly 'com.mysql:mysql-connector-j'
+    runtimeOnly("com.mysql:mysql-connector-j")
 
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
+    compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
