@@ -1,6 +1,7 @@
 package content.repository;
 
 import common.enums.ContentStatus;
+import common.enums.ContentType;
 import content.entity.Content;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -59,4 +60,48 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+
+    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (인기순) ──────────────
+    @Query("SELECT DISTINCT c FROM Content c " +
+           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+           "WHERE c.status = 'ACTIVE' " +
+           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "AND (:category IS NULL OR c.type = :category) " +
+           "ORDER BY c.totalViewCount DESC, c.createdAt DESC")
+    List<Content> findActiveByTitleLikePopular(
+            @Param("keyword") String keyword,
+            @Param("category") ContentType category,
+            Pageable pageable);
+
+    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (최신순) ──────────────
+    @Query("SELECT DISTINCT c FROM Content c " +
+           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+           "WHERE c.status = 'ACTIVE' " +
+           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "AND (:category IS NULL OR c.type = :category) " +
+           "ORDER BY c.createdAt DESC, c.id DESC")
+    List<Content> findActiveByTitleLikeLatest(
+            @Param("keyword") String keyword,
+            @Param("category") ContentType category,
+            Pageable pageable);
+
+    // ── ES 검색 Fallback: total count (페이지네이션 정확도용) ──────────────
+    @Query("SELECT COUNT(DISTINCT c) FROM Content c " +
+           "WHERE c.status = 'ACTIVE' " +
+           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "AND (:category IS NULL OR c.type = :category)")
+    long countActiveByTitleLike(
+            @Param("keyword") String keyword,
+            @Param("category") ContentType category);
+
+    // ── 추천 Fallback: 인기순 (조회수 + 북마크 기준) ──────────────────────
+    @Query("SELECT DISTINCT c FROM Content c " +
+           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+           "WHERE c.status = 'ACTIVE' " +
+           "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
+    List<Content> findTopActiveByPopularity(Pageable pageable);
+
+    // ── ES 검색 Fallback (keyword 없음): total count용 ────────────────────
+    @Query("SELECT COUNT(c) FROM Content c WHERE c.status = 'ACTIVE'")
+    long countAllActive();
 }

@@ -1,12 +1,16 @@
 package org.backend.userapi.recommendation.service;
 
 import common.enums.HistoryStatus;
+import content.entity.Content;
+import content.repository.ContentRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.recommendation.dto.RecommendationResponse;
 import org.backend.userapi.recommendation.dto.RecommendedContentResponse;
 import org.backend.userapi.search.document.ContentDocument;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
@@ -63,6 +67,7 @@ public class RecommendationService {
     private final WatchHistoryRepository watchHistoryRepository;
     private final TagVectorService tagVectorService;
     private final ElasticsearchOperations elasticsearchOperations;
+    private final ContentRepository contentRepository;
 
     // ── Stage 1 후보 크기 ─────────────────────────────────────────
     /** 후보 최소값: 랭킹 품질 보장을 위한 하한선 */
@@ -138,59 +143,64 @@ public class RecommendationService {
      */
     @Transactional(readOnly = true)
     public RecommendationResponse recommend(Long userId, boolean extended) {
+        try {
+            // 1. 유저 선호 태그 조회
+            List<Long> preferredTagIds = userPreferredTagRepository
+                    .findAllByUserIdWithTag(userId)
+                    .stream()
+                    .map(upt -> upt.getTag().getId())
+                    .toList();
 
-        // 1. 유저 선호 태그 조회
-        List<Long> preferredTagIds = userPreferredTagRepository
-                .findAllByUserIdWithTag(userId)
-                .stream()
-                .map(upt -> upt.getTag().getId())
-                .toList();
+            if (preferredTagIds.isEmpty()) {
+                log.info("[추천] userId={} 선호 태그 없음 → 빈 결과 반환", userId);
+                return new RecommendationResponse(List.of(), false);
+            }
 
-        if (preferredTagIds.isEmpty()) {
-            log.info("[추천] userId={} 선호 태그 없음 → 빈 결과 반환", userId);
-            return new RecommendationResponse(List.of(), false);
-        }
+            // 2. 100차원 유저 쿼리 벡터 (선호 태그 = 1.0f, 나머지 = 0.0f)
+            float[] queryVector = tagVectorService.buildUserVector(preferredTagIds);
 
-        // 2. 100차원 유저 쿼리 벡터 (선호 태그 = 1.0f, 나머지 = 0.0f)
-        float[] queryVector = tagVectorService.buildUserVector(preferredTagIds);
+            // 2-1. 0-벡터 방어: 선호 태그가 TagVectorService 인덱스에 하나도 매핑 안 된 경우
+            //      (태그가 비활성화되거나 아직 인덱스에 없을 때 발생)
+            //      kNN에 0-벡터를 보내면 코사인 유사도 계산 불가 → Fallback(인기+신선도) 사용
+            if (isZeroVector(queryVector)) {
+                log.info("[추천] userId={} 0-벡터 감지 (선호 태그가 벡터 인덱스 미매핑) → Fallback 모드", userId);
+                return fallbackRecommend(userId, extended);
+            }
 
-        // 2-1. 0-벡터 방어: 선호 태그가 TagVectorService 인덱스에 하나도 매핑 안 된 경우
-        //      (태그가 비활성화되거나 아직 인덱스에 없을 때 발생)
-        //      kNN에 0-벡터를 보내면 코사인 유사도 계산 불가 → Fallback(인기+신선도) 사용
-        if (isZeroVector(queryVector)) {
-            log.info("[추천] userId={} 0-벡터 감지 (선호 태그가 벡터 인덱스 미매핑) → Fallback 모드", userId);
-            return fallbackRecommend(userId, extended);
-        }
+            // 3. 동적 후보 크기 계산 (전체 콘텐츠의 1/3)
+            long totalActive  = countActiveContents();
+            int candidateSize = calcCandidateSize(totalActive);
+            log.info("[추천] userId={} 총 활성 콘텐츠={} → Stage1 후보 목표={}", userId, totalActive, candidateSize);
 
-        // 3. 동적 후보 크기 계산 (전체 콘텐츠의 1/3)
-        long totalActive  = countActiveContents();
-        int candidateSize = calcCandidateSize(totalActive);
-        log.info("[추천] userId={} 총 활성 콘텐츠={} → Stage1 후보 목표={}", userId, totalActive, candidateSize);
+            // 4. Stage 1: ES kNN — 코사인 유사도 기반 후보 추출
+            List<SearchHit<ContentDocument>> candidates = knnSearch(queryVector, candidateSize);
+            if (candidates.isEmpty()) {
+                log.info("[추천] userId={} kNN 결과 없음 → 빈 결과 반환", userId);
+                return new RecommendationResponse(List.of(), false);
+            }
 
-        // 4. Stage 1: ES kNN — 코사인 유사도 기반 후보 추출
-        List<SearchHit<ContentDocument>> candidates = knnSearch(queryVector, candidateSize);
-        if (candidates.isEmpty()) {
-            log.info("[추천] userId={} kNN 결과 없음 → 빈 결과 반환", userId);
-            return new RecommendationResponse(List.of(), false);
-        }
+            // 5. 시청 이력 조회 (contentId → 최고 HistoryStatus)
+            LocalDateTime since          = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Map<Long, HistoryStatus> watchStatusMap = buildWatchStatusMap(userId, since);
 
-        // 5. 시청 이력 조회 (contentId → 최고 HistoryStatus)
-        LocalDateTime since          = LocalDateTime.now().minusMonths(WATCH_MONTHS);
-        Map<Long, HistoryStatus> watchStatusMap = buildWatchStatusMap(userId, since);
+            // 6. Stage 2: 2-pass 내부 랭킹 → 상위 RESULT_SIZE(50)개
+            List<RecommendedContentResponse> ranked = rank(candidates, watchStatusMap);
 
-        // 6. Stage 2: 2-pass 내부 랭킹 → 상위 RESULT_SIZE(50)개
-        List<RecommendedContentResponse> ranked = rank(candidates, watchStatusMap);
+            // 7. 2-tier 응답 결정
+            if (extended) {
+                log.info("[추천] userId={} extended → {}개 반환", userId, ranked.size());
+                return new RecommendationResponse(ranked, false);
+            } else {
+                List<RecommendedContentResponse> initial =
+                        ranked.subList(0, Math.min(INITIAL_SIZE, ranked.size()));
+                boolean hasMore = ranked.size() > INITIAL_SIZE;
+                log.info("[추천] userId={} initial → {}개 반환, hasMore={}", userId, initial.size(), hasMore);
+                return new RecommendationResponse(initial, hasMore);
+            }
 
-        // 7. 2-tier 응답 결정
-        if (extended) {
-            log.info("[추천] userId={} extended → {}개 반환", userId, ranked.size());
-            return new RecommendationResponse(ranked, false);
-        } else {
-            List<RecommendedContentResponse> initial =
-                    ranked.subList(0, Math.min(INITIAL_SIZE, ranked.size()));
-            boolean hasMore = ranked.size() > INITIAL_SIZE;
-            log.info("[추천] userId={} initial → {}개 반환, hasMore={}", userId, initial.size(), hasMore);
-            return new RecommendationResponse(initial, hasMore);
+        } catch (DataAccessException e) {
+            log.warn("[ES DOWN] 추천 ES 연결 실패 → DB 인기순 Fallback: userId={}", userId);
+            return recommendFromDb(userId, extended);
         }
     }
 
@@ -529,6 +539,61 @@ public class RecommendationService {
             case WATCHING  -> 2;
             case STARTED   -> 1;
         };
+    }
+
+    // =========================================================
+    //  ES DOWN Fallback — DB 인기순 추천
+    // =========================================================
+
+    /**
+     * ES 다운 시 DB 인기순 Fallback 추천.
+     * kNN 없이 조회수+북마크 기준 상위 콘텐츠를 반환.
+     * 시청 완료 콘텐츠(COMPLETED)는 목록에서 제외.
+     */
+    private RecommendationResponse recommendFromDb(Long userId, boolean extended) {
+        try {
+            List<Content> contents = contentRepository.findTopActiveByPopularity(
+                    PageRequest.of(0, RESULT_SIZE)
+            );
+
+            // 시청 이력 조회 (DB 직접 — ES 무관)
+            LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Map<Long, HistoryStatus> watchStatusMap = buildWatchStatusMap(userId, since);
+
+            int limit = extended ? RESULT_SIZE : INITIAL_SIZE;
+            List<RecommendedContentResponse> items = contents.stream()
+                    .filter(c -> watchStatusMap.get(c.getId()) != HistoryStatus.COMPLETED)
+                    .limit(limit)
+                    .map(this::toResponseFromContent)
+                    .toList();
+
+            boolean hasMore = !extended && contents.size() > INITIAL_SIZE;
+            log.info("[추천-DB Fallback] userId={} → {}개 반환", userId, items.size());
+            return new RecommendationResponse(items, hasMore);
+
+        } catch (Exception dbEx) {
+            log.error("[추천 ES+DB DOWN] DB Fallback도 실패 → 빈 결과 반환: {}", dbEx.getMessage());
+            return new RecommendationResponse(List.of(), false);
+        }
+    }
+
+    /**
+     * Content 엔티티 → RecommendedContentResponse 직접 변환 (DB Fallback 전용).
+     */
+    private RecommendedContentResponse toResponseFromContent(Content content) {
+        List<String> tagNames = content.getContentTags().stream()
+                .map(ct -> ct.getTag().getName())
+                .toList();
+        return new RecommendedContentResponse(
+                content.getId(),
+                content.getTitle(),
+                content.getType().name(),
+                content.getThumbnailUrl(),
+                content.getAccessLevel().name(),
+                content.getTotalViewCount(),
+                content.getBookmarkCount(),
+                tagNames
+        );
     }
 
     /**
