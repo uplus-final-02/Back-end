@@ -38,4 +38,17 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
   void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
 
   Optional<Video> findTopByContent_IdOrderByEpisodeNoDesc(Long contentId);
+  
+  @Query("SELECT v.id AS videoId, v.episodeNo AS episodeNo, v.title AS title, v.description AS description " +
+          "FROM Video v " +
+          "WHERE v.content.id = :contentId " +
+          "ORDER BY v.episodeNo ASC")
+   List<AdminEpisodeRow> findAdminEpisodesByContentId(@Param("contentId") Long contentId);
+
+   interface AdminEpisodeRow {
+       Long getVideoId();
+       Integer getEpisodeNo();
+       String getTitle();
+       String getDescription();
+   }
 }

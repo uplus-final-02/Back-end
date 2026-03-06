@@ -3,6 +3,8 @@ package content.repository;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
 import content.entity.Content;
+
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
@@ -60,6 +62,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+    
+    Page<Content> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ────
     /**

@@ -86,4 +86,23 @@ public class Content extends BaseTimeEntity {
                 .map(ContentTag::getTag)
                 .collect(Collectors.toList());
     }
+    
+    public void updateMetadata(
+            String title,
+            String description,
+            String thumbnailUrl,
+            ContentAccessLevel accessLevel,
+            ContentStatus status
+    ) {
+        this.title = title;
+        this.description = description;
+        this.thumbnailUrl = thumbnailUrl;
+
+        if (accessLevel != null) {
+            this.accessLevel = accessLevel;
+        }
+        if (status != null) {
+            this.status = status;
+        }
+    }
 }
