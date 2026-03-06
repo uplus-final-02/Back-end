@@ -11,12 +11,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -40,9 +37,8 @@ public class Content extends BaseTimeEntity {
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "description", columnDefinition = "json")
-    private Map<String, Object> description;
+    private String description;
 
     @Column(name = "thumbnail_url", nullable = false, length = 500)
     private String thumbnailUrl;
@@ -70,7 +66,7 @@ public class Content extends BaseTimeEntity {
     private List<ContentTag> contentTags = new ArrayList<>();
 
     @Builder
-    public Content(ContentType type, String title, Map<String, Object> description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel) {
+    public Content(ContentType type, String title, String description, String thumbnailUrl, ContentStatus status, Long uploaderId, ContentAccessLevel accessLevel) {
         this.type = type;
         this.title = title;
         this.description = description;
@@ -93,7 +89,7 @@ public class Content extends BaseTimeEntity {
     
     public void updateMetadata(
             String title,
-            Map<String, Object> description,
+            String description,
             String thumbnailUrl,
             ContentAccessLevel accessLevel,
             ContentStatus status
