@@ -54,7 +54,6 @@ public class AdminVideoUploadService {
             throw new RuntimeException("VIDEO_NOT_DRAFT");
         }
 
-        video.updateInfo(req.title(), req.description());
         video.updateStatus(VideoStatus.PRIVATE);
 
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
