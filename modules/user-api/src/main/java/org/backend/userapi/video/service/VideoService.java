@@ -50,7 +50,7 @@ public class VideoService {
         String title = null;
         String description = null;
         String thumbnailUrl = null;
-        String thumbnailPrefix = "https://image.tmdb.org/t/p/w1280";
+//        String thumbnailPrefix = "https://image.tmdb.org/t/p/w1280";
         if (content.getType() == ContentType.SINGLE) {
             title = content.getTitle();
             String rawJson = content.getDescription();
@@ -125,7 +125,8 @@ public class VideoService {
                 .videoId(video.getId())
                 .title(title)
                 .description(description)
-                .thumbnailUrl(thumbnailPrefix + thumbnailUrl)
+//                .thumbnailUrl(thumbnailPrefix + thumbnailUrl)
+                .thumbnailUrl(thumbnailUrl)
                 .viewCount(video.getViewCount())
                 .durationSec(durationSec)
                 .createdAt(video.getCreatedAt())
