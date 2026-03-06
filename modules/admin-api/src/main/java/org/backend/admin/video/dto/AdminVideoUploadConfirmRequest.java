@@ -4,7 +4,5 @@ public record AdminVideoUploadConfirmRequest(
         Long contentId,
         Long videoId,
         String objectKey
-//        String title,
-//        String description
 ) {
 }

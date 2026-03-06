@@ -60,7 +60,6 @@ public class AdminSeriesEpisodeUploadService {
             throw new UploadNotCompletedException();
         }
 
-        //video.updateInfo(req.episodeTitle(), req.episodeDescription());
         video.updateStatus(VideoStatus.PRIVATE);
 
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
