@@ -6,12 +6,13 @@ import common.enums.ContentType;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public record AdminContentDetailResponse(
         Long contentId,
         ContentType type,
         String title,
-        String description,
+        Map<String, Object> description,
         String thumbnailUrl,
         ContentStatus status,
         ContentAccessLevel accessLevel,
