@@ -53,4 +53,14 @@ public class VideoFile {
     public void updateTranscodeStatus(TranscodeStatus status) {
         this.transcodeStatus = status;
     }
+
+    // HLS objectKey 저장(컬럼명은 hls_url)
+    public void updateHlsKey(String hlsObjectKey) {
+        this.hlsUrl = hlsObjectKey;
+    }
+
+    // duration 저장
+    public void updateDurationSec(int durationSec) {
+        this.durationSec = durationSec;
+    }
 }

@@ -9,6 +9,8 @@ import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
+import core.events.video.VideoTranscodeEventPublisher;
+import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
@@ -29,6 +31,7 @@ public class AdminSeriesEpisodeUploadService {
     private final VideoRepository videoRepository;
     private final VideoFileRepository videoFileRepository;
     private final ObjectStorageService objectStorageService;
+    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
 
     @Transactional
     public AdminSeriesEpisodeConfirmResponse confirmUpload(Long seriesId, AdminSeriesEpisodeConfirmRequest req) {
@@ -65,6 +68,15 @@ public class AdminSeriesEpisodeUploadService {
 
         vf.updateOriginalKey(req.objectKey());
         vf.updateTranscodeStatus(TranscodeStatus.WAITING);
+
+        videoTranscodeEventPublisher.publish(
+                VideoTranscodeRequestedEvent.of(
+                        series.getId(),
+                        video.getId(),
+                        vf.getId(),
+                        vf.getOriginalUrl()
+                )
+        );
 
         return new AdminSeriesEpisodeConfirmResponse(
                 series.getId(),

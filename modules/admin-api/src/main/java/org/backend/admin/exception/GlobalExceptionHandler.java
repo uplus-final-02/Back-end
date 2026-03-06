@@ -1,6 +1,7 @@
 package org.backend.admin.exception;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -45,5 +46,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ec.status())
                 .body(new ErrorResponse(ec.status().value(), ec.message(), null));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleNotReadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(400, "요청 바디가 비어있습니다. (JSON body required)", null));
     }
 }
