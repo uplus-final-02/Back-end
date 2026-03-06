@@ -91,7 +91,6 @@ public class AdminSeriesEpisodeUploadService {
         if (seriesId == null) throw new IllegalArgumentException("seriesId는 필수입니다.");
         if (req == null || req.videoId() == null) throw new IllegalArgumentException("videoId는 필수입니다.");
         if (!StringUtils.hasText(req.objectKey())) throw new IllegalArgumentException("objectKey는 필수입니다.");
-        //if (!StringUtils.hasText(req.episodeTitle())) throw new IllegalArgumentException("episodeTitle은 필수입니다.");
     }
 
     private ObjectStorageService.ObjectStat safeStat(String objectKey) {
