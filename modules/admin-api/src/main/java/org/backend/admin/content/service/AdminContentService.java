@@ -3,6 +3,7 @@ package org.backend.admin.content.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.backend.admin.content.dto.AdminContentDeleteResponse;
 import org.backend.admin.content.dto.AdminContentDetailResponse;
 import org.backend.admin.content.dto.AdminContentListResponse;
 import org.backend.admin.content.dto.AdminContentUpdateRequest;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import common.entity.Tag;
+import common.enums.ContentStatus;
 import common.enums.ContentType;
 import common.repository.TagRepository;
 import content.entity.Content;
@@ -166,6 +168,23 @@ public class AdminContentService {
                 tags,
                 episodes
         );
+    }
+    
+    // 콘텐츠 삭제
+    @Transactional
+    public AdminContentDeleteResponse deleteContent(Long contentId) {
+    	Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId));
+
+    	if (content.getStatus() == ContentStatus.DELETED) {
+    	    return AdminContentDeleteResponse.from(content);
+    	}
+    	content.delete();
+    	
+    	return AdminContentDeleteResponse.from(content);
+    	
+    	
+    	
     }
     	
 
