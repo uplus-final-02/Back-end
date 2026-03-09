@@ -32,8 +32,8 @@ jobs:
             --instance-ids "${{ secrets.DATA_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "commands=[
-              'mkdir -p ~/utopia-data',
-              'cd ~/utopia-data',
+              'mkdir -p /home/ubuntu/utopia-data',
+              'cd /home/ubuntu/utopia-data/utopia-data',
           
               'echo $ENCODED_BUNDLE | base64 -d > project.tar.gz',
               'tar -xzf project.tar.gz',
