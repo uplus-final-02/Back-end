@@ -38,9 +38,21 @@ public class AdminContentService {
     
     // 콘텐츠 목록 조회
 	@Transactional(readOnly = true)
-    public Page<AdminContentListResponse> getContents(Pageable pageable) {
-        Page<Content> page = contentRepository
-                .findAllByOrderByCreatedAtDesc(pageable);
+    public Page<AdminContentListResponse> getContents(Pageable pageable,String sort, ContentStatus status) {
+		
+		Sort sortOption = "OLDEST".equalsIgnoreCase(sort)
+	            ? Sort.by(Sort.Direction.ASC, "createdAt")
+	            : Sort.by(Sort.Direction.DESC, "createdAt");
+
+	    Pageable sortedPageable = PageRequest.of(
+	            pageable.getPageNumber(),
+	            pageable.getPageSize(),
+	            sortOption
+	    );
+	    
+		Page<Content> page = (status == null)
+	            ? contentRepository.findAll(sortedPageable)
+	            : contentRepository.findByStatus(status, sortedPageable);
 
         List<AdminContentListResponse> content = page.getContent().stream()
                 .map(c -> new AdminContentListResponse(

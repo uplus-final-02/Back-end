@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import common.enums.ContentStatus;
 import lombok.RequiredArgsConstructor;
 
 
@@ -32,10 +33,13 @@ public class AdminContentController {
     @GetMapping("/list")
     public AdminApiResponse<Page<AdminContentListResponse>> getContents(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "LATEST") String sort,
+            @RequestParam(required = false) ContentStatus status
     ) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<AdminContentListResponse> result = adminContentService.getContents(pageable);
+        Page<AdminContentListResponse> result =
+                adminContentService.getContents(pageable, sort, status);
         return AdminApiResponse.ok("조회 성공", result);
     }
     
