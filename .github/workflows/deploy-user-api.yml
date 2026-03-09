@@ -45,7 +45,7 @@ jobs:
 
       - name: S3에 파일 업로드
         run: |
-          aws s3 cp modules/user-api/build/libs/*-SNAPSHOT.jar s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/user-api.jar
+          aws s3 cp modules/user-api/build/libs/*.jar s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/user-api.jar
           aws s3 cp docker-compose.user-api.yml s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/
           aws s3 cp docker/Dockerfile.dev.user-api s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker/Dockerfile.dev.user-api
 
