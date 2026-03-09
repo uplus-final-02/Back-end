@@ -9,6 +9,8 @@ import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
+import core.events.video.VideoTranscodeEventPublisher;
+import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
@@ -29,6 +31,7 @@ public class AdminSeriesEpisodeUploadService {
     private final VideoRepository videoRepository;
     private final VideoFileRepository videoFileRepository;
     private final ObjectStorageService objectStorageService;
+    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
 
     @Transactional
     public AdminSeriesEpisodeConfirmResponse confirmUpload(Long seriesId, AdminSeriesEpisodeConfirmRequest req) {
@@ -57,7 +60,6 @@ public class AdminSeriesEpisodeUploadService {
             throw new UploadNotCompletedException();
         }
 
-        video.updateInfo(req.episodeTitle(), req.episodeDescription());
         video.updateStatus(VideoStatus.PRIVATE);
 
         VideoFile vf = videoFileRepository.findByVideoId(video.getId())
@@ -65,6 +67,15 @@ public class AdminSeriesEpisodeUploadService {
 
         vf.updateOriginalKey(req.objectKey());
         vf.updateTranscodeStatus(TranscodeStatus.WAITING);
+
+        videoTranscodeEventPublisher.publish(
+                VideoTranscodeRequestedEvent.of(
+                        series.getId(),
+                        video.getId(),
+                        vf.getId(),
+                        vf.getOriginalUrl()
+                )
+        );
 
         return new AdminSeriesEpisodeConfirmResponse(
                 series.getId(),
@@ -80,7 +91,6 @@ public class AdminSeriesEpisodeUploadService {
         if (seriesId == null) throw new IllegalArgumentException("seriesId는 필수입니다.");
         if (req == null || req.videoId() == null) throw new IllegalArgumentException("videoId는 필수입니다.");
         if (!StringUtils.hasText(req.objectKey())) throw new IllegalArgumentException("objectKey는 필수입니다.");
-        if (!StringUtils.hasText(req.episodeTitle())) throw new IllegalArgumentException("episodeTitle은 필수입니다.");
     }
 
     private ObjectStorageService.ObjectStat safeStat(String objectKey) {

@@ -18,8 +18,10 @@ include 'modules:core'
 include 'modules:domain'
 include 'modules:user-api'
 include 'modules:admin-api'
+include 'modules:transcoder-worker'
 
 project(':modules:core').projectDir = file('modules/core')
 project(':modules:domain').projectDir = file('modules/domain')
 project(':modules:user-api').projectDir = file('modules/user-api')
 project(':modules:admin-api').projectDir = file('modules/admin-api')
+project(':modules:transcoder-worker').projectDir = file('modules/transcoder-worker')

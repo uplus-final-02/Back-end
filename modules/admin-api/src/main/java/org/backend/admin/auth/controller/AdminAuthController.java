@@ -1,4 +1,4 @@
-package org.backend.admin.controller;
+package org.backend.admin.auth.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

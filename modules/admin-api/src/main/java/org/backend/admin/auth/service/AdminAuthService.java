@@ -8,11 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import user.entity.AuthAccount;
 import user.entity.User;
 import user.repository.AuthAccountRepository;
-import user.repository.UserRepository;
 
 import org.backend.admin.auth.dto.AdminLoginRequest;
 import org.backend.admin.auth.dto.AdminLoginResponse;
-import org.backend.admin.controller.AdminAuthController;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +24,6 @@ import common.enums.UserRole;
 public class AdminAuthService {
 	
 	private final AuthAccountRepository authAccountRepository;
-	private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -65,7 +62,4 @@ public class AdminAuthService {
         return new AdminLoginResponse(accessToken);
     }
     
-    private boolean isAdmin(User user) {
-        return "ADMIN".equals(String.valueOf(user.getUserRole()));
-    }
 }
