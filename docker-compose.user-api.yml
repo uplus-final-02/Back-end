@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  user-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev.user-api
+    container_name: user-api
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+      - TZ=Asia/Seoul
+
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${DATA_NODE_IP}:3306/${MYSQL_DATABASE}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
+      - SPRING_DATA_REDIS_HOST=${DATA_NODE_IP}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=${DATA_NODE_IP}:9094
+      - SPRING_ELASTICSEARCH_URIS=http://${DATA_NODE_IP}:9200
+    ports:
+      - "${USER_API_PORT}:8080"
+    restart: always
