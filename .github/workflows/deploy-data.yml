@@ -33,7 +33,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters "commands=[
               'mkdir -p /home/ubuntu/utopia-data',
-              'cd /home/ubuntu/utopia-data/utopia-data',
+              'cd /home/ubuntu/utopia-data',
           
               'echo $ENCODED_BUNDLE | base64 -d > project.tar.gz',
               'tar -xzf project.tar.gz',
