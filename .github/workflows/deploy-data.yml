@@ -24,7 +24,7 @@ jobs:
 
       - name: Tar & Deploy via SSM
         run: |
-          tar -czf project.tar.gz docker-compose.data.yml docker/
+          tar -czf project.tar.gz docker-compose.data.yml docker/elasticsearch/Dockerfile
           
           ENCODED_BUNDLE=$(base64 -w 0 project.tar.gz)
 
