@@ -1,0 +1,53 @@
+name: Deploy Data Node (SSM)
+
+on:
+  push:
+    branches: [ develop, deploy/#168-v2 ]
+    paths:
+      - 'docker-compose.data.yml'
+      - 'docker/elasticsearch/Dockerfile'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Tar & Deploy via SSM
+        run: |
+          # 1. 컴포즈 파일과 도커파일이 들어있는 docker/ 폴더 전체를 압축
+          tar -czf project.tar.gz docker-compose.data.yml docker/
+          
+          # 2. 텍스트(Base64)로 변환 (SSM 명령어로 쏘기 위함)
+          ENCODED_BUNDLE=$(base64 -w 0 project.tar.gz)
+
+          # 3. EC2 내부에서 압축 풀고 실행
+          aws ssm send-command \
+            --instance-ids "${{ secrets.DATA_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              'mkdir -p ~/utopia-data',
+              'cd ~/utopia-data',
+          
+              # 파일 복구 및 압축 해제
+              'echo $ENCODED_BUNDLE | base64 -d > project.tar.gz',
+              'tar -xzf project.tar.gz',
+          
+              # 환경 변수(.env) 파일 생성 (GitHub Secrets에서 주입)
+              'echo \"${{ secrets.ENV_FILE }}\" > .env',
+          
+              # 새로운 data 전용 yml 파일로 컨테이너 실행
+              'sudo docker compose -f docker-compose.data.yml up -d --build',
+              'sudo docker image prune -f',
+          
+              # 찌꺼기 파일 정리
+              'rm project.tar.gz'
+            ]"
