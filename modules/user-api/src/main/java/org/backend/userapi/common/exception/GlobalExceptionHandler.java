@@ -4,6 +4,8 @@ import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.common.exception.LoginInProgressException;
+import org.backend.userapi.common.exception.LoginLockedException;
 import org.backend.userapi.common.exception.OAuthLoginException;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
 import org.backend.userapi.payment.exception.PaymentIdempotencyException;
@@ -22,6 +24,24 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // ── 로그인 5회 연속 실패 → 계정 잠금 → 429 ───────────────────────
+    @ExceptionHandler(LoginLockedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLoginLocked(LoginLockedException e) {
+        log.warn("[Login] 계정 잠금 상태 접근: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, e.getMessage(), null));
+    }
+
+    // ── 로그인 동시 중복 요청 차단 → 409 ─────────────────────────────
+    @ExceptionHandler(LoginInProgressException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLoginInProgress(LoginInProgressException e) {
+        log.warn("[Login] 동시 로그인 요청 차단: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
 
     // ── 소셜 로그인 외부 API 실패 → 502 ──────────────────────────────
     @ExceptionHandler(OAuthLoginException.class)

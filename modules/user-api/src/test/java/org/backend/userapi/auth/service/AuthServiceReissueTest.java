@@ -37,6 +37,9 @@ class AuthServiceReissueTest {
     @Mock private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private RefreshTokenService refreshTokenService;
+    @Mock private EmailVerificationService emailVerificationService;
+    @Mock private MembershipCheckService membershipCheckService;
+    @Mock private LoginRateLimitService loginRateLimitService;
 
     private AuthService authService;
 
@@ -49,7 +52,10 @@ class AuthServiceReissueTest {
                 tagRepository,
                 passwordEncoder,
                 jwtTokenProvider,
-                refreshTokenService
+                refreshTokenService,
+                emailVerificationService,
+                membershipCheckService,
+                loginRateLimitService
         );
     }
 
@@ -69,11 +75,15 @@ class AuthServiceReissueTest {
         when(jwtTokenProvider.generateRefreshToken(userId))
                 .thenReturn(newRefresh);
 
+        when(loginRateLimitService.acquireReissueLock(userId)).thenReturn(true);
+        // MembershipCheckService mock 기본값: isPaid=false, isUplus=false
         when(jwtTokenProvider.generateAccessToken(
                 eq(userId),
                 eq("test@test.com"),
                 eq("tester"),
-                eq("USER")
+                eq("USER"),
+                eq(false),
+                eq(false)
         )).thenReturn(newAccess);
 
         when(jwtTokenProvider.getAccessTokenTtlSeconds()).thenReturn(1800L);
