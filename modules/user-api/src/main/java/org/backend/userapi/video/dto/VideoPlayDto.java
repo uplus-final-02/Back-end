@@ -23,6 +23,7 @@ public class VideoPlayDto {
     private Long videoId;
     private String title;
     private String description;
+    private String thumbnailUrl;
 
     private Long viewCount;
     private Long durationSec;
@@ -72,5 +73,13 @@ public class VideoPlayDto {
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         private Long prevVideoId;
+    }
+
+    // 메시지를 동적으로 생성하는 편의 메서드
+    public String getStatusDescription() {
+        if (this.url == null) {
+            return "현재 재생 가능한 영상이 없습니다.";
+        }
+        return "재생 정보 조회 성공";
     }
 }
