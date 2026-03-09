@@ -23,4 +23,4 @@ services:
       - SPRING_ELASTICSEARCH_URIS=http://${DATA_NODE_IP}:9200
     ports:
       - "${USER_API_PORT}:8080"
-    restart: always
+    restart: "no"
