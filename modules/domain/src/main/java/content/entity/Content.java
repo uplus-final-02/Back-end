@@ -105,4 +105,8 @@ public class Content extends BaseTimeEntity {
             this.status = status;
         }
     }
+    
+    public void delete() {
+        this.status = ContentStatus.DELETED;
+    }
 }
