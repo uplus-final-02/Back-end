@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  transcoder-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.transcoder-worker
+    container_name: transcoder-worker
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - TZ=Asia/Seoul
+
+      # --- Kafka & Redis 연결 ---
+      - SPRING_DATA_REDIS_HOST=${DATA_NODE_IP}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=${DATA_NODE_IP}:9094
+
+    restart: always # 작업 중 뻗어도 도커가 다시 살려내도록 설정
