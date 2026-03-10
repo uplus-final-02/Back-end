@@ -1,6 +1,7 @@
 package core.storage;
 
 import core.storage.config.StorageProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -19,6 +20,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "aws")
 public class AwsS3ObjectStorageService implements ObjectStorageService {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
