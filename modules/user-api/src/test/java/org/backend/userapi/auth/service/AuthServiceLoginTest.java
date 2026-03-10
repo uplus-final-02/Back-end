@@ -44,7 +44,10 @@ class AuthServiceLoginTest {
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private RefreshTokenService refreshTokenService;
     @Mock private RefreshTokenRepository refreshTokenRepository;
-    
+    @Mock private EmailVerificationService emailVerificationService;
+    @Mock private MembershipCheckService membershipCheckService;
+    @Mock private LoginRateLimitService loginRateLimitService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -56,7 +59,10 @@ class AuthServiceLoginTest {
                 tagRepository,
                 passwordEncoder,
                 jwtTokenProvider,
-                refreshTokenService
+                refreshTokenService,
+                emailVerificationService,
+                membershipCheckService,
+                loginRateLimitService
         );
     }
 
@@ -78,11 +84,15 @@ class AuthServiceLoginTest {
         when(authAccountRepository.findByAuthProviderAndEmail(AuthProvider.EMAIL, "test@test.com"))
                 .thenReturn(Optional.of(authAccount));
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
+        when(loginRateLimitService.acquireProcessingLock("test@test.com")).thenReturn(true);
+        // MembershipCheckService mock 기본값: isPaid=false, isUplus=false
         when(jwtTokenProvider.generateAccessToken(
                 eq(1L),
                 eq("test@test.com"),
                 eq("tester"),
-                eq(user.getUserRole().name()) // 기본값이 USER
+                eq(user.getUserRole().name()), // 기본값이 USER
+                eq(false),
+                eq(false)
         )).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken(1L)).thenReturn("refresh-token");
         when(jwtTokenProvider.getAccessTokenTtlSeconds()).thenReturn(1800L);
