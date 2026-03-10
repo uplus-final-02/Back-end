@@ -2,7 +2,7 @@ name: Deploy Admin API
 
 on:
   push:
-    branches: [ develop, 'deploy/#168-v2' ]
+    branches: [ develop ]
     paths:
       - 'modules/admin-api/**'
       - 'modules/core/**'
