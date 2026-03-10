@@ -19,7 +19,6 @@ public class VideoFileStatusService {
         VideoFile vf = videoFileRepository.findById(videoFileId)
                 .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND: " + videoFileId));
 
-        // DONE/FAILED면 덮어쓰지 않도록 보호(원하면 제거 가능)
         if (vf.getTranscodeStatus() == TranscodeStatus.DONE || vf.getTranscodeStatus() == TranscodeStatus.FAILED) {
             return;
         }
