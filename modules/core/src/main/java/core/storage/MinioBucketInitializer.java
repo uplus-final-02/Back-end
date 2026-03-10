@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Slf4j
-@Component
+//@Component
 public class MinioBucketInitializer {
 
     private final MinioClient internalMinioClient;
