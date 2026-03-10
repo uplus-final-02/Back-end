@@ -55,7 +55,15 @@ public class ContentService {
         // (같은 작품의 1화, 2화를 봤다면 가장 최근인 2화만 남김)
         Map<Long, WatchHistory> distinctHistoryMap = new LinkedHashMap<>();
         for (WatchHistory wh : histories) {
-            Long contentId = wh.getVideo().getContent().getId();
+        	
+        	// 삭제된 콘텐츠 시청기록 조회에서 제외
+        	Content content = wh.getVideo().getContent();
+        	if (content.getStatus() != ContentStatus.ACTIVE) {
+                continue;
+            }
+        	
+//            Long contentId = wh.getVideo().getContent().getId();
+            Long contentId = content.getId();
 
             // 맵에 없으면 추가 (이미 있으면 더 최신 기록이 들어간 것이므로 패스)
             distinctHistoryMap.putIfAbsent(contentId, wh);
@@ -157,7 +165,14 @@ public class ContentService {
                 .orElseThrow(() -> new ContentNotFoundException(
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
-
+        
+        // 삭제된 콘텐츠의 경우 상세페이지 조회X
+        if (content.getStatus() != ContentStatus.ACTIVE) {
+            throw new ContentNotFoundException(
+                    "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+            );
+        }
+        
         return ContentDetailResponse.builder()
                 .contentId(content.getId())
                 .type(content.getType())
@@ -183,7 +198,14 @@ public class ContentService {
                 .orElseThrow(() -> new ContentNotFoundException(
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
-
+        
+        // 삭제된 콘텐츠의 경우 연관된 에피소드 조회X
+        if (content.getStatus() != ContentStatus.ACTIVE) {
+            throw new ContentNotFoundException(
+                    "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+            );
+        }
+        
         if (content.getType() != ContentType.SERIES) {
             throw new IllegalArgumentException(
                     "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId

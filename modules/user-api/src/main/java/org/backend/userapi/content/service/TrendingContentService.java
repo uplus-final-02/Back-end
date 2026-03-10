@@ -12,6 +12,8 @@ import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.TrendingResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.enums.ContentStatus;
 import user.repository.UserNicknameInfo;
 import user.repository.UserRepository;
 
@@ -173,6 +175,12 @@ public class TrendingContentService {
 
             // 물리적 FK가 없으므로, 콘텐츠가 삭제되었을 경우를 대비한 방어 로직
             if (content != null) {
+//            	// 삭제, 숨김 처리된 콘텐츠에 한해 rank 집계 제외
+//            	if (content.getStatus() != ContentStatus.ACTIVE) {
+//                    log.info("[Trending Chart] 캐시 갱신 중: 비활성/삭제 콘텐츠(ID: {})가 제외되었습니다.", history.getContentId());
+//                    continue;
+//                }
+            	
                 String uploaderName = (content.getUploaderId() == null)
                     ? "관리자"
                     : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
