@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-@Service
+//@Service
 public class MinioObjectStorageService implements ObjectStorageService {
 
     private final MinioClient internalMinioClient; // (필요 시) 서버 내부용
