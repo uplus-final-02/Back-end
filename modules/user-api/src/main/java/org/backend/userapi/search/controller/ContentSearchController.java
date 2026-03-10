@@ -119,11 +119,13 @@ public class ContentSearchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), size);
+        int safeSize = (size <= 0) ? 10 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize);
+        
         Page<ContentDocument> relatedPage = contentIndexingService.getAlternativeContents(pageable);
         
         ContentSearchResponse response = ContentSearchResponse.from(relatedPage, null);
         
-        return ResponseEntity.ok(new ApiResponse<>(200, "연관/인기 콘텐츠를 성공적으로 조회했습니다.", response));    
+        return ResponseEntity.ok(new ApiResponse<>(200, "연관/인기 콘텐츠를 성공적으로 조회했습니다.", response));
     }
 }
