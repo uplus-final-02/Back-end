@@ -54,8 +54,7 @@ public class ContentDocument {
     @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
     private LocalDateTime updatedAt;
 
-    // HNSW 벡터 인덱싱용 (mapping JSON에서 dense_vector로 정의)
-    // @Field 미사용: dense_vector는 Spring Data ES 애노테이션 미지원 → content-mapping.json이 직접 관리
+    @Field(type = FieldType.Dense_Vector)
     private float[] tagVector;
 
     @Transient

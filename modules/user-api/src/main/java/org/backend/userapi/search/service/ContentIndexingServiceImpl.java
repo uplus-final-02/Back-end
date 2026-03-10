@@ -155,10 +155,10 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                                     ));
 
                                     if (isChosungQuery) {
-                                        String chosungKeyword = ChosungUtil.extract(keyword);
+                                    	String chosungKeyword = ChosungUtil.extract(keyword).replaceAll("\\s+", "");
                                         bool.should(s -> s.multiMatch(mm -> mm
-                                                .fields("titleChosung^2", "titleChosung.ngram^1")
-                                                .query(chosungKeyword)
+                                                .fields("titleChosung^5", "titleChosung.ngram^3")
+                                                .query(chosungKeyword) 
                                                 .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
                                         ));
                                     }
@@ -263,16 +263,20 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
 
     @Override
     public List<String> getSuggestions(String keyword) {
-        if (!StringUtils.hasText(keyword)) return List.of();
+    	if (!StringUtils.hasText(keyword)) return List.of();
 
         boolean isChosungQuery = !keyword.matches(".*[가-힣].*");
 
         NativeQuery query = NativeQuery.builder()
                 .withQuery(q -> q.bool(b -> {
                     b.should(s -> s.match(m -> m.field("title.ngram").query(keyword)));
+                    
+                    // 💡 태그 검색 복구
+                    b.should(s -> s.match(m -> m.field("tags").query(keyword)));
 
                     if (isChosungQuery) {
-                        String chosungKeyword = ChosungUtil.extract(keyword);
+                        // 💡 초성 공백 제거 복구
+                        String chosungKeyword = ChosungUtil.extract(keyword).replaceAll("\\s+", "");
                         b.should(s -> s.match(m -> m.field("titleChosung.ngram").query(chosungKeyword)));
                     }
 
@@ -290,7 +294,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                     .toList();
         } catch (DataAccessException e) {
             log.warn("[ES DOWN] 자동완성 ES 연결 실패 → 빈 결과 반환: keyword={}", keyword);
-            return List.of(); // 자동완성은 빈 결과가 500보다 UX에 자연스러움
+            return List.of(); 
         }
     }
 
@@ -300,7 +304,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     private ContentDocument toDocument(Content content) {
-        List<String> tagNames = content.getContentTags().stream()
+    	List<String> tagNames = content.getContentTags().stream()
                 .map(ct -> ct.getTag().getName())
                 .collect(Collectors.toList());
 
@@ -308,13 +312,16 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .map(ct -> ct.getTag().getId())
                 .collect(Collectors.toList());
 
-        // priority 가중치가 반영된 30차원 태그 벡터 빌드
         float[] tagVector = tagVectorService.buildContentVector(tagIds);
+
+        String rawChosung = ChosungUtil.extract(content.getTitle());
+        String noSpaceChosung = rawChosung != null ? rawChosung.replaceAll("\\s+", "") : "";
+        String combinedChosung = (rawChosung != null ? rawChosung : "") + " " + noSpaceChosung;
 
         return ContentDocument.builder()
                 .contentId(content.getId())
                 .title(content.getTitle())
-                .titleChosung(ChosungUtil.extract(content.getTitle()))
+                .titleChosung(combinedChosung)
                 .description(content.getDescription())
                 .tags(tagNames)
                 .contenttype(content.getType().name())
@@ -414,5 +421,12 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .createdAt(content.getCreatedAt())
                 .updatedAt(content.getUpdatedAt())
                 .build(); // tagVector 생략 (벡터 연산 불필요)
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ContentDocument> getAlternativeContents(Pageable pageable) {
+        log.info("[OTT 대체 추천] 검색 결과가 없어 전체 인기작(Fallback)을 제공합니다.");
+        return searchFromDb(null, null, null, null, pageable);
     }
 }
