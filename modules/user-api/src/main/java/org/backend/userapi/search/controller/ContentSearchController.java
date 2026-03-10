@@ -112,4 +112,20 @@ public class ContentSearchController {
         Map<String, Object> status = contentIndexingService.getIndexingStatus();
         return ResponseEntity.ok(new ApiResponse<>(200, "엘라스틱서치 인덱싱 현재 상태를 조회했습니다.", status));
     }
+    
+ // UX를 위한 "빈 화면 채우기용" 연관/인기 콘텐츠 API
+    @GetMapping("/search/related")
+    public ResponseEntity<ApiResponse<ContentSearchResponse>> getRelatedContents(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        int safeSize = (size <= 0) ? 10 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize);
+        
+        Page<ContentDocument> relatedPage = contentIndexingService.getAlternativeContents(pageable);
+        
+        ContentSearchResponse response = ContentSearchResponse.from(relatedPage, null);
+        
+        return ResponseEntity.ok(new ApiResponse<>(200, "연관/인기 콘텐츠를 성공적으로 조회했습니다.", response));
+    }
 }
