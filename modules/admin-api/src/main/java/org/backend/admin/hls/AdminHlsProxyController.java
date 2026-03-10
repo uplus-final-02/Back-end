@@ -15,13 +15,18 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/hls")
 public class AdminHlsProxyController {
+
+    private static final String HLS_M3U8_MIME = "application/vnd.apple.mpegurl";
+    private static final Set<String> ALLOWED_VARIANTS = Set.of("v0", "v1", "v2", "v3", "v4", "v5");
 
     @Qualifier("internalMinioClient")
     private final MinioClient internalMinioClient;
@@ -36,10 +41,11 @@ public class AdminHlsProxyController {
      * 1) master.m3u8 반환
      * - master 안의 variant playlist 경로(v0/prog_index.m3u8 등)를
      *   우리 서버의 variant 프록시 URL로 바꿔서 내려줌
+     * - BANDWIDTH 오름차순으로 정렬해서 재구성
      * - Degraded Mode 시 assertAvailable()에서 즉시 예외 발생
      * - MinIO 읽기 실패 시 StorageException으로 래핑
      */
-    @GetMapping(value = "/{videoFileId}/master.m3u8", produces = "application/vnd.apple.mpegurl")
+    @GetMapping(value = "/{videoFileId}/master.m3u8", produces = HLS_M3U8_MIME)
     public String getRewrittenMaster(@PathVariable Long videoFileId,
                                      @RequestParam(defaultValue = "600") int expirySec) {
 
@@ -53,9 +59,7 @@ public class AdminHlsProxyController {
                 .toUriString();
 
         MasterParseResult parsed = parseMaster(raw);
-
-        // BANDWIDTH 오름차순 정렬
-        parsed.variants.sort((a, b) -> Long.compare(a.bandwidth, b.bandwidth));
+        parsed.variants.sort(Comparator.comparingLong(v -> v.bandwidth));
 
         StringBuilder sb = new StringBuilder();
         for (String h : parsed.headerLines) {
@@ -67,7 +71,6 @@ public class AdminHlsProxyController {
 
             String variant = extractVariantFromUri(v.uriLine);
             if (variant == null) {
-                // 예상하지 못한 URI면 원본 유지
                 sb.append(v.uriLine).append("\n\n");
                 continue;
             }
@@ -86,18 +89,18 @@ public class AdminHlsProxyController {
     }
 
     /**
-     * 2) variant playlist(v0/v1/v2) 반환
+     * 2) variant playlist(v0~v5) 반환
      * - variant m3u8 안의 ts 라인을 presigned URL로 치환
      * - Degraded Mode 시 assertAvailable()에서 즉시 예외 발생
      */
-    @GetMapping(value = "/{videoFileId}/{variant}/prog_index.m3u8", produces = "application/vnd.apple.mpegurl")
+    @GetMapping(value = "/{videoFileId}/{variant}/prog_index.m3u8", produces = HLS_M3U8_MIME)
     public String getRewrittenVariant(@PathVariable Long videoFileId,
                                       @PathVariable String variant,
                                       @RequestParam(defaultValue = "600") int expirySec) {
 
         bucketInitializer.assertAvailable();
 
-        if (!variant.equals("v0") && !variant.equals("v1") && !variant.equals("v2")) {
+        if (!ALLOWED_VARIANTS.contains(variant)) {
             throw new IllegalArgumentException("invalid variant: " + variant);
         }
 
@@ -159,7 +162,7 @@ public class AdminHlsProxyController {
     private MasterParseResult parseMaster(String raw) {
         MasterParseResult result = new MasterParseResult();
 
-        List<String> lines = raw.lines().toList();
+        List<String> lines = raw.lines().collect(Collectors.toList());
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).trim();
             if (line.isBlank()) continue;
@@ -196,7 +199,6 @@ public class AdminHlsProxyController {
                 result.headerLines.add(line);
             }
         }
-
         return result;
     }
 
@@ -221,13 +223,13 @@ public class AdminHlsProxyController {
     private String extractVariantFromUri(String uriLine) {
         String t = uriLine.trim();
 
-        if (t.startsWith("v0/")) return "v0";
-        if (t.startsWith("v1/")) return "v1";
-        if (t.startsWith("v2/")) return "v2";
+        for (String v : ALLOWED_VARIANTS) {
+            if (t.startsWith(v + "/")) return v;
+        }
 
-        if (t.contains("/v0/")) return "v0";
-        if (t.contains("/v1/")) return "v1";
-        if (t.contains("/v2/")) return "v2";
+        for (String v : ALLOWED_VARIANTS) {
+            if (t.contains("/" + v + "/")) return v;
+        }
 
         return null;
     }

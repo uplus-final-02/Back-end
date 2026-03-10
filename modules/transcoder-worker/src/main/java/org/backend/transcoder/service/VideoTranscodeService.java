@@ -86,25 +86,34 @@ public class VideoTranscodeService {
         Files.createDirectories(hlsDir.resolve("v0"));
         Files.createDirectories(hlsDir.resolve("v1"));
         Files.createDirectories(hlsDir.resolve("v2"));
+        Files.createDirectories(hlsDir.resolve("v3"));
+        Files.createDirectories(hlsDir.resolve("v4"));
+        Files.createDirectories(hlsDir.resolve("v5"));
 
         String segPattern = hlsDir.resolve("v%v").resolve("seg_%05d.ts").toString();
         String variantPlaylist = hlsDir.resolve("v%v").resolve("prog_index.m3u8").toString();
 
         String filter =
                 "[0:v]" +
-                        "split=3[v1080][v720][v480];" +
+                        "split=6[v1080][v720][v480][v360][v240][v144];" +
 
                         "[v1080]scale=w=1920:h=1080:force_original_aspect_ratio=decrease:flags=lanczos," +
-                        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2," +
-                        "format=yuv420p[v1080o];" +
+                        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v1080o];" +
 
                         "[v720]scale=w=1280:h=720:force_original_aspect_ratio=decrease:flags=lanczos," +
-                        "pad=1280:720:(ow-iw)/2:(oh-ih)/2," +
-                        "format=yuv420p[v720o];" +
+                        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v720o];" +
 
                         "[v480]scale=w=854:h=480:force_original_aspect_ratio=decrease:flags=lanczos," +
-                        "pad=854:480:(ow-iw)/2:(oh-ih)/2," +
-                        "format=yuv420p[v480o]";
+                        "pad=854:480:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v480o];" +
+
+                        "[v360]scale=w=640:h=360:force_original_aspect_ratio=decrease:flags=lanczos," +
+                        "pad=640:360:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v360o];" +
+
+                        "[v240]scale=w=426:h=240:force_original_aspect_ratio=decrease:flags=lanczos," +
+                        "pad=426:240:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v240o];" +
+
+                        "[v144]scale=w=256:h=144:force_original_aspect_ratio=decrease:flags=lanczos," +
+                        "pad=256:144:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v144o]";
 
         ProcessBuilder pb = new ProcessBuilder(
                 "ffmpeg",
@@ -114,38 +123,52 @@ public class VideoTranscodeService {
                 "-probesize", "100M",
 
                 "-i", inputMp4.toAbsolutePath().toString(),
+
                 "-filter_complex", filter,
 
                 "-map", "[v1080o]", "-map", "0:a:0?",
                 "-map", "[v720o]",  "-map", "0:a:0?",
                 "-map", "[v480o]",  "-map", "0:a:0?",
+                "-map", "[v360o]",  "-map", "0:a:0?",
+                "-map", "[v240o]",  "-map", "0:a:0?",
+                "-map", "[v144o]",  "-map", "0:a:0?",
 
                 "-c:v", "libx264",
                 "-preset", "veryfast",
                 "-profile:v", "high",
-                "-crf", "21",
+                "-crf", "20",
 
-                "-b:v:0", "2000k", "-maxrate:v:0", "2400k", "-bufsize:v:0", "4000k",
-                "-b:v:1", "1100k", "-maxrate:v:1", "1400k", "-bufsize:v:1", "2200k",
-                "-b:v:2", "650k",  "-maxrate:v:2", "850k",  "-bufsize:v:2", "1300k",
+                "-b:v:0", "2400k", "-maxrate:v:0", "3000k", "-bufsize:v:0", "4800k",
+                "-b:v:1", "1200k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2400k",
+                "-b:v:2", "700k",  "-maxrate:v:2", "900k",  "-bufsize:v:2", "1400k",
+                "-b:v:3", "450k",  "-maxrate:v:3", "600k",  "-bufsize:v:3", "900k",
+                "-b:v:4", "300k",  "-maxrate:v:4", "400k",  "-bufsize:v:4", "600k",
+                "-b:v:5", "180k",  "-maxrate:v:5", "250k",  "-bufsize:v:5", "400k",
 
                 "-c:a", "aac",
+                "-ac", "2",
+
                 "-b:a:0", "128k",
                 "-b:a:1", "96k",
                 "-b:a:2", "64k",
-                "-ac", "2",
+                "-b:a:3", "56k",
+                "-b:a:4", "48k",
+                "-b:a:5", "32k",
 
+                "-g", "48",
+                "-keyint_min", "48",
                 "-sc_threshold", "0",
-                "-force_key_frames", "expr:gte(t,n_forced*6)",
 
                 "-f", "hls",
-                "-hls_time", "6",
+                "-hls_time", "4",
                 "-hls_playlist_type", "vod",
                 "-hls_flags", "independent_segments",
                 "-hls_segment_filename", segPattern,
 
                 "-master_pl_name", masterM3u8.getFileName().toString(),
-                "-var_stream_map", "v:0,a:0 v:1,a:1 v:2,a:2",
+                "-var_stream_map",
+                "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4 v:5,a:5",
+
                 variantPlaylist
         );
 
