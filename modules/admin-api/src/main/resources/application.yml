@@ -18,7 +18,10 @@ app:
     secret: ${JWT_SECRET:change-me}
     access-token-ttl-seconds: 1800
     refresh-token-ttl-seconds: 1209600
-    
+
+  storage:
+    s3:
+      region: ${S3_REGION:ap-northeast-2}
     
 logging:
   level:
