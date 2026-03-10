@@ -14,7 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.util.StringUtils; // 💡 null safe 유틸 사용
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,7 +35,7 @@ public class ContentSearchController {
     @PostMapping("/index/rebuild")
     public ResponseEntity<ApiResponse<Void>> rebuildIndex() {
         contentIndexingService.indexAllContents();
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return ResponseEntity.ok(new ApiResponse<>(200, "전체 콘텐츠 엘라스틱서치 재색인(Rebuild) 작업이 백그라운드에서 시작되었습니다.", null));
     }
 
     @GetMapping("/search")
@@ -49,11 +49,11 @@ public class ContentSearchController {
             @RequestParam(defaultValue = "15") int size,
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
-    	if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category) && !StringUtils.hasText(genre)) {
-    	    throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
-    	}
+        if (!StringUtils.hasText(keyword) && !StringUtils.hasText(tag) && !StringUtils.hasText(category) && !StringUtils.hasText(genre)) {
+            throw new IllegalArgumentException("검색어나 필터를 하나 이상 입력해주세요..");
+        }
 
-    	int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
+        int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
         Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
             case "LATEST" -> Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
             case "POPULAR" -> Sort.by(Sort.Order.desc("totalViewCount"), Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
@@ -65,25 +65,51 @@ public class ContentSearchController {
         
         Long userId = (jwtPrincipal != null) ? jwtPrincipal.getUserId() : null;
         
-    	Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, userId, pageable);
+        // 1. 일단 원래대로 검색을 합니다.
+        Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, userId, pageable);
         
-        // keyword를 넘겨주어 matchType(TITLE, TAG 등) 판별
-    	return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
+        // 💡 [여기가 넷플릭스 4단계 추가 부분!] 검색 결과가 비어있다면?
+        boolean isAlternative = false;
+        if (result.isEmpty() && StringUtils.hasText(keyword)) {
+            // 인기작(대체 콘텐츠)으로 결과물을 싹 덮어치기 합니다.
+            result = contentIndexingService.getAlternativeContents(pageable);
+            isAlternative = true;
+        }
+
+        // 2. 최종 결정된 result(원래 결과 or 대체 결과)로 DTO를 만듭니다.
+        ContentSearchResponse responseData = ContentSearchResponse.from(result, keyword);
+
+        // 💡 3. 상황에 맞게 프론트엔드에 띄워줄 센스 있는 메시지를 세팅합니다.
+        String message;
+        if (isAlternative) {
+            message = "'" + keyword + "'에 대한 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
+        } else if (result.isEmpty()) {
+            message = "조건에 맞는 검색 결과가 없습니다.";
+        } else {
+            message = "검색 결과를 성공적으로 조회했습니다.";
+        }
+
+        return ResponseEntity.ok(new ApiResponse<>(200, message, responseData));
     }
 
     @GetMapping("/search/suggestions")
     public ResponseEntity<ApiResponse<List<String>>> getSuggestions(@RequestParam String keyword) {
-        // 자동완성에서도 공백 입력 방어 필요
         if (!StringUtils.hasText(keyword)) {
-             return ResponseEntity.ok(ApiResponse.success(List.of())); // 빈 리스트 반환이 UX상 자연스러움
+             return ResponseEntity.ok(new ApiResponse<>(200, "검색어를 입력해주세요.", List.of())); 
         }
+        
         List<String> suggestions = contentIndexingService.getSuggestions(keyword);
-        return ResponseEntity.ok(ApiResponse.success(suggestions));
+        
+        String message = suggestions.isEmpty()
+                ? "추천 자동완성 검색어가 없습니다."
+                : "자동완성 검색어를 성공적으로 조회했습니다.";
+
+        return ResponseEntity.ok(new ApiResponse<>(200, message, suggestions));
     }
     
     @GetMapping("/index/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getIndexingStatus() {
         Map<String, Object> status = contentIndexingService.getIndexingStatus();
-        return ResponseEntity.ok(ApiResponse.success(status));
+        return ResponseEntity.ok(new ApiResponse<>(200, "엘라스틱서치 인덱싱 현재 상태를 조회했습니다.", status));
     }
 }
