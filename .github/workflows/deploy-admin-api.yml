@@ -2,7 +2,7 @@ name: Deploy Admin API
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'feat/#188-s3' ]
     paths:
       - 'modules/admin-api/**'
       - 'modules/core/**'
