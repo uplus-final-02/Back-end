@@ -5,10 +5,9 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.backend.userapi.common.dto.ApiResponse;
-import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
 import org.backend.userapi.search.service.ContentIndexingService;
-import org.springframework.data.domain.Page;
+import org.backend.userapi.search.service.SearchCacheService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -30,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 public class ContentSearchController {
 
     private final ContentIndexingService contentIndexingService;
+    private final SearchCacheService searchCacheService;
 
     // TODO: 운영 환경에서는 관리자 권한 체크 또는 내부망 접근 제한 필요
     @PostMapping("/index/rebuild")
@@ -57,18 +57,19 @@ public class ContentSearchController {
         Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
             case "LATEST" -> Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
             case "POPULAR" -> Sort.by(Sort.Order.desc("totalViewCount"), Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
-            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId")); 
+            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId"));
             default -> throw new IllegalArgumentException("지원하지 않는 정렬 방식입니다: " + sort);
         };
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, sortObj);
-        
+
         Long userId = (jwtPrincipal != null) ? jwtPrincipal.getUserId() : null;
-        
-    	Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, userId, pageable);
-        
-        // keyword를 넘겨주어 matchType(TITLE, TAG 등) 판별
-    	return ResponseEntity.ok(ApiResponse.success(ContentSearchResponse.from(result, keyword)));
+
+        // Cache-Aside: Redis 캐시 조회 → 미스 시 ES 검색 → 결과 캐시 저장
+        ContentSearchResponse response = searchCacheService.searchWithCache(
+                keyword, category, genre, tag, userId, sort, pageable);
+
+    	return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/search/suggestions")
