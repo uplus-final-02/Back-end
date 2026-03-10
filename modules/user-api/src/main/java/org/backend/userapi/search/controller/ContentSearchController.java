@@ -8,6 +8,7 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
 import org.backend.userapi.search.service.ContentIndexingService;
+import org.backend.userapi.search.service.SearchCacheService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class ContentSearchController {
 
     private final ContentIndexingService contentIndexingService;
+    private final SearchCacheService searchCacheService;
 
     // TODO: 운영 환경에서는 관리자 권한 체크 또는 내부망 접근 제한 필요
     @PostMapping("/index/rebuild")
@@ -57,39 +59,37 @@ public class ContentSearchController {
         Sort sortObj = switch (sort.toUpperCase(Locale.ROOT)) {
             case "LATEST" -> Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
             case "POPULAR" -> Sort.by(Sort.Order.desc("totalViewCount"), Sort.Order.desc("createdAt"), Sort.Order.desc("contentId"));
-            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId")); 
+            case "RELATED" -> Sort.by(Sort.Order.desc("_score"), Sort.Order.desc("contentId"));
             default -> throw new IllegalArgumentException("지원하지 않는 정렬 방식입니다: " + sort);
         };
 
         Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, sortObj);
-        
         Long userId = (jwtPrincipal != null) ? jwtPrincipal.getUserId() : null;
-        
-        // 1. 일단 원래대로 검색을 합니다.
-        Page<ContentDocument> result = contentIndexingService.search(keyword, category, genre, tag, userId, pageable);
-        
-        // 💡 [여기가 넷플릭스 4단계 추가 부분!] 검색 결과가 비어있다면?
+
+        ContentSearchResponse response = searchCacheService.searchWithCache(
+                keyword, category, genre, tag, userId, sort, pageable);
+
         boolean isAlternative = false;
-        if (result.isEmpty() && StringUtils.hasText(keyword)) {
-            // 인기작(대체 콘텐츠)으로 결과물을 싹 덮어치기 합니다.
-            result = contentIndexingService.getAlternativeContents(pageable);
+        if (response.contents().isEmpty()) {
+            Page<ContentDocument> altPage = contentIndexingService.getAlternativeContents(pageable);
+            response = ContentSearchResponse.from(altPage, keyword); 
             isAlternative = true;
         }
 
-        // 2. 최종 결정된 result(원래 결과 or 대체 결과)로 DTO를 만듭니다.
-        ContentSearchResponse responseData = ContentSearchResponse.from(result, keyword);
-
-        // 💡 3. 상황에 맞게 프론트엔드에 띄워줄 센스 있는 메시지를 세팅합니다.
         String message;
         if (isAlternative) {
-            message = "'" + keyword + "'에 대한 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
-        } else if (result.isEmpty()) {
+            if (StringUtils.hasText(keyword)) {
+                message = "'" + keyword + "'에 대한 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
+            } else {
+                message = "선택하신 조건에 맞는 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
+            }
+        } else if (response.contents().isEmpty()) {
             message = "조건에 맞는 검색 결과가 없습니다.";
         } else {
             message = "검색 결과를 성공적으로 조회했습니다.";
         }
 
-        return ResponseEntity.ok(new ApiResponse<>(200, message, responseData));
+        return ResponseEntity.ok(new ApiResponse<>(200, message, response));
     }
 
     @GetMapping("/search/suggestions")
