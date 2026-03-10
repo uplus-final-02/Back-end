@@ -2,6 +2,7 @@ package org.backend.userapi.video.service;
 
 import common.entity.Tag;
 import common.enums.ContentType;
+import common.enums.HistoryStatus;
 import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
@@ -11,6 +12,7 @@ import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import core.security.principal.JwtPrincipal;
+import core.storage.service.HlsUrlProvider;
 import interaction.repository.BookmarkRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.Tuple;
@@ -30,7 +32,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional
 public class VideoService {
 
     private final VideoRepository videoRepository;
@@ -39,6 +41,7 @@ public class VideoService {
     private final UserRepository userRepository;
     private final BookmarkRepository bookmarkRepository;
     private final ContentTagRepository contentTagRepository;
+    private final HlsUrlProvider hlsUrlProvider;
 
     public VideoPlayDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
         // videos, contents 기본 정보 선조회
@@ -76,26 +79,33 @@ public class VideoService {
         }
 
         Long userId = jwtPrincipal.getUserId();
-        // TODO : jwtFilter 완료되면 주석 해제 및 수정 필요
-//        boolean isPaid = jwtPrincipal.getPaid();
-//        boolean isUplus = jwtPrincipal.getUplus();
         Long contentId = content.getId();
 
-        // TODO : jwtFilter 완료되면 주석 해제 및 수정 필요
-        // 1. 영상 접근 권한 - 유저 권한 확인
-        // 조건 : UserDetails.getPaid(), UserDetails.getUplus()
-        // checkAccessPermission(content, user); // CustomUserDetails 필요
-
         // 2. 비디오 및 파일 기본 정보 조회 로직 구현
-        // 동영상 파일의 HLS URL과 전체 재생 시간을 가져옵니다
         VideoFile videoFile = videoFileRepository.findByVideoId(videoId).orElse(null);
-        String hlsUrl = (videoFile != null) ? videoFile.getHlsUrl() : null;
-        long durationSec = (videoFile != null) ? videoFile.getDurationSec() : 0;
-        // int totalDuration = videoFile.getDurationSec(); // 현재 사용하는 곳이 없음
 
-        // 3. 사용자 이어보기(History) 정보 연동
-        // 최근 3개월 이력 중 마지막 시청 지점을 가져옵니다 (없으면 0초)
+        // HlsUrlProvider를 통해 URL 생성 (Local or CloudFront)
+        String hlsUrl = (videoFile != null) ? hlsUrlProvider.getHlsUrl(videoFile.getId()) : null;
+
+        long durationSec = (videoFile != null) ? videoFile.getDurationSec() : 0;
+
+        // 3. 사용자 이어보기(History) 정보 연동 (없을 경우 insert)
         Optional<WatchHistory> history = watchHistoryRepository.findByUserIdAndVideoId(userId, videoId);
+
+        if (history.isPresent()) {
+            VideoPlayDto.PlaybackState playbackState = VideoPlayDto.PlaybackState.builder()
+                    .startPositionSec(history.map(WatchHistory::getLastPositionSec).orElse(0).longValue())
+                    .lastUpdated(history.map(h -> h.getUpdatedAt().toString()).orElse(null))
+                    .build();
+        } else { // 시청 이력이 없을 경우 insert
+            WatchHistory newHistory = WatchHistory.builder()
+                    .userId(userId)
+                    .video(video)
+                    .status(HistoryStatus.STARTED)
+                    .build();
+
+            watchHistoryRepository.save(newHistory);
+        }
 
         VideoPlayDto.PlaybackState playbackState = VideoPlayDto.PlaybackState.builder()
                 .startPositionSec(history.map(WatchHistory::getLastPositionSec).orElse(0).longValue())
@@ -120,12 +130,10 @@ public class VideoService {
         boolean isBookmarked = bookmarkRepository.existsByUserIdAndContentId(userId, content.getId());
 
         // 최종 DTO 조립 및 반환
-
         return VideoPlayDto.builder()
                 .videoId(video.getId())
                 .title(title)
                 .description(description)
-//                .thumbnailUrl(thumbnailPrefix + thumbnailUrl)
                 .thumbnailUrl(thumbnailUrl)
                 .viewCount(video.getViewCount())
                 .durationSec(durationSec)
@@ -145,7 +153,6 @@ public class VideoService {
                         .prevVideoId(prevId)
                         .build())
                 .build();
-
     }
 
     @Transactional(readOnly = true)
@@ -158,35 +165,4 @@ public class VideoService {
                 tuple.get("durationSec", Integer.class)
         );
     }
-
-    // access 검증 메소드
-//  private void checkAccessPermission(Content content, CustomUserDetails user) {
-//    String requiredLevel = content.getAccessLevel(); // FREE, BASIC, UPLUS
-//
-//    // 1. 무료 콘텐츠는 누구나 접근 가능
-//    if ("FREE".equalsIgnoreCase(requiredLevel)) {
-//      return;
-//    }
-//
-//    // 유료인데 비로그인이면 거부
-//    if (user == null) {
-//      throw new AccessDeniedException("로그인이 필요합니다.");
-//    }
-//
-//    boolean isPaid = user.getPaid();   // JWT payload에서 가져온 값
-//    boolean isUplus = user.getUplus(); // JWT payload에서 가져온 값
-//
-//    // 2. 최소 등급이 BASIC인 경우 (유료 구독자 OR 유플러스 회원)
-//    if ("BASIC".equalsIgnoreCase(requiredLevel)) {
-//      if (!isPaid && !isUplus) {
-//        throw new AccessDeniedException("구독권이 필요합니다.");
-//      }
-//    }
-//    // 3. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
-//    else if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
-//      if (!isUplus) {
-//        throw new AccessDeniedException("U+ 회원 전용 콘텐츠입니다.");
-//      }
-//    }
-//  }
 }
