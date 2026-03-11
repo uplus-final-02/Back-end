@@ -54,6 +54,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
             	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
                     .requestMatchers("/admin/hls", "/admin/hls/**").permitAll() // 테스트
+                    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll() // 테스트
             	    .anyRequest().hasRole("ADMIN")
             	)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
