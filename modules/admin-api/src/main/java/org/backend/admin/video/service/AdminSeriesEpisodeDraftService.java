@@ -9,6 +9,7 @@ import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
+import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.exception.ContentNotFoundException;
 import org.backend.admin.video.dto.AdminEpisodeDraftResponse;
@@ -24,7 +25,10 @@ public class AdminSeriesEpisodeDraftService {
     private final VideoFileRepository videoFileRepository;
 
     @Transactional
-    public AdminEpisodeDraftResponse createDraft(Long seriesId) {
+    public AdminEpisodeDraftResponse createDraft(JwtPrincipal principal, Long seriesId) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
 
         Content series = contentRepository.findById(seriesId)
                 .orElseThrow(ContentNotFoundException::new);
