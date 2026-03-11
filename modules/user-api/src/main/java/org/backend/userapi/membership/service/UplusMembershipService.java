@@ -39,8 +39,9 @@ public class UplusMembershipService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
+        
         String phoneNumber = normalize(request.getPhoneNumber());
+        LocalDateTime now = LocalDateTime.now();
         
         boolean isUplusMember = telecomMemberRepository
                 .existsByPhoneNumberAndStatus(phoneNumber, "ACTIVE");
@@ -49,8 +50,13 @@ public class UplusMembershipService {
             throw new UplusUserNotFoundException("LG U+ 회원이 아닙니다.");
         }
         
-        LocalDateTime now = LocalDateTime.now();
+        UserUplusVerified verified = userUplusVerifiedRepository.findByUser_Id(userId).orElse(null);
+        // 이미 본인 계정이 같은 번호로 인증된 상태면 재인증 막음
+        if (verified != null && verified.isVerified() && phoneNumber.equals(verified.getPhoneNumber())) {
+            throw new IllegalArgumentException("이미 인증된 회원입니다.");
+        }
         
+        // 다른 계정이 이미 사용 중인 번호인지 확인
         UserUplusVerified existingByPhone =
                 userUplusVerifiedRepository.findByPhoneNumber(phoneNumber).orElse(null);
 
@@ -61,9 +67,7 @@ public class UplusMembershipService {
             }
         }
         
-        UserUplusVerified verified = userUplusVerifiedRepository.findByUser_Id(userId)
-                .orElse(null);
-         
+        // 내 계정의 다른 번호였거나, 아예 없던 경우면 재인증 허용
         if (verified == null) {
             verified = UserUplusVerified.createVerified(user, phoneNumber, now);
             userUplusVerifiedRepository.save(verified); 
