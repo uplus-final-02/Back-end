@@ -35,6 +35,7 @@ public class UplusMembershipService {
     private final TelecomMemberRepository telecomMemberRepository;
     private final SubscriptionsRepository subscriptionsRepository;
     
+    // 통신사 회원 인증
     public UplusVerificationResponse verify(Long userId, UplusVerificationRequest request) {
 
         User user = userRepository.findById(userId)

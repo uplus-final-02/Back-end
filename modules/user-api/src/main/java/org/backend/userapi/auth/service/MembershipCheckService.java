@@ -26,7 +26,7 @@ public class MembershipCheckService {
     public boolean isPaid(Long userId) {
         Subscriptions sub = subscriptionsRepository.findByUser_Id(userId).orElse(null);
         if (sub == null) return false;
-
+        
         LocalDateTime now = LocalDateTime.now();
         boolean notExpired = sub.getExpiresAt() != null && sub.getExpiresAt().isAfter(now);
 
