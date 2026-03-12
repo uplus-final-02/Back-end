@@ -48,7 +48,7 @@ jobs:
         run: |
           aws s3 cp modules/transcoder-worker/build/libs/*.jar s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/transcoder-worker/transcoder-worker.jar
           aws s3 cp docker-compose.transcoder-worker.yml s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/transcoder-worker/
-          aws s3 cp docker/Dockerfile.transcoder-worker s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/transcoder-worker/docker/Dockerfile.dev.transcoder-worker
+          aws s3 cp docker/Dockerfile.dev.transcoder-worker s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/transcoder-worker/docker/Dockerfile.dev.transcoder-worker
 
       - name: EC2 배포 실행 (SSM)
         run: |
