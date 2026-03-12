@@ -143,9 +143,15 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                                 
                                 b.must(m -> m.bool(bool -> {
                                     bool.should(s -> s.multiMatch(mm -> mm
-                                            .fields("title^5", "title.ngram^3", "tags^3", "description^2")
+                                            .fields("title.ngram^15", "title^5", "tags^3", "description^2")
                                             .query(keyword)
                                             .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
+                                    ));
+                                    
+                                    bool.should(s -> s.matchPhrase(mp -> mp
+                                            .field("title.ngram")
+                                            .query(keyword)
+                                            .boost(20.0f)
                                     ));
 
                                     bool.should(s -> s.matchPhrasePrefix(mpp -> mpp

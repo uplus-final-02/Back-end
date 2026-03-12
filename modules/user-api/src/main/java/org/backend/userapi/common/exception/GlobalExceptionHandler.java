@@ -2,6 +2,8 @@ package org.backend.userapi.common.exception;
 
 import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
+import core.storage.StorageException;
+import core.storage.StorageUnavailableException;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.common.exception.LoginInProgressException;
@@ -222,6 +224,26 @@ public class GlobalExceptionHandler {
     }
     
     
+    // ── MinIO 런타임 오류 (기동 후 장애) → 503 ──────────────────────────
+    // checkAvailable()을 통과했더라도 실제 MinIO 호출에서 실패하면 StorageException 발생
+    // → 500 대신 503으로 응답해 Degraded Mode 목표를 유지
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStorageException(StorageException e) {
+        log.warn("[MinIO] 스토리지 런타임 오류 - 503 반환: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "파일 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+    }
+
+    // ── MinIO 장애 (Degraded Mode 시작 후 fast-reject) → 503 ──────────
+    @ExceptionHandler(StorageUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStorageUnavailable(StorageUnavailableException e) {
+        log.warn("[MinIO] 스토리지 서비스 장애 - 503 반환: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "파일 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException e) {
         log.error("RuntimeException occurred", e);

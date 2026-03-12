@@ -142,4 +142,12 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     // ── ES 검색 Fallback (keyword 없음): total count용 ────────────────────
     @Query("SELECT COUNT(c) FROM Content c WHERE c.status = 'ACTIVE'")
     long countAllActive();
+    
+    @Modifying
+    @Query("UPDATE Content c SET c.bookmarkCount = c.bookmarkCount + 1 WHERE c.id = :contentId")
+    void incrementBookmarkCount(@Param("contentId") Long contentId);
+
+    @Modifying
+    @Query("UPDATE Content c SET c.bookmarkCount = c.bookmarkCount - 1 WHERE c.id = :contentId AND c.bookmarkCount > 0")
+    void decrementBookmarkCount(@Param("contentId") Long contentId);
 }

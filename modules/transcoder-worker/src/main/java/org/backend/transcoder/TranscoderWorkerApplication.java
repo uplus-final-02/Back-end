@@ -20,6 +20,7 @@ import org.springframework.kafka.annotation.EnableKafka;
         "common.entity",
         "core.storage"
 })
+
 @EntityScan(basePackages = {
         "content.entity",
         "common.entity"

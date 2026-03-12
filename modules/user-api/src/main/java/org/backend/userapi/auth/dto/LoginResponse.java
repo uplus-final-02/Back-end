@@ -5,6 +5,9 @@ public record LoginResponse(
         String accessToken,
         long accessTokenTtlSeconds,
         String refreshToken,
-        long refreshTokenTtlSeconds
+        long refreshTokenTtlSeconds,
+        boolean paid,
+        boolean uplus
+        
 ) {
 }
