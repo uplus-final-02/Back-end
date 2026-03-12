@@ -4,7 +4,7 @@ services:
   transcoder-worker:
     build:
       context: .
-      dockerfile: docker/Dockerfile.transcoder-worker
+      dockerfile: docker/Dockerfile.dev.transcoder-worker
     container_name: transcoder-worker
     env_file: .env
     environment:
