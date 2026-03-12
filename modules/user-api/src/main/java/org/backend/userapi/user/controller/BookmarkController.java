@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "3. 찜(북마크) API", description = "콘텐츠 찜하기, 찜 취소, 찜 목록 조회 및 연속 재생 정보 API")
+@Tag(name = "찜(북마크) API", description = "콘텐츠 찜하기, 찜 취소, 찜 목록 조회 및 연속 재생 정보 API")
 @RestController
 @RequiredArgsConstructor
 public class BookmarkController {

@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import java.time.Duration;
 import java.util.Map;
 
-@Tag(name = "2. 프로필 API", description = "마이페이지 조회 및 프로필 이미지 변경 API")
+@Tag(name = "프로필 API", description = "마이페이지 조회 및 프로필 이미지 변경 API")
 @RestController
 @RequestMapping("/api/profile")
 @RequiredArgsConstructor

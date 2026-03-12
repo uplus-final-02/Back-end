@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "1. 검색 API", description = "콘텐츠 검색, 실시간 추천 및 엘라스틱서치 관리 API")
+@Tag(name = "검색 API", description = "콘텐츠 검색, 실시간 추천 및 엘라스틱서치 관리 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
