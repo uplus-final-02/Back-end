@@ -7,6 +7,7 @@ import io.minio.MinioClient;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "minio", matchIfMissing = true)
 public class MinioBucketInitializer {
 
     private final MinioClient internalMinioClient;
