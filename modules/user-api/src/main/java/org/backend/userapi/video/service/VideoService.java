@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.exception.VideoNotFoundException;
 import org.backend.userapi.video.dto.VideoPlayDto;
 import org.backend.userapi.video.dto.VideoSimpleMetaData;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -46,6 +47,9 @@ public class VideoService {
                 .orElseThrow(() -> new VideoNotFoundException("비디오 정보를 찾을 수 없습니다."));
         Content content = video.getContent();
 
+        // [인가] 접근 권한 판별
+        checkAccessPermission(content, jwtPrincipal);
+        
         // contents.type 에 따른 기본 정보 조회 분기 처리 (title, description, thumbnail_url)
         String title = null;
         String description = null;
@@ -160,33 +164,41 @@ public class VideoService {
     }
 
     // access 검증 메소드
-//  private void checkAccessPermission(Content content, CustomUserDetails user) {
-//    String requiredLevel = content.getAccessLevel(); // FREE, BASIC, UPLUS
-//
-//    // 1. 무료 콘텐츠는 누구나 접근 가능
-//    if ("FREE".equalsIgnoreCase(requiredLevel)) {
-//      return;
+  private void checkAccessPermission(Content content, JwtPrincipal jwtPrincipal) {
+	  
+    String requiredLevel = content.getAccessLevel().name(); // FREE, BASIC, UPLUS
+
+    
+    // 1. 무료 콘텐츠는 누구나 접근 가능
+    if ("FREE".equalsIgnoreCase(requiredLevel)) {
+      return;
+    }
+
+    // 유료인데 비로그인이면 거부
+//    if (jwtPrincipal == null) {
+//        throw new AccessDeniedException("로그인이 필요합니다.");
 //    }
-//
-//    // 유료인데 비로그인이면 거부
-//    if (user == null) {
-//      throw new AccessDeniedException("로그인이 필요합니다.");
-//    }
-//
-//    boolean isPaid = user.getPaid();   // JWT payload에서 가져온 값
-//    boolean isUplus = user.getUplus(); // JWT payload에서 가져온 값
-//
-//    // 2. 최소 등급이 BASIC인 경우 (유료 구독자 OR 유플러스 회원)
-//    if ("BASIC".equalsIgnoreCase(requiredLevel)) {
-//      if (!isPaid && !isUplus) {
-//        throw new AccessDeniedException("구독권이 필요합니다.");
-//      }
-//    }
-//    // 3. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
-//    else if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
-//      if (!isUplus) {
-//        throw new AccessDeniedException("U+ 회원 전용 콘텐츠입니다.");
-//      }
-//    }
-//  }
+    
+    boolean isPaid = jwtPrincipal.isPaid();
+    boolean isUplus = jwtPrincipal.isUplus();
+
+    // 2. 베이직 콘텐츠는 유료 구독자 또는 U+ 회원 접근 가능
+    if ("BASIC".equalsIgnoreCase(requiredLevel)) {
+        if (!isPaid && !isUplus) {
+            throw new AccessDeniedException("베이직 구독 또는 LG U+ 회원 인증이 필요합니다.");
+        }
+        return;
+    }
+
+    // 3. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
+    if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
+        if (!isUplus) {
+            throw new AccessDeniedException("LG U+ 회원 전용 콘텐츠입니다.");
+        }
+        return;
+    }
+    
+    // 알 수 없는 접근 레벨 방어
+    throw new IllegalStateException("지원하지 않는 접근 레벨입니다: " + requiredLevel);
+  }
 }

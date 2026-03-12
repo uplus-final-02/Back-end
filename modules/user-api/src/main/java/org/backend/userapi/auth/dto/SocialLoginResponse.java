@@ -21,24 +21,33 @@ public record SocialLoginResponse(
         String accessToken,
         Long accessTokenTtlSeconds,
         String refreshToken,
-        Long refreshTokenTtlSeconds
+        Long refreshTokenTtlSeconds,
+        
+        // 회원 상태
+        boolean paid,
+        boolean uplus
+        
 ) {
     /** 신규 유저 - setup token 반환 */
     public static SocialLoginResponse newUser(String setupToken, long setupTokenTtlSeconds) {
         return new SocialLoginResponse(
                 true, setupToken, setupTokenTtlSeconds,
-                null, null, null, null, null
+                null, null, null, null, null,
+                false, false
         );
     }
 
     /** 기존 유저 - 정식 JWT 반환 */
     public static SocialLoginResponse existingUser(String tokenType, String accessToken,
                                                    long accessTokenTtlSeconds,
-                                                   String refreshToken, long refreshTokenTtlSeconds) {
+                                                   String refreshToken, long refreshTokenTtlSeconds,                                                   
+                                                   boolean paid,
+                                                   boolean uplus) {
         return new SocialLoginResponse(
                 false, null, null,
                 tokenType, accessToken, accessTokenTtlSeconds,
-                refreshToken, refreshTokenTtlSeconds
+                refreshToken, refreshTokenTtlSeconds,
+                paid, uplus
         );
     }
 }

@@ -8,24 +8,18 @@ import common.repository.TagRepository;
 import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
 import core.security.jwt.JwtTokenProvider;
+import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.auth.dto.*;
-import core.security.principal.JwtPrincipal;
 import org.backend.userapi.auth.oauth.OAuthUserInfo;
 import org.backend.userapi.common.exception.*;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import common.entity.Tag;
-import common.enums.AuthProvider;
-import common.enums.UserStatus;
-import common.repository.TagRepository;
-import core.security.jwt.JwtTokenProvider;
-import core.security.principal.JwtPrincipal;
-import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.RefreshToken;
 import user.entity.User;
@@ -33,7 +27,6 @@ import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Locale;
@@ -195,7 +188,9 @@ public class AuthService {
                     LoginResponse jwt = issueJwt(user, existing.getEmail());
                     return SocialLoginResponse.existingUser(
                             jwt.tokenType(), jwt.accessToken(), jwt.accessTokenTtlSeconds(),
-                            jwt.refreshToken(), jwt.refreshTokenTtlSeconds()
+                            jwt.refreshToken(), jwt.refreshTokenTtlSeconds(),
+                            jwt.paid(),
+                            jwt.uplus()
                     );
                 })
                 .orElseGet(() -> {
@@ -286,8 +281,19 @@ public class AuthService {
             AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                     .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-            boolean paid = membershipCheckService.isPaid(userId);
-            boolean uplus = membershipCheckService.isUplus(userId);
+            // ── JWT 클레임 계산 (nice-to-have): DB 장애 시 false 폴백 ─────────
+            boolean paid = false;
+            try {
+                paid = membershipCheckService.isPaid(userId);
+            } catch (DataAccessException e) {
+                log.warn("[Auth] reissue isPaid DB 조회 실패 — paid=false 폴백 (userId={}): {}", userId, e.getMessage());
+            }
+            boolean uplus = false;
+            try {
+                uplus = membershipCheckService.isUplus(userId);
+            } catch (DataAccessException e) {
+                log.warn("[Auth] reissue isUplus DB 조회 실패 — uplus=false 폴백 (userId={}): {}", userId, e.getMessage());
+            }
 
             String newAccessToken = jwtTokenProvider.generateAccessToken(
                     user.getId(),
@@ -303,7 +309,9 @@ public class AuthService {
 
             return new LoginResponse(
                     "Bearer", newAccessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
-                    newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+                    newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds(),
+                    paid,
+                    uplus
             );
         } finally {
             // ── 처리 완료 → 동시 재발급 방지 락 해제 ─────────────────────
@@ -344,13 +352,33 @@ public class AuthService {
         }
     }
 
-    /** JWT 발급 + Refresh Token DB 저장 */
+    /**
+     * JWT 발급 + Refresh Token DB 저장.
+     *
+     * <p>paid/uplus는 JWT 클레임용(nice-to-have)이므로 MySQL 순간 장애 시 false 폴백.
+     * {@link MembershipCheckService#isPaid}·{@link MembershipCheckService#isUplus}는
+     * {@code REQUIRES_NEW} 트랜잭션으로 격리되어 있어, 예외를 catch해도 외부 트랜잭션에 영향이 없다.
+     *
+     * <p>반면 {@code refreshTokenService.upsert()}는 세션 관리의 핵심이므로 의도적으로 catch하지 않는다.
+     * 실패 시 {@code DataAccessException → GlobalExceptionHandler → 503} 으로 정상 전파된다.
+     */
     private LoginResponse issueJwt(User user, String email) {
     	Long userId = user.getId();
-    	
-    	boolean paid = membershipCheckService.isPaid(userId);
-        boolean uplus = membershipCheckService.isUplus(userId);
-    	
+
+    	// ── JWT 클레임 계산 (nice-to-have): DB 장애 시 false 폴백 ─────────
+    	boolean paid = false;
+    	try {
+    	    paid = membershipCheckService.isPaid(userId);
+    	} catch (DataAccessException e) {
+    	    log.warn("[Auth] isPaid DB 조회 실패 — paid=false 폴백 (userId={}): {}", userId, e.getMessage());
+    	}
+    	boolean uplus = false;
+    	try {
+    	    uplus = membershipCheckService.isUplus(userId);
+    	} catch (DataAccessException e) {
+    	    log.warn("[Auth] isUplus DB 조회 실패 — uplus=false 폴백 (userId={}): {}", userId, e.getMessage());
+    	}
+
         String accessToken = jwtTokenProvider.generateAccessToken(
                 userId,
                 email,
@@ -359,15 +387,17 @@ public class AuthService {
                 paid,
                 uplus
         );
-        
-//        String accessToken  = jwtTokenProvider.generateAccessToken(
-//                user.getId(), email, user.getNickname(), user.getUserRole().name());
+
+        // ── Refresh Token 저장 (핵심): 실패 시 503 전파 (의도적) ──────────
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
         refreshTokenService.upsert(user.getId(), refreshToken);
 
         return new LoginResponse(
                 "Bearer", accessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
-                refreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+                refreshToken, 
+                jwtTokenProvider.getRefreshTokenTtlSeconds(),
+                paid,
+                uplus
         );
     }
 
