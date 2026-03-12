@@ -8,6 +8,7 @@ import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,11 @@ public class ViewCountFlushScheduler {
      * cron: cron: "0 0/5 * * * *" (5분 간격으로 정각 0초에 실행. 예: 0분 0초, 5분 0초, 5분 0초...)
      */
     @Scheduled(cron = "0 0/5 * * * *")
+    @SchedulerLock(
+            name            = "viewCountFlushTask",
+            lockAtMostFor   = "PT10M",  // 크래시 안전망 — Redis SCAN + 대량 DB 업데이트가 느릴 수 있음
+            lockAtLeastFor  = "PT30S"   // 최소 30초 유지
+    )
     @Transactional
     public void flushViewCountsToDB() {
         log.info("[Scheduler] Redis 조회수 DB 동기화(Flush) 시작");
