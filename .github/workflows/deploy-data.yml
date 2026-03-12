@@ -2,8 +2,9 @@ name: Deploy Data Node (SSM)
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'deploy/#168-v2' ]
     paths:
+      - 'modules/domain/**'
       - 'docker-compose.data.yml'
       - 'docker/elasticsearch/Dockerfile'
       - '.github/workflows/deploy-data.yml'
