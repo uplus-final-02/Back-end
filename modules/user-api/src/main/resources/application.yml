@@ -59,7 +59,7 @@ management:
         include: health          # info 제거 — probe 용도 외 불필요한 정보 노출 차단
   endpoint:
     health:
-      # 🌟 빈이 없으면 무시하고 있는 것들만 검사하는 옵션
+      # 🌟 빈이 없으면 무시하고 있는 것들만 검사하는 옵션.
       validate-group-membership: false
       probes:
         enabled: true
