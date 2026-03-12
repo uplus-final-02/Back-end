@@ -2,6 +2,7 @@ package org.backend.userapi.common.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.backend.userapi.content.service.ContentMetricSnapshotService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,11 @@ public class ContentMetricSnapshotScheduler {
      * (변경) 10초에 실행함
      */
     @Scheduled(cron = "10 0/10 * * * *")
+    @SchedulerLock(
+            name            = "metricSnapshotTask",
+            lockAtMostFor   = "PT15M",  // 크래시 안전망 — 집계 쿼리가 느릴 경우 커버
+            lockAtLeastFor  = "PT1M"    // 최소 1분 유지
+    )
     public void createMetricSnapshotBucket() {
         LocalDateTime now = LocalDateTime.now();
 

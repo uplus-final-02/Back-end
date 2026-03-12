@@ -1,5 +1,8 @@
 package org.backend.admin.exception;
 
+import core.storage.StorageException;
+import core.storage.StorageUnavailableException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -38,6 +41,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ec.status())
                 .body(new ErrorResponse(ec.status().value(), msg, null));
+    }
+
+    // ── MinIO 런타임 오류 (기동 후 장애) → 503 ──────────────────────────
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ErrorResponse> handleStorageException(StorageException e) {
+        ErrorCode ec = ErrorCode.STORAGE_UNAVAILABLE;
+        return ResponseEntity
+                .status(ec.status())
+                .body(new ErrorResponse(ec.status().value(), ec.message(), null));
+    }
+
+    // ── MinIO 장애 (Degraded Mode 시작 후 fast-reject) → 503 ──────────
+    @ExceptionHandler(StorageUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleStorageUnavailable(StorageUnavailableException e) {
+        ErrorCode ec = ErrorCode.STORAGE_UNAVAILABLE;
+        return ResponseEntity
+                .status(ec.status())
+                .body(new ErrorResponse(ec.status().value(), ec.message(), null));
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,9 +1,11 @@
 package org.backend.admin.hls;
 
+import core.storage.MinioBucketInitializer;
+import core.storage.StorageException;
 import core.storage.config.StorageProperties;
 import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -13,6 +15,18 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
+/**
+ * 개발용 HLS 프록시 컨트롤러.
+ * master.m3u8을 읽어 세그먼트 상대경로를 presigned URL로 rewrite해 반환.
+ *
+ * <p>[Degraded Mode 연동]
+ * <ul>
+ *   <li>메서드 진입 시 {@link MinioBucketInitializer#assertAvailable()} 호출.
+ *       MinIO 장애 상태(available=false)이면 즉시 {@code StorageUnavailableException} throw → 503.
+ *   <li>MinIO 호출(getObject, getPresignedObjectUrl) 실패 시 {@code StorageException} 래핑 → 503.
+ *   <li>두 예외 모두 {@code GlobalExceptionHandler}에서 503으로 변환됨.
+ * </ul>
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/hls")
@@ -25,11 +39,15 @@ public class AdminHlsProxyController {
     private final MinioClient publicMinioClient;
 
     private final StorageProperties props;
+    private final MinioBucketInitializer bucketInitializer;
 
     // 개발용: m3u8을 presigned 세그먼트 URL로 rewrite 해서 반환
     @GetMapping(value = "/{videoFileId}/master.m3u8", produces = "application/vnd.apple.mpegurl")
     public String getRewrittenMaster(@PathVariable Long videoFileId,
-                                     @RequestParam(defaultValue = "600") int expirySec) throws Exception {
+                                     @RequestParam(defaultValue = "600") int expirySec) {
+
+        // ── Degraded Mode 체크 → StorageUnavailableException → 503 ──────
+        bucketInitializer.assertAvailable();
 
         String masterKey = "hls/" + videoFileId + "/master.m3u8";
 
@@ -42,6 +60,8 @@ public class AdminHlsProxyController {
                         .build()
         )) {
             raw = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new StorageException("HLS master.m3u8 읽기 실패: " + masterKey, e);
         }
 
         // 2) m3u8 각 라인 처리: #으로 시작하는 메타라인은 그대로, 파일명(ts 등)은 presigned로 치환
@@ -67,7 +87,7 @@ public class AdminHlsProxyController {
                                         .build()
                         );
                     } catch (Exception e) {
-                        throw new RuntimeException("PRESIGN_FAILED for " + segKey, e);
+                        throw new StorageException("HLS presigned URL 생성 실패: " + segKey, e);
                     }
                 })
                 .collect(Collectors.joining("\n"));
