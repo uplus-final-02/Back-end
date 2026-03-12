@@ -121,6 +121,13 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    healthcheck:
+      # Flyway 마이그레이션 완료 후 readiness UP → admin-api/transcoder-worker 기동 허용
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health/readiness" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     env_file:
       - .env
     environment:
@@ -145,6 +152,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      user-api:
+        condition: service_healthy  # user-api Flyway 완료 후 기동 (스키마 선행 보장)
     env_file:
       - .env
     environment:
@@ -165,6 +174,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      user-api:
+        condition: service_healthy  # user-api Flyway 완료 후 기동 (스키마 선행 보장)
     env_file:
       - .env
     environment:

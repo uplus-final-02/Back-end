@@ -1,57 +1,63 @@
 package org.backend.transcoder.kafka;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-
 /**
- * Kafka 이벤트 중복 처리 방지 — JDBC 기반 멱등성 저장소.
+ * Kafka 이벤트 중복 처리 방지를 위한 JDBC 레포지토리.
  *
- * <p>processed_kafka_events 테이블에 처리 완료된 eventId를 저장하여
- * 동일 이벤트의 재처리를 방지합니다 (Kafka at-least-once → exactly-once 보장).
+ * <p>[멱등성 보장 흐름]
+ * <pre>
+ *   transcode()  @Transactional
+ *     ├── isProcessed(eventId) → true  : 즉시 반환 (이미 처리된 이벤트)
+ *     ├── ... FFmpeg, MinIO ...
+ *     └── vf.updateTranscodeStatus(DONE)
+ *     └── markProcessed(eventId, videoId)  ← DONE 업데이트와 동일 트랜잭션 커밋
+ * </pre>
  *
- * <p>JPA 엔티티 없이 {@link JdbcTemplate}을 직접 사용하는 이유:
- * <ul>
- *   <li>단순 INSERT/SELECT 2개 쿼리만 필요 — 영속성 컨텍스트 오버헤드 불필요</li>
- *   <li>INSERT IGNORE로 동시 중복 실행 시 DB 레벨 원자적 중복 방지 보장</li>
- * </ul>
+ * <p>[트랜잭션 참여]
+ //{VideoTranscodeService#transcode}의 {@code @Transactional} 안에서 호출되므로
+ * JPA와 동일 JDBC 커넥션을 공유한다. REQUIRES_NEW 불필요.
+ *
+ * <p>[재시도 안전성]
+ * 트랜스코딩 실패 → {@code @Transactional} 롤백 → {@code markProcessed} 롤백
+ * → 다음 재시도에서 {@code isProcessed()} = false → 정상 재처리
+ *
+ * <p>[INSERT IGNORE]
+ * PK(event_id) 중복 시 예외 없이 무시. 동시 중복 요청 방어.
  */
-@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class ProcessedKafkaEventJdbcRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * 이미 처리된 이벤트인지 확인.
-     *
-     * @param eventId Kafka 이벤트 UUID
-     * @return true면 중복 이벤트 → 재처리 생략
-     */
-    public boolean isProcessed(String eventId) {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM processed_kafka_events WHERE event_id = ?",
-                Integer.class,
-                eventId
-        );
-        return count != null && count > 0;
-    }
+    private static final String EXISTS_SQL =
+            "SELECT COUNT(*) FROM processed_kafka_events WHERE event_id = ?";
+
+    private static final String INSERT_SQL =
+            "INSERT IGNORE INTO processed_kafka_events (event_id, video_id, processed_at) " +
+            "VALUES (?, ?, NOW(3))";
 
     /**
-     * 이벤트 처리 완료 마킹.
-     * INSERT IGNORE → 동시 중복 실행 시 두 번째 INSERT는 조용히 무시됨.
-     *
-     * @param eventId     Kafka 이벤트 UUID
-     * @param videoFileId 처리된 VideoFile ID
+     * 이미 처리된 이벤트인지 확인한다.
      */
-    public void markProcessed(String eventId, Long videoFileId) {
-        jdbcTemplate.update(
-                "INSERT IGNORE INTO processed_kafka_events (event_id, video_file_id, processed_at) VALUES (?, ?, ?)",
-                eventId, videoFileId, LocalDateTime.now()
-        );
+    public boolean isProcessed(String eventId) {
+        Integer count = jdbcTemplate.queryForObject(EXISTS_SQL, Integer.class, eventId);
+        return count != null && count > 0;
     }
+   private static final String INSERT_SQL =
+         "INSERT IGNORE INTO processed_kafka_events (event_id, video_file_id, processed_at) " +
+          "VALUES (?, ?, NOW(3))";
+
+
+    /**
+     * 이벤트를 처리 완료로 기록한다.
+     * 호출 시점의 트랜잭션에 참여한다.
+     */
+      public void markProcessed(String eventId, long videoFileId) {
+      jdbcTemplate.update(INSERT_SQL, eventId, videoFileId);
+  }
+
 }
