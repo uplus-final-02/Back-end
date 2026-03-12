@@ -41,22 +41,35 @@ public class EmailVerificationService {
 
     /**
      * 이메일 인증코드 발송 (동기).
-     * - 1분 이내 재발송 요청 시 429 예외
-     * - Redis 다운 시 쿨다운 체크를 건너뛰고 발송 시도, 코드 저장 실패 시 503 반환
-     * - 발송 실패 시 Redis 코드 삭제 후 500 예외 → 클라이언트가 즉시 인지 가능
+     *
+     * <ul>
+     *   <li>쿨다운 체크와 키 세팅을 {@code setIfAbsent()} (Redis SETNX) 단일 원자 연산으로 처리.
+     *       EC2 멀티 인스턴스 환경에서 {@code hasKey()} + {@code set()} 분리 구조의
+     *       TOCTOU(Time-Of-Check-Time-Of-Use) 레이스 컨디션으로 인한 중복 발송을 방지한다.</li>
+     *   <li>1분 이내 재발송 요청 시 429 예외</li>
+     *   <li>Redis 다운 시 쿨다운 체크를 건너뛰고 발송 시도, 코드 저장 실패 시 503 반환</li>
+     *   <li>발송 실패 시 Redis 코드·쿨다운 삭제 후 500 예외 → 클라이언트가 즉시 인지 가능</li>
+     * </ul>
      */
     public void sendCode(String email) {
         String cooldownKey = COOLDOWN_KEY_PREFIX + email;
+        boolean cooldownSet = false;
 
-        // 재발송 쿨다운 체크 (Redis 다운 시 건너뜀)
+        // ── 쿨다운 체크 + 세팅: 단일 원자 연산 (SETNX) ──────────────────
+        // setIfAbsent(): 키가 없으면 SET+EXPIRE, 있으면 아무것도 안 함 → true/false 반환
+        // hasKey() + set() 분리 시 두 명령 사이에 다른 인스턴스가 끼어들어 중복 발송 가능
         try {
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+            Boolean isNew = redisTemplate.opsForValue()
+                    .setIfAbsent(cooldownKey, "1", Duration.ofSeconds(COOLDOWN_TTL_SECONDS));
+            if (!Boolean.TRUE.equals(isNew)) {
+                // 이미 쿨다운 키 존재 → 재발송 제한 중
                 long remaining = Optional.ofNullable(redisTemplate.getExpire(cooldownKey))
                                          .orElse(COOLDOWN_TTL_SECONDS);
                 throw new TooManyEmailRequestsException(
                     String.format("인증코드를 이미 발송했습니다. %d초 후 다시 시도해주세요.", remaining)
                 );
             }
+            cooldownSet = true;
         } catch (TooManyEmailRequestsException e) {
             throw e; // 비즈니스 예외는 그대로 전파
         } catch (RedisConnectionFailureException e) {
@@ -67,13 +80,15 @@ public class EmailVerificationService {
 
         String code = generateCode();
 
-        // 인증코드 & 쿨다운 Redis 저장 (Redis 다운 시 503 반환)
+        // ── 인증코드 저장 (Redis 다운 시 cooldown 롤백 후 503) ────────────
         try {
             redisTemplate.opsForValue()
                 .set(VERIFY_KEY_PREFIX + email, code, Duration.ofSeconds(CODE_TTL_SECONDS));
-            redisTemplate.opsForValue()
-                .set(cooldownKey, "1", Duration.ofSeconds(COOLDOWN_TTL_SECONDS));
         } catch (RedisConnectionFailureException e) {
+            if (cooldownSet) {
+                // setIfAbsent로 세팅된 쿨다운 롤백: 코드 저장 실패로 사용자가 재시도 가능해야 함
+                try { redisTemplate.delete(cooldownKey); } catch (Exception ignored) {}
+            }
             log.error("[Redis DOWN] 이메일 인증코드 저장 실패 - 인증 서비스 불가: email={}", email);
             throw new RedisServiceUnavailableException(
                 "인증 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요."
