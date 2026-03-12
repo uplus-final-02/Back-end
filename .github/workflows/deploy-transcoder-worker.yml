@@ -66,6 +66,6 @@ jobs:
           
               'echo \"${{ secrets.ENV_FILE }}\" > .env',
           
-              'sudo docker compose -f docker-compose.transcorder-worker.yml up -d --build',
+              'sudo docker compose -f docker-compose.transcoder-worker.yml up -d --build',
               'sudo docker image prune -f'
             ]"
