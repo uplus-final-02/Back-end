@@ -17,14 +17,9 @@ import org.springframework.kafka.annotation.EnableKafka;
         "org.backend.transcoder",
         "content.repository",
         "content.entity",
-        "common.entity"
+        "common.entity",
+        "core.storage"
 })
-
-@Import({
-        StorageConfig.class,
-        MinioObjectStorageService.class
-})
-
 @EntityScan(basePackages = {
         "content.entity",
         "common.entity"
