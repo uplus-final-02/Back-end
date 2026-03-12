@@ -22,7 +22,6 @@ public class AdminUserService {
     private final AuthAccountRepository authAccountRepository;
 
     public Page<AdminUserListResponse> getUsers(String search, Pageable pageable) {
-        // 1) 유저 기준 1행 페이징 조회
         Page<AdminUserRowProjection> userPage = userRepository.findAdminUserRows(search, pageable);
 
         List<AdminUserRowProjection> users = userPage.getContent();
@@ -30,15 +29,12 @@ public class AdminUserService {
             return new PageImpl<>(List.of(), pageable, userPage.getTotalElements());
         }
 
-        // 2) 이번 페이지의 userIds 추출
         List<Long> userIds = users.stream()
                 .map(AdminUserRowProjection::getUserId)
                 .toList();
 
-        // 3) auth_accounts를 IN 조회로 한번에 가져오기 (N+1 방지)
         List<AdminLoginMethodProjection> methods = authAccountRepository.findLoginMethodsByUserIds(userIds);
 
-        // 4) userId -> loginMethods 그룹핑
         Map<Long, List<AdminUserListResponse.LoginMethod>> methodsMap = methods.stream()
                 .collect(Collectors.groupingBy(
                         AdminLoginMethodProjection::getUserId,
@@ -48,7 +44,6 @@ public class AdminUserService {
                         )
                 ));
 
-        // 5) 최종 DTO 매핑
         List<AdminUserListResponse> content = users.stream()
                 .map(u -> new AdminUserListResponse(
                         u.getUserId(),
