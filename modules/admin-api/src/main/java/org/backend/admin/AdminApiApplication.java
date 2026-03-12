@@ -5,8 +5,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableJpaAuditing
+@EnableScheduling
 @SpringBootApplication(scanBasePackages = {
         "org.backend.admin",          // admin-api
         "core",                       // core 모듈 (core.security.*)

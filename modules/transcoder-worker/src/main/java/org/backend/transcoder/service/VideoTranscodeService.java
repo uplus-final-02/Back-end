@@ -7,6 +7,7 @@ import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,14 +21,23 @@ public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
     private final ObjectStorageService objectStorageService;
+    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
 
     @Transactional
     public void transcode(VideoTranscodeRequestedEvent event) {
+        // ① 이벤트 레벨 멱등성: 동일 eventId 중복 처리 방지 (Outbox at-least-once 보상)
+        if (processedEventRepository.isProcessed(event.eventId())) {
+            log.info("[TRANSCODE][SKIP_DUPLICATE] 이미 처리된 이벤트 — eventId={}", event.eventId());
+            return;
+        }
+
         VideoFile vf = videoFileRepository.findById(event.videoFileId())
                 .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND: " + event.videoFileId()));
 
+        // ② 상태 레벨 멱등성: TranscodeStatus.DONE 이면 processed 기록 후 스킵
         if (vf.getTranscodeStatus() == TranscodeStatus.DONE) {
             log.info("[TRANSCODE][SKIP] already DONE. videoFileId={}", vf.getId());
+            processedEventRepository.markProcessed(event.eventId(), event.videoId());
             return;
         }
 
@@ -59,10 +69,11 @@ public class VideoTranscodeService {
 
             String hlsMasterKey = baseKey + "/master.m3u8";
 
-            // 5) DB 업데이트
+            // 5) DB 업데이트 + 멱등성 키 기록 (동일 트랜잭션으로 커밋)
             vf.updateHlsKey(hlsMasterKey);
             vf.updateDurationSec(durationSec);
             vf.updateTranscodeStatus(TranscodeStatus.DONE);
+            processedEventRepository.markProcessed(event.eventId(), event.videoId());
 
             log.info("[TRANSCODE][DONE] videoFileId={}, hlsKey={}, durationSec={}",
                     vf.getId(), hlsMasterKey, durationSec);
