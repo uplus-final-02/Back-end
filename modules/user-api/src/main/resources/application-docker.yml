@@ -4,6 +4,10 @@ spring:
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 3000    # 기본 30s → 3s: 순간 장애 시 빠른 실패
+      keepalive-time: 30000       # 30s마다 keepalive → idle 커넥션 유효성 유지
+      max-lifetime: 1800000       # 30분: MySQL wait_timeout 전에 커넥션 교체
 
   data:
     redis:
