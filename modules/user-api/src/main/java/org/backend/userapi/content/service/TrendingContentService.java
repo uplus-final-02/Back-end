@@ -169,29 +169,34 @@ public class TrendingContentService {
 
         // 5. 응답 결과 조립 (histories의 정렬된 순서 유지)
         List<TrendingResponse> newList = new ArrayList<>();
+        int actualRank = 1; // 동적 순위 부여
 
         for (TrendingHistory history : histories) {
             Content content = contentMap.get(history.getContentId());
 
             // 물리적 FK가 없으므로, 콘텐츠가 삭제되었을 경우를 대비한 방어 로직
-            if (content != null) {
-//            	// 삭제, 숨김 처리된 콘텐츠에 한해 rank 집계 제외
-//            	if (content.getStatus() != ContentStatus.ACTIVE) {
-//                    log.info("[Trending Chart] 캐시 갱신 중: 비활성/삭제 콘텐츠(ID: {})가 제외되었습니다.", history.getContentId());
-//                    continue;
-//                }
-            	
-                String uploaderName = (content.getUploaderId() == null)
-                    ? "관리자"
-                    : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+            if (content == null) {
+                log.warn("[Trending Chart] 캐시 갱신 중: 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.",
+                        history.getContentId());
+                continue;
+            }
 
-                newList.add(TrendingResponse.builder()
-                                 .rank(history.getRanking()) // DB에 기록된 실제 순위 사용
-                                 .trendingScore(history.getTrendingScore())
-                                 .content(DefaultContentResponse.from(content, uploaderName))
-                                 .build());
-            } else {
-                log.warn("[Trending Chart] 캐시 갱신 중: 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.", history.getContentId());            }
+            // 삭제, 숨김 처리된 콘텐츠는 조회 응답에서 제외
+            if (content.getStatus() != ContentStatus.ACTIVE) {
+                log.info("[Trending Chart] 캐시 갱신 중: 비활성/삭제 콘텐츠(ID: {})가 제외되었습니다.",
+                        history.getContentId());
+                continue;
+            }
+
+            String uploaderName = (content.getUploaderId() == null)
+                ? "관리자"
+                : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+
+            newList.add(TrendingResponse.builder()
+                             .rank(actualRank++) // 조회 시점 기준으로 순위 재부여
+                             .trendingScore(history.getTrendingScore())
+                             .content(DefaultContentResponse.from(content, uploaderName))
+                             .build());
         }
 
         // 원자적 캐시 덮어쓰기
