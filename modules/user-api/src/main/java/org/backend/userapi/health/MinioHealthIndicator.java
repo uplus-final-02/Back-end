@@ -4,11 +4,13 @@ import core.storage.config.StorageProperties;
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 @Component("minioDependency")
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "minio", matchIfMissing = true)
 public class MinioHealthIndicator implements HealthIndicator {
 
     private final MinioClient internalMinioClient;
