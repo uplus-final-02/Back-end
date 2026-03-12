@@ -63,9 +63,20 @@ public class TrendingContentService {
             log.warn("[Trending Chart] 집계할 데이터가 없습니다.");
             return;
         }
-
+        
+        // 2-1. 집계 대상 content 상태 일괄 조회
+        Set<Long> activeContentIds = contentRepository.findAllById(
+                stats.stream()
+                     .map(TrendingStatDto::getContentId)
+                     .collect(Collectors.toSet())
+            ).stream()
+             .filter(c -> c.getStatus() == ContentStatus.ACTIVE)
+             .map(Content::getId)
+             .collect(Collectors.toSet());
+        
         // 3. 점수 계산, 필터링, 정렬 및 Top N 추출
         List<TrendingStatDto> sortedStats = stats.stream()
+        			 .filter(stat -> activeContentIds.contains(stat.getContentId()))
                      .filter(stat -> calculateScore(stat) > 0) // 점수가 있는 것만 선별
                      .sorted((a, b) -> Double.compare(calculateScore(b), calculateScore(a))) // 내림차순 정렬
                      .limit(MAX_TRENDING_SIZE) // 상위 개수 제한
