@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -29,6 +30,7 @@ import org.springframework.util.StringUtils;
  * </ul>
  */
 @Service
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "minio", matchIfMissing = true)
 public class MinioObjectStorageService implements ObjectStorageService {
 
     private final MinioClient internalMinioClient; // (필요 시) 서버 내부용

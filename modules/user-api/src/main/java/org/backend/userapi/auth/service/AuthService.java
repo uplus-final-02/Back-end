@@ -195,7 +195,9 @@ public class AuthService {
                     LoginResponse jwt = issueJwt(user, existing.getEmail());
                     return SocialLoginResponse.existingUser(
                             jwt.tokenType(), jwt.accessToken(), jwt.accessTokenTtlSeconds(),
-                            jwt.refreshToken(), jwt.refreshTokenTtlSeconds()
+                            jwt.refreshToken(), jwt.refreshTokenTtlSeconds(),
+                            jwt.paid(),
+                            jwt.uplus()
                     );
                 })
                 .orElseGet(() -> {
@@ -303,7 +305,9 @@ public class AuthService {
 
             return new LoginResponse(
                     "Bearer", newAccessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
-                    newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+                    newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds(),
+                    paid,
+                    uplus
             );
         } finally {
             // ── 처리 완료 → 동시 재발급 방지 락 해제 ─────────────────────
@@ -367,7 +371,10 @@ public class AuthService {
 
         return new LoginResponse(
                 "Bearer", accessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
-                refreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+                refreshToken, 
+                jwtTokenProvider.getRefreshTokenTtlSeconds(),
+                paid,
+                uplus
         );
     }
 
