@@ -3,6 +3,7 @@ package user.entity;
 import common.entity.BaseTimeEntity;
 import common.enums.UserRole;
 import common.enums.UserStatus;
+import common.enums.WithdrawalReason;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -39,6 +40,10 @@ public class User extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_status", nullable = false, length = 20)
     private UserStatus userStatus;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "withdrawal_reason")
+    private WithdrawalReason withdrawalReason;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
@@ -61,5 +66,17 @@ public class User extends BaseTimeEntity {
     
     public void updateProfileImage(String profileImage) {
         this.profileImage = profileImage;
+    }
+    
+    // 탈퇴 로직 메소드
+    public void withdraw(WithdrawalReason reason) {
+        this.userStatus = UserStatus.WITHDRAW_PENDING;
+        this.withdrawalReason = reason;
+        this.deletedAt = LocalDateTime.now();
+    }
+    
+    public boolean isWithdrawn() {
+        return this.userStatus == UserStatus.DELETED 
+            || this.userStatus == UserStatus.WITHDRAW_PENDING;
     }
 }

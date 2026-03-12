@@ -17,4 +17,7 @@ dependencies {
 
     implementation 'io.minio:minio:8.5.12'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    implementation platform('software.amazon.awssdk:bom:2.21.1')
+    implementation 'software.amazon.awssdk:s3'
 }
