@@ -19,10 +19,8 @@ import java.util.Comparator;
 public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
-    private final ObjectStorageService objectStorageService;
-    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final MinioObjectStorageService objectStorageService;
-
+    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final VideoFileStatusService statusService;
 
     public void transcode(VideoTranscodeRequestedEvent event) {
@@ -66,12 +64,11 @@ public class VideoTranscodeService {
 
             String hlsMasterKey = baseKey + "/master.m3u8";
 
-            // 5) DB 업데이트 + 멱등성 키 기록 (동일 트랜잭션으로 커밋)
-            vf.updateHlsKey(hlsMasterKey);
-            vf.updateDurationSec(durationSec);
-            vf.updateTranscodeStatus(TranscodeStatus.DONE);
-            processedEventRepository.markProcessed(event.eventId(), event.videoId());
+            // 5) DB 상태 업데이트 + 멱등성 키 기록
+            // statusService.markDone() : REQUIRES_NEW 트랜잭션으로 VideoFile 상태를 DONE으로 커밋
+            // markProcessed()          : statusService와 별개 트랜잭션 (JdbcTemplate 직접 사용)
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
+            processedEventRepository.markProcessed(event.eventId(), event.videoId());
 
             log.info("[TRANSCODE][DONE] videoFileId={}, hlsKey={}, durationSec={}",
                     event.videoFileId(), hlsMasterKey, durationSec);
