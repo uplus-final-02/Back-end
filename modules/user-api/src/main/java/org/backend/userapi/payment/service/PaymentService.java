@@ -11,6 +11,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.backend.userapi.auth.service.MembershipCheckService;
 import org.backend.userapi.common.exception.ConflictException;
 import org.backend.userapi.common.exception.RedisServiceUnavailableException;
 import org.backend.userapi.payment.dto.SubscribeRequest;
@@ -48,6 +50,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MembershipCheckService membershipCheckService;
 
     @Transactional
     public SubscribeResponse subscribe(Long userId, SubscribeRequest request, String idempotencyKey) {
@@ -140,6 +143,10 @@ public class PaymentService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. userId=" + userId));
 
+        if (membershipCheckService.isUplus(userId)) {
+            throw new IllegalArgumentException("LG U+ 인증 회원은 베이직 구독을 신청할 수 없습니다.");
+        }
+        
         PaymentProvider paymentProvider = request.getPaymentProvider();
 
         Subscriptions subscription = subscriptionsRepository.findByUser_Id(userId).orElse(null);

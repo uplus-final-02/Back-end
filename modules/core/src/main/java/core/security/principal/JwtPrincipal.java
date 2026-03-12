@@ -1,7 +1,6 @@
 package core.security.principal;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 @Getter
 public class JwtPrincipal {
