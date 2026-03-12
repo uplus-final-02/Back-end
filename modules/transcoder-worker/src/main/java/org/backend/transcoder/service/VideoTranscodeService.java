@@ -7,6 +7,7 @@ import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.MinioObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.*;
@@ -19,10 +20,16 @@ public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
     private final MinioObjectStorageService objectStorageService;
-
     private final VideoFileStatusService statusService;
+    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
 
     public void transcode(VideoTranscodeRequestedEvent event) {
+        // ── 멱등성 체크: 동일 eventId 재처리 방지 ────────────────────────
+        if (processedEventRepository.isProcessed(event.eventId())) {
+            log.info("[TRANSCODE][SKIP_DUPLICATE] eventId={}, videoFileId={}", event.eventId(), event.videoFileId());
+            return;
+        }
+
         VideoFile vf = videoFileRepository.findById(event.videoFileId())
                 .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND: " + event.videoFileId()));
 
@@ -56,9 +63,10 @@ public class VideoTranscodeService {
             String hlsMasterKey = baseKey + "/master.m3u8";
 
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
+            processedEventRepository.markProcessed(event.eventId(), event.videoFileId());
 
-            log.info("[TRANSCODE][DONE] videoFileId={}, hlsKey={}, durationSec={}",
-                    event.videoFileId(), hlsMasterKey, durationSec);
+            log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
 
         } catch (Exception e) {
             log.error("[TRANSCODE][FAILED] videoFileId={}, cause={}", event.videoFileId(), e.getMessage(), e);
