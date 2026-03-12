@@ -102,14 +102,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) { // admin 테스트용
+    protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
         return path.equals("/admin/login")
                 || path.startsWith("/admin/storage")
-                || path.startsWith("/admin/users")
-                || path.startsWith("/admin/uploads/videos")
-                || path.startsWith("/admin/videos")
-                || path.startsWith("/admin/series")
-                || path.startsWith("/admin/hls");
+                || path.startsWith("/admin/hls"); // 테스트
     }
 }

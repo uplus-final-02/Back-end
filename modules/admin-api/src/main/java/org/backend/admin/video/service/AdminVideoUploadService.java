@@ -10,6 +10,7 @@ import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
 import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
+import core.security.principal.JwtPrincipal;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmRequest;
@@ -25,8 +26,6 @@ import org.backend.admin.exception.UploadNotCompletedException;
 @Service
 @RequiredArgsConstructor
 public class AdminVideoUploadService {
-
-    private final ContentRepository contentRepository;
     private final VideoRepository videoRepository;
     private final VideoFileRepository videoFileRepository;
 
@@ -35,7 +34,11 @@ public class AdminVideoUploadService {
     private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
 
     @Transactional
-    public AdminVideoUploadConfirmResponse confirmUpload(AdminVideoUploadConfirmRequest req) {
+    public AdminVideoUploadConfirmResponse confirmUpload(JwtPrincipal principal, AdminVideoUploadConfirmRequest req) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
+
         validate(req);
 
         var stat = safeStat(req.objectKey());
