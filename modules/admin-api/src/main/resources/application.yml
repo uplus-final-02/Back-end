@@ -18,7 +18,16 @@ app:
     secret: ${JWT_SECRET:change-me}
     access-token-ttl-seconds: 1800
     refresh-token-ttl-seconds: 1209600
-    
+
+  storage:
+    s3:
+      provider: ${S3_PROVIDER:minio} # minio | aws
+      bucket: ${S3_BUCKET:app-bucket}
+      region: ${S3_REGION:ap-northeast-2}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      endpoint: ${S3_ENDPOINT:}
+      public-base-url: ${S3_PUBLIC_BASE_URL}
     
 logging:
   level:

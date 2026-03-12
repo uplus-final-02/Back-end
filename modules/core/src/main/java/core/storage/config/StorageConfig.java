@@ -2,6 +2,7 @@ package core.storage.config;
 
 import io.minio.MinioClient;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,7 +11,8 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(StorageProperties.class)
 public class StorageConfig {
 
-    private static final String DEFAULT_REGION = "us-east-1";
+    @Value("${app.storage.s3.region}")
+    private String DEFAULT_REGION;
 
     @Bean
     @Qualifier("internalMinioClient")

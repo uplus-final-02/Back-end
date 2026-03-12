@@ -63,7 +63,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
       void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
     
-    Page<Content> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    
+    Page<Content> findByStatus(ContentStatus status, Pageable pageable);
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ────
     /**

@@ -36,6 +36,7 @@ import user.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -51,6 +52,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
     private final MembershipCheckService membershipCheckService;
+    private final LoginRateLimitService loginRateLimitService;
     
     // ══════════════════════════════════════════════════════════════
     //  STEP 1: 이메일 인증코드 발송
@@ -219,22 +221,45 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        AuthAccount authAccount = authAccountRepository
-                .findByAuthProviderAndEmail(AuthProvider.EMAIL, request.email())
-                .orElseThrow(() -> new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다."));
+        // 이메일 정규화: 대소문자·공백 차이로 Rate Limit 우회 방지
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
 
-        if (authAccount.getPasswordHash() == null
-                || !passwordEncoder.matches(request.password(), authAccount.getPasswordHash())) {
-            throw new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
+        // ── 1. 계정 잠금 확인 (5회 연속 실패 시 15분 잠금) ──────────────
+        loginRateLimitService.checkLock(email);
+
+        // ── 2. 동시 중복 요청 방지 (SETNX TTL 5초) ──────────────────────
+        boolean lockAcquired = loginRateLimitService.acquireProcessingLock(email);
+
+        try {
+            AuthAccount authAccount = authAccountRepository
+                    .findByAuthProviderAndEmail(AuthProvider.EMAIL, email)
+                    .orElseThrow(() -> {
+                        loginRateLimitService.recordFailure(email); // 존재하지 않는 이메일도 실패 카운트
+                        return new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
+                    });
+
+            if (authAccount.getPasswordHash() == null
+                    || !passwordEncoder.matches(request.password(), authAccount.getPasswordHash())) {
+                loginRateLimitService.recordFailure(email); // 비밀번호 불일치 → 실패 카운트
+                throw new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
+            }
+
+            User user = authAccount.getUser();
+            if (user.getUserStatus() != UserStatus.ACTIVE) {
+                throw new InvalidCredentialsException("비활성화된 계정입니다.");
+            }
+
+            // ── 3. 로그인 성공 → 실패 카운터 초기화 ────────────────────
+            loginRateLimitService.clearFailure(email);
+            authAccount.updateLastLoginAt();
+            return issueJwt(user, authAccount.getEmail());
+
+        } finally {
+            // ── 4. 처리 완료 → 동시 요청 방지 락 해제 ──────────────────
+            if (lockAcquired) {
+                loginRateLimitService.releaseProcessingLock(email);
+            }
         }
-
-        User user = authAccount.getUser();
-        if (user.getUserStatus() != UserStatus.ACTIVE) {
-            throw new InvalidCredentialsException("비활성화된 계정입니다.");
-        }
-
-        authAccount.updateLastLoginAt();
-        return issueJwt(user, authAccount.getEmail());
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -245,37 +270,47 @@ public class AuthService {
     public LoginResponse reissue(ReissueRequest request) {
         Long userId = jwtTokenProvider.extractUserIdFromRefreshToken(request.refreshToken());
 
-        RefreshToken saved = refreshTokenService.validateStoredTokenAndGet(userId, request.refreshToken());
+        // ── 동시 재발급 요청 방지 (SETNX TTL 5초) ────────────────────────
+        boolean lockAcquired = loginRateLimitService.acquireReissueLock(userId);
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new InvalidCredentialsException("사용자 정보를 찾을 수 없습니다."));
+        try {
+            RefreshToken saved = refreshTokenService.validateStoredTokenAndGet(userId, request.refreshToken());
 
-        if (user.getUserStatus() != UserStatus.ACTIVE) {
-            throw new InvalidCredentialsException("비활성화된 계정입니다.");
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new InvalidCredentialsException("사용자 정보를 찾을 수 없습니다."));
+
+            if (user.getUserStatus() != UserStatus.ACTIVE) {
+                throw new InvalidCredentialsException("비활성화된 계정입니다.");
+            }
+
+            AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
+                    .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
+
+            boolean paid = membershipCheckService.isPaid(userId);
+            boolean uplus = membershipCheckService.isUplus(userId);
+
+            String newAccessToken = jwtTokenProvider.generateAccessToken(
+                    user.getId(),
+                    authAccount.getEmail(),
+                    user.getNickname(),
+                    user.getUserRole().name(),
+                    paid,
+                    uplus
+            );
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+
+            refreshTokenService.upsert(userId, newRefreshToken);
+
+            return new LoginResponse(
+                    "Bearer", newAccessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
+                    newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
+            );
+        } finally {
+            // ── 처리 완료 → 동시 재발급 방지 락 해제 ─────────────────────
+            if (lockAcquired) {
+                loginRateLimitService.releaseReissueLock(userId);
+            }
         }
-
-        AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
-                .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
-
-        boolean paid = membershipCheckService.isPaid(userId);
-        boolean uplus = membershipCheckService.isUplus(userId);
-
-        String newAccessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(),
-                authAccount.getEmail(),
-                user.getNickname(),
-                user.getUserRole().name(),
-                paid,
-                uplus
-        );
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
-
-        refreshTokenService.upsert(userId, newRefreshToken);
-
-        return new LoginResponse(
-                "Bearer", newAccessToken, jwtTokenProvider.getAccessTokenTtlSeconds(),
-                newRefreshToken, jwtTokenProvider.getRefreshTokenTtlSeconds()
-        );
     }
 
     @Transactional
