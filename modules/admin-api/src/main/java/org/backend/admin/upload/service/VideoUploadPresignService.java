@@ -1,5 +1,6 @@
 package org.backend.admin.upload.service;
 
+import core.security.principal.JwtPrincipal;
 import core.storage.ObjectStorageService;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,10 @@ public class VideoUploadPresignService {
 
     private final ObjectStorageService objectStorageService;
 
-    public VideoUploadPresignResponse presign(VideoUploadPresignRequest req) {
+    public VideoUploadPresignResponse presign(JwtPrincipal principal, VideoUploadPresignRequest req) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
         validate(req);
 
         // key 규칙: videos/original/{contentId}/{uuid}.{ext}

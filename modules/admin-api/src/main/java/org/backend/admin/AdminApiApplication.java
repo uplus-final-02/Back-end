@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @EnableJpaAuditing
-@EnableScheduling
+@EnableScheduling   // MinioBucketInitializer.healthCheck() 30초 주기 실행
 @SpringBootApplication(scanBasePackages = {
         "org.backend.admin",          // admin-api
         "core",                       // core 모듈 (core.security.*)

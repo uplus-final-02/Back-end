@@ -3,6 +3,7 @@ package org.backend.admin.video.service;
 import common.enums.VideoStatus;
 import content.entity.Video;
 import content.repository.VideoRepository;
+import core.security.principal.JwtPrincipal;
 import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.exception.UploadNotCompletedException;
@@ -21,10 +22,15 @@ public class AdminSeriesEpisodePresignService {
 
     @Transactional(readOnly = true)
     public org.backend.admin.video.dto.AdminEpisodePresignResponse presignPutUrl(
+            JwtPrincipal principal,
             Long seriesId,
             Long videoId,
             org.backend.admin.video.dto.AdminEpisodePresignRequest req
     ) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
+
         validate(req);
 
         Video video = videoRepository.findById(videoId)

@@ -11,6 +11,7 @@ import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
 import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
+import core.security.principal.JwtPrincipal;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
@@ -34,7 +35,14 @@ public class AdminSeriesEpisodeUploadService {
     private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
 
     @Transactional
-    public AdminSeriesEpisodeConfirmResponse confirmUpload(Long seriesId, AdminSeriesEpisodeConfirmRequest req) {
+    public AdminSeriesEpisodeConfirmResponse confirmUpload(
+            JwtPrincipal principal,
+            Long seriesId,
+            AdminSeriesEpisodeConfirmRequest req
+    ) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
         validate(seriesId, req);
 
         Content series = contentRepository.findById(seriesId)

@@ -11,6 +11,7 @@ import content.repository.VideoRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
+import core.security.principal.JwtPrincipal;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.exception.UploadNotCompletedException;
@@ -42,7 +43,11 @@ public class AdminVideoUploadService {
      * — Kafka 장애 시 API는 정상 응답, 복구 후 자동 재발행
      */
     @Transactional
-    public AdminVideoUploadConfirmResponse confirmUpload(AdminVideoUploadConfirmRequest req) {
+    public AdminVideoUploadConfirmResponse confirmUpload(JwtPrincipal principal, AdminVideoUploadConfirmRequest req) {
+        if (principal == null) {
+            throw new IllegalStateException("UNAUTHORIZED: JwtPrincipal is null");
+        }
+
         validate(req);
 
         var stat = safeStat(req.objectKey());
