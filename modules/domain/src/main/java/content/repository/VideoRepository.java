@@ -24,6 +24,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
   Optional<Video> findByContentIdAndEpisodeNo(Long contentId, Integer episodeNo);
   
+  @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"content", "videoFile"})
   List<Video> findAllByContentIdInOrderByEpisodeNoAsc(List<Long> contentIds);
 
   @Query("""

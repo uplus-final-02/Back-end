@@ -1,0 +1,48 @@
+name: Deploy Data Node (SSM)
+
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'modules/domain/**'
+      - 'docker-compose.data.yml'
+      - 'docker/elasticsearch/Dockerfile'
+      - '.github/workflows/deploy-data.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Tar & Deploy via SSM
+        run: |
+          tar -czf project.tar.gz docker-compose.data.yml docker/elasticsearch/Dockerfile
+          
+          ENCODED_BUNDLE=$(base64 -w 0 project.tar.gz)
+
+          aws ssm send-command \
+            --instance-ids "${{ secrets.DATA_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              'mkdir -p /home/ubuntu/utopia-data',
+              'cd /home/ubuntu/utopia-data',
+          
+              'echo $ENCODED_BUNDLE | base64 -d > project.tar.gz',
+              'tar -xzf project.tar.gz',
+          
+              'echo \"${{ secrets.ENV_FILE }}\" > .env',
+          
+              'sudo docker compose -f docker-compose.data.yml up -d --build',
+              'sudo docker image prune -f',
+          
+              'rm project.tar.gz'
+            ]"

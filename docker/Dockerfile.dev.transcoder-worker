@@ -1,0 +1,7 @@
+FROM amazoncorretto:21-alpine
+WORKDIR /app
+RUN apk update && \
+    apk add --no-cache ffmpeg
+COPY modules/transcoder-worker/build/libs/*.jar app.jar
+ENV TZ=Asia/Seoul
+ENTRYPOINT ["java", "-jar", "app.jar"]

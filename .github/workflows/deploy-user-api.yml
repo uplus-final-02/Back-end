@@ -1,0 +1,72 @@
+name: Deploy User API
+
+on:
+  push:
+    branches: [ develop, 'deploy/#168-v2']
+    paths:
+      - 'modules/user-api/**'
+      - 'modules/core/**'
+      - 'modules/domain/**'
+      - 'docker-compose.user-api.yml'
+      - 'docker/Dockerfile.dev.user-api'
+      - '.github/workflows/deploy-user-api.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: JDK 21 설정
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+
+      - name: Gradle 캐시 설정
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: User API 빌드
+        run: |
+          chmod +x gradlew
+          ./gradlew :modules:user-api:bootJar -x test
+
+      - name: AWS 자격 증명 설정
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: S3에 파일 업로드
+        run: |
+          aws s3 cp modules/user-api/build/libs/*.jar s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/user-api.jar
+          aws s3 cp docker-compose.user-api.yml s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/
+          aws s3 cp docker/Dockerfile.dev.user-api s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker/Dockerfile.dev.user-api
+
+      - name: EC2 동시 배포 실행 (SSM)
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ secrets.USER_API_INSTANCE_IDS }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              'mkdir -p /home/ubuntu/utopia-user-api/modules/user-api/build/libs',
+              'mkdir -p /home/ubuntu/utopia-user-api/docker',
+              'cd /home/ubuntu/utopia-user-api',
+          
+              'aws s3 cp s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/user-api.jar modules/user-api/build/libs/',
+              'aws s3 cp s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker-compose.user-api.yml .',
+              'aws s3 cp s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker/Dockerfile.dev.user-api docker/',
+          
+              'echo \"${{ secrets.ENV_FILE }}\" > .env',
+          
+              'sudo docker compose -f docker-compose.user-api.yml up -d --build',
+              'sudo docker image prune -f'
+            ]"

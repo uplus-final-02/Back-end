@@ -12,6 +12,7 @@ public interface ContentIndexingService {
     void indexContent(Long contentId);
     void deleteContent(Long contentId);
     Page<ContentDocument> search(String keyword, String category, String genre, String tag, Long userId, Pageable pageable);
+    Page<ContentDocument> getAlternativeContents(Pageable pageable);
     long countIndexedContents();
     List<String> getSuggestions(String keyword);
     Map<String, Object> getIndexingStatus();

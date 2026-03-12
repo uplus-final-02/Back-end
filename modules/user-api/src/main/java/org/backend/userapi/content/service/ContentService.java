@@ -206,11 +206,13 @@ public class ContentService {
             );
         }
         
-        if (content.getType() != ContentType.SERIES) {
-            throw new IllegalArgumentException(
-                    "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId
-            );
-        }
+
+//        if (content.getType() != ContentType.SERIES) {
+//            throw new IllegalArgumentException(
+//                    "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId
+//            );
+//        }
+
 
         List<Video> videos = videoRepository.findEpisodesWithVideoFileByContentId(contentId);
 

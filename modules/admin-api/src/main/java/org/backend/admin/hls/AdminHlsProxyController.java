@@ -1,22 +1,34 @@
 package org.backend.admin.hls;
 
+import core.storage.MinioBucketInitializer;
+import core.storage.StorageException;
 import core.storage.config.StorageProperties;
 import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/hls")
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "minio", matchIfMissing = true)
 public class AdminHlsProxyController {
+
+    private static final String HLS_M3U8_MIME = "application/vnd.apple.mpegurl";
+    private static final Set<String> ALLOWED_VARIANTS = Set.of("v0", "v1", "v2", "v3", "v4", "v5");
 
     @Qualifier("internalMinioClient")
     private final MinioClient internalMinioClient;
@@ -25,37 +37,87 @@ public class AdminHlsProxyController {
     private final MinioClient publicMinioClient;
 
     private final StorageProperties props;
+    private final MinioBucketInitializer bucketInitializer;
 
-    // 개발용: m3u8을 presigned 세그먼트 URL로 rewrite 해서 반환
-    @GetMapping(value = "/{videoFileId}/master.m3u8", produces = "application/vnd.apple.mpegurl")
+    /**
+     * 1) master.m3u8 반환
+     * - master 안의 variant playlist 경로(v0/prog_index.m3u8 등)를
+     *   우리 서버의 variant 프록시 URL로 바꿔서 내려줌
+     * - BANDWIDTH 오름차순으로 정렬해서 재구성
+     * - Degraded Mode 시 assertAvailable()에서 즉시 예외 발생
+     * - MinIO 읽기 실패 시 StorageException으로 래핑
+     */
+    @GetMapping(value = "/{videoFileId}/master.m3u8", produces = HLS_M3U8_MIME)
     public String getRewrittenMaster(@PathVariable Long videoFileId,
-                                     @RequestParam(defaultValue = "600") int expirySec) throws Exception {
+                                     @RequestParam(defaultValue = "600") int expirySec) {
+
+        bucketInitializer.assertAvailable();
 
         String masterKey = "hls/" + videoFileId + "/master.m3u8";
+        String raw = readObjectAsString(masterKey);
 
-        // 1) MinIO에서 master.m3u8 텍스트 읽기
-        String raw;
-        try (InputStream is = internalMinioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(props.bucket())
-                        .object(masterKey)
-                        .build()
-        )) {
-            raw = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+                .build()
+                .toUriString();
+
+        MasterParseResult parsed = parseMaster(raw);
+        parsed.variants.sort(Comparator.comparingLong(v -> v.bandwidth));
+
+        StringBuilder sb = new StringBuilder();
+        for (String h : parsed.headerLines) {
+            sb.append(h).append("\n");
         }
 
-        // 2) m3u8 각 라인 처리: #으로 시작하는 메타라인은 그대로, 파일명(ts 등)은 presigned로 치환
-        String basePrefix = "hls/" + videoFileId + "/";
+        for (VariantBlock v : parsed.variants) {
+            sb.append(v.streamInfLine).append("\n");
+
+            String variant = extractVariantFromUri(v.uriLine);
+            if (variant == null) {
+                sb.append(v.uriLine).append("\n\n");
+                continue;
+            }
+
+            sb.append(baseUrl)
+                    .append("/admin/hls/")
+                    .append(videoFileId)
+                    .append("/")
+                    .append(variant)
+                    .append("/prog_index.m3u8?expirySec=")
+                    .append(expirySec)
+                    .append("\n\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 2) variant playlist(v0~v5) 반환
+     * - variant m3u8 안의 ts 라인을 presigned URL로 치환
+     * - Degraded Mode 시 assertAvailable()에서 즉시 예외 발생
+     */
+    @GetMapping(value = "/{videoFileId}/{variant}/prog_index.m3u8", produces = HLS_M3U8_MIME)
+    public String getRewrittenVariant(@PathVariable Long videoFileId,
+                                      @PathVariable String variant,
+                                      @RequestParam(defaultValue = "600") int expirySec) {
+
+        bucketInitializer.assertAvailable();
+
+        if (!ALLOWED_VARIANTS.contains(variant)) {
+            throw new IllegalArgumentException("invalid variant: " + variant);
+        }
+
+        String variantKey = "hls/" + videoFileId + "/" + variant + "/prog_index.m3u8";
+        String raw = readObjectAsString(variantKey);
+
+        String basePrefix = "hls/" + videoFileId + "/" + variant + "/";
 
         String rewritten = raw.lines()
                 .map(line -> {
-                    String trimmed = line.trim();
-                    if (trimmed.isBlank()) return trimmed;
-                    if (trimmed.startsWith("#")) return trimmed;
+                    String t = line.trim();
+                    if (t.isBlank()) return t;
+                    if (t.startsWith("#")) return t;
 
-                    // 상대경로(seg_00000.ts)면 basePrefix 붙여서 objectKey 생성
-                    String segKey = trimmed.startsWith("http") ? null : basePrefix + trimmed;
-                    if (segKey == null) return trimmed;
+                    String segKey = basePrefix + t;
 
                     try {
                         return publicMinioClient.getPresignedObjectUrl(
@@ -67,11 +129,110 @@ public class AdminHlsProxyController {
                                         .build()
                         );
                     } catch (Exception e) {
-                        throw new RuntimeException("PRESIGN_FAILED for " + segKey, e);
+                        throw new StorageException("HLS presigned URL 생성 실패: " + segKey, e);
                     }
                 })
                 .collect(Collectors.joining("\n"));
 
         return rewritten + "\n";
+    }
+
+    private String readObjectAsString(String objectKey) {
+        try (InputStream is = internalMinioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(props.bucket())
+                        .object(objectKey)
+                        .build()
+        )) {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new StorageException("HLS object 읽기 실패: " + objectKey, e);
+        }
+    }
+
+    private static class MasterParseResult {
+        List<String> headerLines = new ArrayList<>();
+        List<VariantBlock> variants = new ArrayList<>();
+    }
+
+    private static class VariantBlock {
+        String streamInfLine;
+        String uriLine;
+        long bandwidth;
+    }
+
+    private MasterParseResult parseMaster(String raw) {
+        MasterParseResult result = new MasterParseResult();
+
+        List<String> lines = raw.lines().collect(Collectors.toList());
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i).trim();
+            if (line.isBlank()) continue;
+
+            if (line.startsWith("#EXT-X-STREAM-INF:")) {
+                VariantBlock vb = new VariantBlock();
+                vb.streamInfLine = line;
+                vb.bandwidth = parseBandwidth(line);
+
+                String uri = null;
+                int j = i + 1;
+                while (j < lines.size()) {
+                    String next = lines.get(j).trim();
+                    if (next.isBlank()) {
+                        j++;
+                        continue;
+                    }
+                    if (next.startsWith("#")) {
+                        j++;
+                        continue;
+                    }
+                    uri = next;
+                    break;
+                }
+
+                if (uri == null) {
+                    result.headerLines.add(line);
+                } else {
+                    vb.uriLine = uri;
+                    result.variants.add(vb);
+                    i = j;
+                }
+            } else {
+                result.headerLines.add(line);
+            }
+        }
+        return result;
+    }
+
+    private long parseBandwidth(String streamInfLine) {
+        int idx = streamInfLine.indexOf("BANDWIDTH=");
+        if (idx < 0) return Long.MAX_VALUE;
+
+        int start = idx + "BANDWIDTH=".length();
+        int end = start;
+        while (end < streamInfLine.length() && Character.isDigit(streamInfLine.charAt(end))) {
+            end++;
+        }
+
+        String num = streamInfLine.substring(start, end);
+        try {
+            return Long.parseLong(num);
+        } catch (Exception e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private String extractVariantFromUri(String uriLine) {
+        String t = uriLine.trim();
+
+        for (String v : ALLOWED_VARIANTS) {
+            if (t.startsWith(v + "/")) return v;
+        }
+
+        for (String v : ALLOWED_VARIANTS) {
+            if (t.contains("/" + v + "/")) return v;
+        }
+
+        return null;
     }
 }
