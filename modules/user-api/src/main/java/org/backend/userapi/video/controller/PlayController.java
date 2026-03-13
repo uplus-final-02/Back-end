@@ -26,8 +26,7 @@ public class PlayController {
     @GetMapping("/{videoId}/play")
     public ApiResponse<VideoPlayDto> playVideo(
         @PathVariable Long videoId,
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal,
-        HttpServletResponse response // 🌟 1. 쿠키를 담기 위해 HTTP 응답 객체 추가
+        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) throws Exception {
 
         VideoPlayDto result = videoService.getPlayInfo(videoId, jwtPrincipal);
@@ -43,9 +42,9 @@ public class PlayController {
 
                 CookiesForCustomPolicy cookies = cloudFrontCookieService.generateSignedCookies(resourcePath);
 
-                addCookieToResponse(response, "CloudFront-Policy", cookies.policyHeaderValue());
-                addCookieToResponse(response, "CloudFront-Signature", cookies.signatureHeaderValue());
-                addCookieToResponse(response, "CloudFront-Key-Pair-Id", cookies.keyPairIdHeaderValue());
+                result.setPolicy(cookies.policyHeaderValue().replace("CloudFront-Policy=", ""));
+                result.setSignature(cookies.signatureHeaderValue().replace("CloudFront-Signature=", ""));
+                result.setKeyPairId(cookies.keyPairIdHeaderValue().replace("CloudFront-Key-Pair-Id=", ""));
             } catch (Exception e) {
                 // 환경변수 누락 등의 에러가 발생해도, 앱이 죽지 않고 로그만 남기도록 처리
                 System.out.println("⚠️ CloudFront 서명 쿠키 생성 실패 (로컬 환경이거나 키가 누락됨): " + e.getMessage());

@@ -4,16 +4,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import common.entity.Tag;
 import common.enums.ContentStatus;
 import common.enums.VideoStatus;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -45,6 +43,11 @@ public class VideoPlayDto {
 
     // [5] 시리즈 연동 정보
     private Context context;
+
+    // cookie 에 넣을 정보들
+    private String policy;
+    private String signature;
+    private String keyPairId;
 
     // --- Inner Classes ---
 
