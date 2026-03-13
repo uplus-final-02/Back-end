@@ -199,13 +199,6 @@ public class ContentService {
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
         
-        // 삭제된 콘텐츠의 경우 연관된 에피소드 조회X
-        if (content.getStatus() != ContentStatus.ACTIVE) {
-            throw new ContentNotFoundException(
-                    "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
-            );
-        }
-        
 
 //        if (content.getType() != ContentType.SERIES) {
 //            throw new IllegalArgumentException(

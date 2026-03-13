@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "cloudfront")
+@ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "aws")
 public class CloudFrontHlsUrlProvider implements HlsUrlProvider {
 
     private final CloudFrontService cloudFrontService;

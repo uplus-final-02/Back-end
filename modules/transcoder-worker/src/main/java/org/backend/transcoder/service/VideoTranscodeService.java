@@ -5,6 +5,7 @@ import content.entity.VideoFile;
 import content.repository.VideoFileRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.MinioObjectStorageService;
+import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
@@ -21,9 +22,7 @@ public class VideoTranscodeService {
     private final VideoFileRepository videoFileRepository;
     private final ObjectStorageService objectStorageService;
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
-    private final MinioObjectStorageService objectStorageService;
     private final VideoFileStatusService statusService;
-    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
 
     public void transcode(VideoTranscodeRequestedEvent event) {
         // ① 이벤트 레벨 멱등성: 동일 eventId 중복 처리 방지 (Outbox at-least-once 보상)
@@ -66,13 +65,11 @@ public class VideoTranscodeService {
 
             String hlsMasterKey = baseKey + "/master.m3u8";
 
-            // 5) DB 업데이트 + 멱등성 키 기록 (동일 트랜잭션으로 커밋)
-            vf.updateHlsKey(hlsMasterKey);
-            vf.updateDurationSec(durationSec);
-            vf.updateTranscodeStatus(TranscodeStatus.DONE);
-            processedEventRepository.markProcessed(event.eventId(), event.videoId());
+            // 5) DB 상태 업데이트 + 멱등성 키 기록
+            // statusService.markDone() : REQUIRES_NEW 트랜잭션으로 VideoFile 상태를 DONE으로 커밋
+            // markProcessed()          : statusService와 별개 트랜잭션 (JdbcTemplate 직접 사용)
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
-            processedEventRepository.markProcessed(event.eventId(), event.videoFileId());
+            processedEventRepository.markProcessed(event.eventId(), event.videoId());
 
             log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
                     event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
@@ -93,7 +90,7 @@ public class VideoTranscodeService {
             if (workDir != null) {
                 try {
                     log.info("[TRANSCODE][WORKDIR] {}", workDir);
-                    //deleteRecursively(workDir);
+                    deleteRecursively(workDir);
                 } catch (Exception ignore) {}
             }
         }
