@@ -47,17 +47,13 @@ public class ProcessedKafkaEventJdbcRepository {
         Integer count = jdbcTemplate.queryForObject(EXISTS_SQL, Integer.class, eventId);
         return count != null && count > 0;
     }
-   private static final String INSERT_SQL =
-         "INSERT IGNORE INTO processed_kafka_events (event_id, video_file_id, processed_at) " +
-          "VALUES (?, ?, NOW(3))";
-
 
     /**
      * 이벤트를 처리 완료로 기록한다.
      * 호출 시점의 트랜잭션에 참여한다.
      */
-      public void markProcessed(String eventId, long videoFileId) {
-      jdbcTemplate.update(INSERT_SQL, eventId, videoFileId);
-  }
+    public void markProcessed(String eventId, long videoId) {
+        jdbcTemplate.update(INSERT_SQL, eventId, videoId);
+    }
 
 }
