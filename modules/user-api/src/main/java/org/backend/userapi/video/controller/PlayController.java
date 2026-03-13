@@ -83,7 +83,6 @@ public class PlayController {
                                               .secure(true)
                                               .path("/")
                                               .sameSite("None")
-                                              .domain(".cloudfront.net")
                                               .build();
         response.addHeader("Set-Cookie", cookie.toString());
     }
