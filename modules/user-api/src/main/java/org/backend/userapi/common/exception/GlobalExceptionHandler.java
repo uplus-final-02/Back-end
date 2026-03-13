@@ -15,6 +15,7 @@ import org.backend.userapi.payment.exception.PaymentInProgressException;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.data.elasticsearch.UncategorizedElasticsearchException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
@@ -104,7 +105,18 @@ public class GlobalExceptionHandler {
         log.warn("[ES] Spring Data 래핑 예외 - 503 반환: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(new ApiResponse<>(503, "검색 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+                .body(new ApiResponse<>(503, "일시적으로 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.", null));
+    }
+
+    // ── MySQL 순간 장애 (락 타임아웃·커넥션 획득 실패 등 일시적 오류) → 503 ──
+    // TransientDataAccessException: 재시도하면 성공할 가능성이 있는 일시적 DB 오류
+    // (DeadlockLoserDataAccessException, QueryTimeoutException, CannotAcquireLockException 등)
+    @ExceptionHandler(TransientDataAccessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTransientDataAccess(TransientDataAccessException e) {
+        log.warn("[DB] 일시적 DB 오류 — 503 반환: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "일시적으로 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.", null));
     }
 
     // ── 존재하지 않는 경로 요청 → 404 ──────────────────────────────────
