@@ -1,38 +1,47 @@
 package org.backend.admin.video.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import common.enums.TranscodeStatus;
 import common.enums.VideoStatus;
-import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
-import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
-import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
+import core.storage.ObjectNotFoundException;
+import core.storage.ObjectStorageService;
 import core.security.principal.JwtPrincipal;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
+import org.backend.admin.exception.UploadNotCompletedException;
+import org.backend.admin.kafka.outbox.VideoTranscodeOutboxJdbcRepository;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmRequest;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmResponse;
 import org.springframework.stereotype.Service;
-import core.storage.ObjectStorageService;
-import core.storage.ObjectNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.backend.admin.exception.ContentNotFoundException;
-import org.backend.admin.exception.UploadNotCompletedException;
 
 @Service
 @RequiredArgsConstructor
 public class AdminVideoUploadService {
+
     private final VideoRepository videoRepository;
     private final VideoFileRepository videoFileRepository;
-
     private final ObjectStorageService objectStorageService;
+    private final ObjectMapper objectMapper;
+    private final VideoTranscodeOutboxJdbcRepository outboxRepository;
 
-    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
-
+    /**
+     * 업로드 확정 처리.
+     *
+     * <p>[Outbox 패턴]
+     * VideoFile 상태 변경과 outbox 행 삽입을 동일 트랜잭션으로 묶는다.
+     * 커밋 후 {@link org.backend.admin.kafka.outbox.OutboxPollingScheduler}가
+     * outbox를 폴링해 Kafka에 발행한다.
+     * — DB 커밋 성공 → 반드시 Kafka 발행 보장 (at-least-once)
+     * — Kafka 장애 시 API는 정상 응답, 복구 후 자동 재발행
+     */
     @Transactional
     public AdminVideoUploadConfirmResponse confirmUpload(JwtPrincipal principal, AdminVideoUploadConfirmRequest req) {
         if (principal == null) {
@@ -43,7 +52,7 @@ public class AdminVideoUploadService {
 
         var stat = safeStat(req.objectKey());
         if (stat.size() <= 0) {
-            throw new UploadNotCompletedException(); // 0바이트도 업로드 미완료
+            throw new UploadNotCompletedException();
         }
 
         Video video = videoRepository.findById(req.videoId())
@@ -65,14 +74,19 @@ public class AdminVideoUploadService {
         vf.updateOriginalKey(req.objectKey());
         vf.updateTranscodeStatus(TranscodeStatus.WAITING);
 
-        videoTranscodeEventPublisher.publish(
-                VideoTranscodeRequestedEvent.of(
-                        video.getContent().getId(),
-                        video.getId(),
-                        vf.getId(),
-                        vf.getOriginalUrl()
-                )
+        // Outbox 삽입 — JPA 변경과 동일 트랜잭션 (JpaTransactionManager가 JDBC 커넥션 공유)
+        VideoTranscodeRequestedEvent event = VideoTranscodeRequestedEvent.of(
+                video.getContent().getId(),
+                video.getId(),
+                vf.getId(),
+                vf.getOriginalUrl()
         );
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            outboxRepository.save(event.eventId(), vf.getId(), payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("이벤트 직렬화 실패: " + event.eventId(), e);
+        }
 
         return new AdminVideoUploadConfirmResponse(
                 video.getContent().getId(),

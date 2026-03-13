@@ -59,6 +59,8 @@ management:
         include: health          # info 제거 — probe 용도 외 불필요한 정보 노출 차단
   endpoint:
     health:
+      # 🌟 빈이 없으면 무시하고 있는 것들만 검사하는 옵션.
+      validate-group-membership: false
       probes:
         enabled: true
       show-details: always       # Docker: EC2 보안그룹으로 8080을 ALB에서만 허용하면 안전
@@ -100,6 +102,18 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       endpoint: ${S3_ENDPOINT:}  # MinIO면 넣고, AWS면 비워도 됨
       public-base-url: ${S3_PUBLIC_BASE_URL}
+
+    local-cdn:
+      # HLS URL 서명용 비밀키 (환경변수 HLS_SIGNING_SECRET로 주입 권장)
+      secret-key: ${HLS_SIGNING_SECRET:default-secret-key-change-me-in-prod}
+
+    # CloudFrontProperties 빈 생성 에러 방지용 더미 설정 (로컬 테스트 시 사용 안 함)
+    cloudfront:
+      domain-name: ""
+      key-pair-id: ""
+      private-key-path: ""
+      use-local: false
+      sign-secret: ""
 
   search:
     initial-index-on-startup: ${SEARCH_INITIAL_INDEX_ON_STARTUP:false}

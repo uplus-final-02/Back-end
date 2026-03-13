@@ -2,7 +2,7 @@ name: Deploy User API
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'deploy/#168-v2']
     paths:
       - 'modules/user-api/**'
       - 'modules/core/**'

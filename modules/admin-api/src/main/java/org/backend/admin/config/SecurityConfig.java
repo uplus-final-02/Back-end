@@ -41,7 +41,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         return http
-        	.securityMatcher("/admin/**")
+            .securityMatcher("/admin/**", "/api/admin/**")
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .httpBasic(basic -> basic.disable())
@@ -52,11 +52,12 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
-            	    .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/").permitAll()
-                    .requestMatchers("/admin/hls", "/admin/hls/**").permitAll() // 테스트
-                    .requestMatchers("/admin/storage", "/admin/storage/**").permitAll() // 테스트
-            	    .anyRequest().hasRole("ADMIN")
-            	)
+                .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/", "/api/admin/login").permitAll()
+                .requestMatchers("/admin/hls/**", "/api/admin/hls/**").permitAll() 
+                .requestMatchers("/admin/storage/**", "/api/admin/storage/**").permitAll() 
+                
+                .anyRequest().hasAuthority("ADMIN") 
+            )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
@@ -67,32 +68,21 @@ public class SecurityConfig {
         return http
             .securityMatcher("/**")
             .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated()) 
             .build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // 프론트엔드 도메인 허용
         configuration.setAllowedOrigins(allowedOrigins);
-
-        // 허용할 HTTP 메서드
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        // 허용할 HTTP 헤더
         configuration.setAllowedHeaders(List.of("*"));
-        // 인증 정보(쿠키, Authorization 헤더 등) 포함 여부
         configuration.setAllowCredentials(true);
-        // 클라이언트에서 접근할 수 있도록 노출할 헤더 (JWT 사용 시 필수)
         configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // 모든 API 경로에 대해 위 설정 적용
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 }
-
-
