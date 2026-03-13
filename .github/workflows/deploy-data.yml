@@ -4,6 +4,7 @@ on:
   push:
     branches: [ develop ]
     paths:
+      - 'modules/domain/**'
       - 'docker-compose.data.yml'
       - 'docker/elasticsearch/Dockerfile'
       - '.github/workflows/deploy-data.yml'
