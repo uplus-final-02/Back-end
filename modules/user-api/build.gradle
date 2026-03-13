@@ -57,6 +57,11 @@ dependencies {
     // ShedLock — user-api 2개 인스턴스 환경에서 스케줄러 중복 실행 방지
     implementation 'net.javacrumbs.shedlock:shedlock-spring:5.16.0'
     implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:5.16.0'
+
+    implementation 'software.amazon.awssdk:cloudfront:2.21.1'
+    implementation 'software.amazon.awssdk:url-connection-client:2.21.1'
+    implementation platform('software.amazon.awssdk:bom:2.21.1')
+    implementation 'software.amazon.awssdk:s3'
 }
 
 tasks.named('test') {
