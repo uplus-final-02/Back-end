@@ -12,8 +12,10 @@ import org.backend.userapi.common.exception.OAuthLoginException;
 import org.backend.userapi.membership.exception.UplusUserNotFoundException;
 import org.backend.userapi.payment.exception.PaymentIdempotencyException;
 import org.backend.userapi.payment.exception.PaymentInProgressException;
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.elasticsearch.UncategorizedElasticsearchException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -72,12 +74,34 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse<>(503, e.getMessage(), null));
     }
 
-    // ── ES / 외부 데이터 저장소 연결 실패 → 503 ──────────────────────
-    // 서비스 레이어에서 catch하지 못한 DataAccessResourceFailureException이
-    // Controller까지 올라왔을 때 RuntimeException(500) 대신 503으로 명확히 응답
+    // ── ES 연결 실패 (네트워크/타임아웃) → 503 ───────────────────────
+    // Spring Data ES가 연결 수준 오류를 DataAccessResourceFailureException으로 래핑
+    // → 서비스 레이어에서 catch하지 못한 경우 Controller까지 올라왔을 때 500 대신 503 반환
     @ExceptionHandler(DataAccessResourceFailureException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataAccessResourceFailure(DataAccessResourceFailureException e) {
-        log.warn("[DataAccess] 외부 데이터 저장소 연결 실패 (ES/DB): {}", e.getMessage());
+        log.warn("[ES] 연결 실패 (네트워크/타임아웃) - 503 반환: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "검색 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+    }
+
+    // ── ES 응답 레벨 오류(ES Java Client) → 503 ───────────────────────
+    // DataAccessResourceFailureException: 연결 자체 실패 (ES 다운, 타임아웃)
+    // ElasticsearchException           : ES가 응답은 했지만 오류 상태 반환
+    //   ex) 인덱스 없음(404), 샤드 오류(500), 클러스터 레드(503) 등
+    // 두 예외가 커버하는 계층이 달라 모두 핸들러 필요
+    @ExceptionHandler(ElasticsearchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleElasticsearchStatus(ElasticsearchException e) {
+        log.warn("[ES] 응답 오류 (status={}) - 503 반환: {}", e.status(), e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiResponse<>(503, "검색 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
+    }
+
+    // ── ES 응답 오류가 Spring Data 계층에서 래핑되어 올라온 경우 → 503 ──
+    @ExceptionHandler(UncategorizedElasticsearchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUncategorizedElasticsearch(UncategorizedElasticsearchException e) {
+        log.warn("[ES] Spring Data 래핑 예외 - 503 반환: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(new ApiResponse<>(503, "검색 서비스가 일시적으로 이용 불가합니다. 잠시 후 다시 시도해주세요.", null));
