@@ -26,23 +26,24 @@ public class PlayController {
     @GetMapping("/{videoId}/play")
     public ApiResponse<VideoPlayDto> playVideo(
         @PathVariable Long videoId,
-        @AuthenticationPrincipal JwtPrincipal jwtPrincipal,
-        HttpServletResponse response // 🌟 1. 쿠키를 담기 위해 HTTP 응답 객체 추가
-    ) throws Exception {
+        @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+        //HttpServletResponse response // 🌟 1. 쿠키를 담기 위해 HTTP 응답 객체 추가
+    ) //throws Exception {
+    {
         VideoPlayDto result = videoService.getPlayInfo(videoId, jwtPrincipal);
 
-        if (result.getUrl() != null && result.getUrl().contains("/hls/")) {
-            String[] parts = result.getUrl().split("/"); // ["https:", "", "...", "hls", "461", "master.m3u8"]
-            String fileId = parts[4];
-
-            String resourcePath = "hls/" + fileId + "/*";
-
-            CookiesForCustomPolicy cookies = cloudFrontCookieService.generateSignedCookies(resourcePath);
-
-            addCookieToResponse(response, "CloudFront-Policy", cookies.policyHeaderValue());
-            addCookieToResponse(response, "CloudFront-Signature", cookies.signatureHeaderValue());
-            addCookieToResponse(response, "CloudFront-Key-Pair-Id", cookies.keyPairIdHeaderValue());
-        }
+//        if (result.getUrl() != null && result.getUrl().contains("/hls/")) {
+//            String[] parts = result.getUrl().split("/"); // ["https:", "", "...", "hls", "461", "master.m3u8"]
+//            String fileId = parts[4];
+//
+//            String resourcePath = "hls/" + fileId + "/*";
+//
+//            CookiesForCustomPolicy cookies = cloudFrontCookieService.generateSignedCookies(resourcePath);
+//
+//            addCookieToResponse(response, "CloudFront-Policy", cookies.policyHeaderValue());
+//            addCookieToResponse(response, "CloudFront-Signature", cookies.signatureHeaderValue());
+//            addCookieToResponse(response, "CloudFront-Key-Pair-Id", cookies.keyPairIdHeaderValue());
+//        }
 
         return new ApiResponse<>(200, result.getStatusDescription(), result);
     }
