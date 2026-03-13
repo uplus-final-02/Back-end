@@ -281,16 +281,18 @@ public class AuthService {
             AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                     .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-            // ── 멤버십 조회: DB 순간 장애 시 false 폴백 (JWT claim = nice-to-have) ──
+            // ── JWT 클레임 계산 (nice-to-have): DB 장애 시 false 폴백 ─────────
             boolean paid = false;
-            try { paid = membershipCheckService.isPaid(userId); }
-            catch (DataAccessException e) {
-                log.warn("[DB 순간 장애] isPaid 조회 실패 - false 폴백: userId={}", userId);
+            try {
+                paid = membershipCheckService.isPaid(userId);
+            } catch (DataAccessException e) {
+                log.warn("[Auth] reissue isPaid DB 조회 실패 — paid=false 폴백 (userId={}): {}", userId, e.getMessage());
             }
             boolean uplus = false;
-            try { uplus = membershipCheckService.isUplus(userId); }
-            catch (DataAccessException e) {
-                log.warn("[DB 순간 장애] isUplus 조회 실패 - false 폴백: userId={}", userId);
+            try {
+                uplus = membershipCheckService.isUplus(userId);
+            } catch (DataAccessException e) {
+                log.warn("[Auth] reissue isUplus DB 조회 실패 — uplus=false 폴백 (userId={}): {}", userId, e.getMessage());
             }
 
             String newAccessToken = jwtTokenProvider.generateAccessToken(
@@ -350,22 +352,33 @@ public class AuthService {
         }
     }
 
-    /** JWT 발급 + Refresh Token DB 저장 */
+    /**
+     * JWT 발급 + Refresh Token DB 저장.
+     *
+     * <p>paid/uplus는 JWT 클레임용(nice-to-have)이므로 MySQL 순간 장애 시 false 폴백.
+     * {@link MembershipCheckService#isPaid}·{@link MembershipCheckService#isUplus}는
+     * {@code REQUIRES_NEW} 트랜잭션으로 격리되어 있어, 예외를 catch해도 외부 트랜잭션에 영향이 없다.
+     *
+     * <p>반면 {@code refreshTokenService.upsert()}는 세션 관리의 핵심이므로 의도적으로 catch하지 않는다.
+     * 실패 시 {@code DataAccessException → GlobalExceptionHandler → 503} 으로 정상 전파된다.
+     */
     private LoginResponse issueJwt(User user, String email) {
     	Long userId = user.getId();
 
-        // ── 멤버십 조회: DB 순간 장애 시 false 폴백 (JWT claim = nice-to-have) ──
-        boolean paid = false;
-        try { paid = membershipCheckService.isPaid(userId); }
-        catch (DataAccessException e) {
-            log.warn("[DB 순간 장애] isPaid 조회 실패 - false 폴백: userId={}", userId);
-        }
-        boolean uplus = false;
-        try { uplus = membershipCheckService.isUplus(userId); }
-        catch (DataAccessException e) {
-            log.warn("[DB 순간 장애] isUplus 조회 실패 - false 폴백: userId={}", userId);
-        }
-    	
+    	// ── JWT 클레임 계산 (nice-to-have): DB 장애 시 false 폴백 ─────────
+    	boolean paid = false;
+    	try {
+    	    paid = membershipCheckService.isPaid(userId);
+    	} catch (DataAccessException e) {
+    	    log.warn("[Auth] isPaid DB 조회 실패 — paid=false 폴백 (userId={}): {}", userId, e.getMessage());
+    	}
+    	boolean uplus = false;
+    	try {
+    	    uplus = membershipCheckService.isUplus(userId);
+    	} catch (DataAccessException e) {
+    	    log.warn("[Auth] isUplus DB 조회 실패 — uplus=false 폴백 (userId={}): {}", userId, e.getMessage());
+    	}
+
         String accessToken = jwtTokenProvider.generateAccessToken(
                 userId,
                 email,
@@ -374,9 +387,8 @@ public class AuthService {
                 paid,
                 uplus
         );
-        
-//        String accessToken  = jwtTokenProvider.generateAccessToken(
-//                user.getId(), email, user.getNickname(), user.getUserRole().name());
+
+        // ── Refresh Token 저장 (핵심): 실패 시 503 전파 (의도적) ──────────
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
         refreshTokenService.upsert(user.getId(), refreshToken);
 
