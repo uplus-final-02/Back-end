@@ -199,18 +199,13 @@ public class ContentService {
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
         
-        // 삭제된 콘텐츠의 경우 연관된 에피소드 조회X
-        if (content.getStatus() != ContentStatus.ACTIVE) {
-            throw new ContentNotFoundException(
-                    "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
-            );
-        }
 
 //        if (content.getType() != ContentType.SERIES) {
 //            throw new IllegalArgumentException(
 //                    "시리즈 콘텐츠만 에피소드 목록을 조회할 수 있습니다. contentId=" + contentId
 //            );
 //        }
+
 
         List<Video> videos = videoRepository.findEpisodesWithVideoFileByContentId(contentId);
 
