@@ -67,12 +67,22 @@ public class PlayController {
         return new ApiResponse<>(200, "조회수 증가 처리 접수", null);
     }
 
-    private void addCookieToResponse(HttpServletResponse response, String name, String value) {
-        ResponseCookie cookie = ResponseCookie.from(name, value)
-                                              .httpOnly(true)       // JS 탈취 방지
-                                              .secure(true)         // HTTPS 전용
-                                              .path("/")            // 도메인 전체 적용
-                                              .sameSite("None")     // 프론트-백엔드 도메인 다를 때 필수
+    private void addCookieToResponse(HttpServletResponse response, String name, String rawValue) {
+        // 1. 방어 로직: 값이 아예 비어있으면 서버 로그에 강력하게 경고를 띄웁니다.
+        if (rawValue == null || rawValue.isBlank()) {
+            System.err.println("🚨 [치명적 오류] " + name + " 쿠키 값이 비어있습니다! (.env에 KEY_PAIR_ID 등이 있는지 확인하세요)");
+            return;
+        }
+
+        // 2. 방어 로직: AWS SDK가 이름까지 같이 뱉어줬다면, 이름 부분("CloudFront-Policy=")을 깔끔하게 잘라냅니다.
+        String cleanValue = rawValue.replace(name + "=", "");
+
+        // 3. 정상적으로 쿠키 굽기
+        ResponseCookie cookie = ResponseCookie.from(name, cleanValue)
+                                              .httpOnly(true)
+                                              .secure(true)
+                                              .path("/")
+                                              .sameSite("None")
                                               .build();
         response.addHeader("Set-Cookie", cookie.toString());
     }
