@@ -56,7 +56,7 @@ public class SecurityConfig {
                 .requestMatchers("/admin/hls/**", "/api/admin/hls/**").permitAll() 
                 .requestMatchers("/admin/storage/**", "/api/admin/storage/**").permitAll() 
                 
-                .anyRequest().hasAuthority("ADMIN") 
+                .anyRequest().hasRole("ADMIN")
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
