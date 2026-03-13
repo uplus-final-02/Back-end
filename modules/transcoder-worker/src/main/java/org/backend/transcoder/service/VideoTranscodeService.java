@@ -22,8 +22,8 @@ public class VideoTranscodeService {
     private final ObjectStorageService objectStorageService;
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final MinioObjectStorageService objectStorageService;
-
     private final VideoFileStatusService statusService;
+    private final ProcessedKafkaEventJdbcRepository processedEventRepository;
 
     public void transcode(VideoTranscodeRequestedEvent event) {
         // ① 이벤트 레벨 멱등성: 동일 eventId 중복 처리 방지 (Outbox at-least-once 보상)
@@ -72,9 +72,10 @@ public class VideoTranscodeService {
             vf.updateTranscodeStatus(TranscodeStatus.DONE);
             processedEventRepository.markProcessed(event.eventId(), event.videoId());
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
+            processedEventRepository.markProcessed(event.eventId(), event.videoFileId());
 
-            log.info("[TRANSCODE][DONE] videoFileId={}, hlsKey={}, durationSec={}",
-                    event.videoFileId(), hlsMasterKey, durationSec);
+            log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
 
         } catch (Exception e) {
             log.error("[TRANSCODE][FAILED] videoFileId={}, cause={}", event.videoFileId(), e.getMessage(), e);

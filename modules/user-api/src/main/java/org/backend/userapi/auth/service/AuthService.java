@@ -8,24 +8,18 @@ import common.repository.TagRepository;
 import core.security.exception.JwtInvalidTokenException;
 import core.security.exception.JwtTokenExpiredException;
 import core.security.jwt.JwtTokenProvider;
+import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.auth.dto.*;
-import core.security.principal.JwtPrincipal;
 import org.backend.userapi.auth.oauth.OAuthUserInfo;
 import org.backend.userapi.common.exception.*;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import common.entity.Tag;
-import common.enums.AuthProvider;
-import common.enums.UserStatus;
-import common.repository.TagRepository;
-import core.security.jwt.JwtTokenProvider;
-import core.security.principal.JwtPrincipal;
-import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
 import user.entity.RefreshToken;
 import user.entity.User;
@@ -33,7 +27,6 @@ import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
 import user.repository.UserPreferredTagRepository;
 import user.repository.UserRepository;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Locale;
@@ -288,8 +281,17 @@ public class AuthService {
             AuthAccount authAccount = authAccountRepository.findByUser_Id(userId)
                     .orElseThrow(() -> new InvalidCredentialsException("인증 정보를 찾을 수 없습니다."));
 
-            boolean paid = membershipCheckService.isPaid(userId);
-            boolean uplus = membershipCheckService.isUplus(userId);
+            // ── 멤버십 조회: DB 순간 장애 시 false 폴백 (JWT claim = nice-to-have) ──
+            boolean paid = false;
+            try { paid = membershipCheckService.isPaid(userId); }
+            catch (DataAccessException e) {
+                log.warn("[DB 순간 장애] isPaid 조회 실패 - false 폴백: userId={}", userId);
+            }
+            boolean uplus = false;
+            try { uplus = membershipCheckService.isUplus(userId); }
+            catch (DataAccessException e) {
+                log.warn("[DB 순간 장애] isUplus 조회 실패 - false 폴백: userId={}", userId);
+            }
 
             String newAccessToken = jwtTokenProvider.generateAccessToken(
                     user.getId(),
@@ -351,9 +353,18 @@ public class AuthService {
     /** JWT 발급 + Refresh Token DB 저장 */
     private LoginResponse issueJwt(User user, String email) {
     	Long userId = user.getId();
-    	
-    	boolean paid = membershipCheckService.isPaid(userId);
-        boolean uplus = membershipCheckService.isUplus(userId);
+
+        // ── 멤버십 조회: DB 순간 장애 시 false 폴백 (JWT claim = nice-to-have) ──
+        boolean paid = false;
+        try { paid = membershipCheckService.isPaid(userId); }
+        catch (DataAccessException e) {
+            log.warn("[DB 순간 장애] isPaid 조회 실패 - false 폴백: userId={}", userId);
+        }
+        boolean uplus = false;
+        try { uplus = membershipCheckService.isUplus(userId); }
+        catch (DataAccessException e) {
+            log.warn("[DB 순간 장애] isUplus 조회 실패 - false 폴백: userId={}", userId);
+        }
     	
         String accessToken = jwtTokenProvider.generateAccessToken(
                 userId,
