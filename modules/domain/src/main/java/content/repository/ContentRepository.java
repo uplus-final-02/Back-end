@@ -26,6 +26,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     @Query("SELECT DISTINCT c FROM Content c LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag")
     List<Content> findAllWithTags();
+    
+    @Query("SELECT c FROM Content c WHERE c.id > :lastId ORDER BY c.id ASC")
+    List<Content> findAllWithTagsCursor(@Param("lastId") Long lastId, Pageable pageable);
 
     @Query("SELECT DISTINCT c FROM Content c " +
             "LEFT JOIN FETCH c.contentTags ct " +

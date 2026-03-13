@@ -63,26 +63,45 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     @Async("indexingExecutor")
     @Transactional(readOnly = true)
     public void indexAllContents() {
-        if (isIndexing.getAndSet(true)) {
+    	if (isIndexing.getAndSet(true)) {
             log.warn("⚠️ 이미 인덱싱 작업이 진행 중입니다.");
             return;
         }
 
         try {
-            log.info("🚀 전체 콘텐츠 인덱싱 시작...");
+            log.info("🚀 전체 콘텐츠 인덱싱 시작 (초고속 커서 기반 청크 처리)...");
             lastIndexingStatus = "RUNNING";
             lastRunTime = LocalDateTime.now();
             lastErrorMessage = null;
 
-            List<Content> contents = contentRepository.findAllWithTags();
-            
-            List<ContentDocument> documents = contents.stream()
-                    .map(this::toDocument)
-                    .toList();
+            int pageSize = 500;
+            long lastId = 0L;   
+            long totalIndexed = 0;
+            List<Content> contents;
 
-            contentSearchRepository.saveAll(documents);
-            
-            log.info("✅ 전체 콘텐츠 인덱싱 완료 (총 {}건)", documents.size());
+            do {
+                Pageable pageable = PageRequest.of(0, pageSize);
+                contents = contentRepository.findAllWithTagsCursor(lastId, pageable);
+
+                if (contents.isEmpty()) {
+                    break; 
+                }
+
+                List<ContentDocument> documents = contents.stream()
+                        .map(this::toDocument)
+                        .toList();
+
+                contentSearchRepository.saveAll(documents);
+
+                totalIndexed += documents.size();
+                
+                lastId = contents.get(contents.size() - 1).getId();
+                
+                log.info("인덱싱 진행 중... 누적 [{}건] 완료 (현재 커서 ID: {})", totalIndexed, lastId);
+
+            } while (contents.size() == pageSize); // 500개를 꽉 채워서 가져왔다면, 다음 데이터가 더 있을 확률이 높으므로 계속 진행
+
+            log.info("✅ 전체 콘텐츠 초고속 인덱싱 완료 (총 {}건)", totalIndexed);
             lastIndexingStatus = "SUCCESS";
 
         } catch (Exception e) {
