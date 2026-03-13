@@ -12,6 +12,7 @@ import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import core.security.principal.JwtPrincipal;
+import core.storage.ObjectStorageService;
 import core.storage.service.HlsUrlProvider;
 import interaction.repository.BookmarkRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -43,6 +44,7 @@ public class VideoService {
     private final BookmarkRepository bookmarkRepository;
     private final ContentTagRepository contentTagRepository;
     private final HlsUrlProvider hlsUrlProvider;
+    private final ObjectStorageService objectStorageService;
 
     public VideoPlayDto getPlayInfo(Long videoId, JwtPrincipal jwtPrincipal) {
         // videos, contents 기본 정보 선조회
