@@ -68,7 +68,9 @@ public class SecurityConfig {
         return http
             .securityMatcher("/**")
             .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated()) 
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health").permitAll()
+                .anyRequest().authenticated())
             .build();
     }
 
