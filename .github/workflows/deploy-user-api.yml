@@ -2,7 +2,7 @@ name: Deploy User API
 
 on:
   push:
-    branches: [ develop, 'deploy/#168-v2']
+    branches: [ develop, 'feat/#218-cdn']
     paths:
       - 'modules/user-api/**'
       - 'modules/core/**'
@@ -66,6 +66,7 @@ jobs:
               'aws s3 cp s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker/Dockerfile.dev.user-api docker/',
           
               'echo \"${{ secrets.ENV_FILE }}\" > .env',
+              'echo \"CLOUDFRONT_PRIVATE_KEY_STRING=${{ secrets.CLOUDFRONT_PRIVATE_KEY }}\" >> .env',
           
               'sudo docker compose -f docker-compose.user-api.yml up -d --build',
               'sudo docker image prune -f'

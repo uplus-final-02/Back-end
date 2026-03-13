@@ -1,6 +1,7 @@
 package core.storage;
 
 import core.storage.config.StorageProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -22,9 +23,13 @@ import java.util.UUID;
 @Service
 @ConditionalOnProperty(name = "app.storage.s3.provider", havingValue = "aws")
 public class AwsS3ObjectStorageService implements ObjectStorageService {
+
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final StorageProperties props;
+
+    @Value("${app.storage.cloudfront.domain-name:}")
+    private String cloudFrontDomain;
 
     public AwsS3ObjectStorageService(
         S3Client s3Client,
@@ -79,7 +84,12 @@ public class AwsS3ObjectStorageService implements ObjectStorageService {
 
     @Override
     public String buildPublicUrl(String objectKey) {
-        // AWS S3의 공식 URL 구조 (CloudFront를 쓴다면 이 부분을 교체하면 됩니다)
+        // 🌟 1. CloudFront 도메인이 환경변수에 설정되어 있다면 CDN 주소 반환
+        if (cloudFrontDomain != null && !cloudFrontDomain.isBlank()) {
+            return "https://" + cloudFrontDomain + "/" + objectKey;
+        }
+
+        // 🌟 2. 설정이 비어있다면(로컬 개발 환경 등) 기존처럼 S3 원본 주소 반환
         return "https://" + props.bucket() + ".s3." + props.region() + ".amazonaws.com/" + objectKey;
     }
 
