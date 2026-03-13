@@ -8,6 +8,7 @@ import user.repository.TelecomMemberRepository;
 import user.repository.UserUplusVerifiedRepository;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import common.enums.SubscriptionStatus;
@@ -22,7 +23,7 @@ public class MembershipCheckService {
     private final UserUplusVerifiedRepository userUplusVerifiedRepository;
     private final TelecomMemberRepository telecomMemberRepository;
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public boolean isPaid(Long userId) {
         Subscriptions sub = subscriptionsRepository.findByUser_Id(userId).orElse(null);
         if (sub == null) return false;
@@ -34,7 +35,7 @@ public class MembershipCheckService {
         return notExpired && (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.CANCELED);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean isUplus(Long userId) {
         UserUplusVerified verified = userUplusVerifiedRepository.findByUser_Id(userId).orElse(null);
         

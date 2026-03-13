@@ -71,8 +71,8 @@ public class VideoTranscodeService {
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
             processedEventRepository.markProcessed(event.eventId(), event.videoId());
 
-            log.info("[TRANSCODE][DONE] videoFileId={}, hlsKey={}, durationSec={}",
-                    event.videoFileId(), hlsMasterKey, durationSec);
+            log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
 
         } catch (Exception e) {
             log.error("[TRANSCODE][FAILED] videoFileId={}, cause={}", event.videoFileId(), e.getMessage(), e);
