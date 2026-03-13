@@ -12,6 +12,8 @@ import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.TrendingResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.enums.ContentStatus;
 import user.repository.UserNicknameInfo;
 import user.repository.UserRepository;
 
@@ -61,9 +63,20 @@ public class TrendingContentService {
             log.warn("[Trending Chart] 집계할 데이터가 없습니다.");
             return;
         }
-
+        
+        // 2-1. 집계 대상 content 상태 일괄 조회
+        Set<Long> activeContentIds = contentRepository.findAllById(
+                stats.stream()
+                     .map(TrendingStatDto::getContentId)
+                     .collect(Collectors.toSet())
+            ).stream()
+             .filter(c -> c.getStatus() == ContentStatus.ACTIVE)
+             .map(Content::getId)
+             .collect(Collectors.toSet());
+        
         // 3. 점수 계산, 필터링, 정렬 및 Top N 추출
         List<TrendingStatDto> sortedStats = stats.stream()
+        			 .filter(stat -> activeContentIds.contains(stat.getContentId()))
                      .filter(stat -> calculateScore(stat) > 0) // 점수가 있는 것만 선별
                      .sorted((a, b) -> Double.compare(calculateScore(b), calculateScore(a))) // 내림차순 정렬
                      .limit(MAX_TRENDING_SIZE) // 상위 개수 제한
@@ -167,23 +180,34 @@ public class TrendingContentService {
 
         // 5. 응답 결과 조립 (histories의 정렬된 순서 유지)
         List<TrendingResponse> newList = new ArrayList<>();
+        int actualRank = 1; // 동적 순위 부여
 
         for (TrendingHistory history : histories) {
             Content content = contentMap.get(history.getContentId());
 
             // 물리적 FK가 없으므로, 콘텐츠가 삭제되었을 경우를 대비한 방어 로직
-            if (content != null) {
-                String uploaderName = (content.getUploaderId() == null)
-                    ? "관리자"
-                    : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+            if (content == null) {
+                log.warn("[Trending Chart] 캐시 갱신 중: 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.",
+                        history.getContentId());
+                continue;
+            }
 
-                newList.add(TrendingResponse.builder()
-                                 .rank(history.getRanking()) // DB에 기록된 실제 순위 사용
-                                 .trendingScore(history.getTrendingScore())
-                                 .content(DefaultContentResponse.from(content, uploaderName))
-                                 .build());
-            } else {
-                log.warn("[Trending Chart] 캐시 갱신 중: 랭킹에 포함된 콘텐츠(ID: {})가 존재하지 않아 제외되었습니다.", history.getContentId());            }
+            // 삭제, 숨김 처리된 콘텐츠는 조회 응답에서 제외
+            if (content.getStatus() != ContentStatus.ACTIVE) {
+                log.info("[Trending Chart] 캐시 갱신 중: 비활성/삭제 콘텐츠(ID: {})가 제외되었습니다.",
+                        history.getContentId());
+                continue;
+            }
+
+            String uploaderName = (content.getUploaderId() == null)
+                ? "관리자"
+                : uploaderNicknameMap.getOrDefault(content.getUploaderId(), "알 수 없음");
+
+            newList.add(TrendingResponse.builder()
+                             .rank(actualRank++) // 조회 시점 기준으로 순위 재부여
+                             .trendingScore(history.getTrendingScore())
+                             .content(DefaultContentResponse.from(content, uploaderName))
+                             .build());
         }
 
         // 원자적 캐시 덮어쓰기

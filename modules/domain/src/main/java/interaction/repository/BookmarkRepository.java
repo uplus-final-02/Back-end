@@ -37,6 +37,7 @@ public interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
     // [추가] Theta Join을 사용하여 Content를 직접 조회 (최신순 정렬)
     @Query("SELECT c FROM Bookmark b, Content c " +
            "WHERE b.userId = :userId AND b.contentId = c.id " +
+           "AND c.status = 'ACTIVE' " +
            "ORDER BY b.createdAt DESC")
     List<Content> findRecentBookmarkedContents(@Param("userId") Long userId, Pageable pageable);
 }

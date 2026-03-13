@@ -51,6 +51,11 @@ public class BookmarkService {
         
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."));
+        
+        // 숨김, 삭제처리된 콘텐츠 북마크 등록X
+        if (content.getStatus() != ContentStatus.ACTIVE) {
+            throw new IllegalArgumentException("콘텐츠를 찾을 수 없습니다.");
+        }
 
         bookmarkRepository.save(Bookmark.builder()
                 .userId(userId)
@@ -125,7 +130,7 @@ public class BookmarkService {
         List<Content> contents = bookmarkRepository.findRecentBookmarkedContents(
             userId,
             PageRequest.of(0, 5)
-        );
+		);
 
         // 2. ContentService의 변환 로직 사용 (닉네임 조회 포함)
         return contentService.convertToDefaultContentResponses(contents);
