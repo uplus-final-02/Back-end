@@ -66,6 +66,8 @@ jobs:
               'aws s3 cp s3://${{ secrets.S3_DEPLOY_BUCKET }}/deploy/user-api/docker/Dockerfile.dev.user-api docker/',
           
               'echo \"${{ secrets.ENV_FILE }}\" > .env',
+              'echo \"CLOUDFRONT_DOMAIN=${{ secrets.CLOUDFRONT_DOMAIN }}\" >> .env',
+              'echo \"CLOUDFRONT_KEY_PAIR_ID=${{ secrets.CLOUDFRONT_KEY_PAIR_ID }}\" >> .env',
               'echo \"CLOUDFRONT_PRIVATE_KEY_STRING=${{ secrets.CLOUDFRONT_PRIVATE_KEY }}\" >> .env',
           
               'sudo docker compose -f docker-compose.user-api.yml up -d --build',
