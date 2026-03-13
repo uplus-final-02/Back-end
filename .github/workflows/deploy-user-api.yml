@@ -69,7 +69,9 @@ jobs:
               'echo \"CLOUDFRONT_DOMAIN=${{ secrets.CLOUDFRONT_DOMAIN }}\" >> .env',
               'echo \"CLOUDFRONT_KEY_PAIR_ID=${{ secrets.CLOUDFRONT_KEY_PAIR_ID }}\" >> .env',
               'echo \"CLOUDFRONT_PRIVATE_KEY_STRING=${{ secrets.CLOUDFRONT_PRIVATE_KEY }}\" >> .env',
-          
+              
+              'sudo docker compose -f docker-compose.user-api.yml down',
+              'sudo docker rmi utopia-user-api-user-api || true',
               'sudo docker compose -f docker-compose.user-api.yml up -d --build',
               'sudo docker image prune -f'
             ]"
