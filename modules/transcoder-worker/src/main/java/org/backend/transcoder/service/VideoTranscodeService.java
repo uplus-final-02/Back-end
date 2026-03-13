@@ -5,6 +5,7 @@ import content.entity.VideoFile;
 import content.repository.VideoFileRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.MinioObjectStorageService;
+import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
@@ -19,7 +20,7 @@ import java.util.Comparator;
 public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
-    private final MinioObjectStorageService objectStorageService;
+    private final ObjectStorageService objectStorageService;
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final VideoFileStatusService statusService;
 
@@ -89,7 +90,7 @@ public class VideoTranscodeService {
             if (workDir != null) {
                 try {
                     log.info("[TRANSCODE][WORKDIR] {}", workDir);
-                    //deleteRecursively(workDir);
+                    deleteRecursively(workDir);
                 } catch (Exception ignore) {}
             }
         }
