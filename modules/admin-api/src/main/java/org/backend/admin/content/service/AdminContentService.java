@@ -208,18 +208,13 @@ public class AdminContentService {
     	
     }
     	
-    private static final Map<String, String> ALLOWED_CONTENT_TYPES = Map.of(
-            "image/png", ".png",
-            "image/jpeg", ".jpg",
-            "image/webp", ".webp"
-    );
-    
-    // 썸네일 업로드
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
+
     public AdminThumbnailUploadResponse uploadThumbnail(Long contentId, Long videoId, MultipartFile file) {
         validateFile(file);
 
-        String contentType = file.getContentType();
-        String extension = resolveExtension(contentType);
+        String extension = resolveExtension(file.getOriginalFilename());
+        String contentType = resolveContentType(file.getContentType(), extension);
         String objectPath = buildThumbnailPath(contentId, videoId, extension);
         String uploadedThumbnailUrl = uploadAndBuildUrl(file, objectPath, extension, contentType);
 
@@ -229,22 +224,52 @@ public class AdminContentService {
     }
 
     private void validateFile(MultipartFile file) {
-    	if (file == null || file.isEmpty()) {
+    	System.out.println("originalFilename = " + file.getOriginalFilename());
+        System.out.println("contentType = " + file.getContentType());
+        System.out.println("size = " + file.getSize());
+        
+        if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("업로드할 썸네일 파일이 비어 있습니다.");
         }
 
-    	String contentType = file.getContentType();
-	    if (contentType == null || !ALLOWED_CONTENT_TYPES.containsKey(contentType)) {
-	        throw new IllegalArgumentException("png, jpg, jpeg, webp 이미지 파일만 업로드 가능합니다.");
-	    }
+        String originalFilename = file.getOriginalFilename();
+        String extension = resolveExtension(originalFilename);
+
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("png, jpg, jpeg, webp 이미지 파일만 업로드 가능합니다.");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("이미지 파일만 업로드 가능합니다.");
+        }
     }
 
-    private String resolveExtension(String contentType) {
-        String extension = ALLOWED_CONTENT_TYPES.get(contentType);
-        if (extension == null) {
+    private String resolveExtension(String originalFilename) {
+        if (originalFilename == null || !originalFilename.contains(".")) {
+            throw new IllegalArgumentException("파일 확장자를 확인할 수 없습니다.");
+        }
+
+        String extension = originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase();
+
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new IllegalArgumentException("지원하지 않는 썸네일 형식입니다.");
         }
+
         return extension;
+    }
+
+    private String resolveContentType(String contentType, String extension) {
+        if (contentType != null && contentType.startsWith("image/")) {
+            return contentType;
+        }
+
+        return switch (extension) {
+            case ".png" -> "image/png";
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".webp" -> "image/webp";
+            default -> throw new IllegalArgumentException("지원하지 않는 썸네일 형식입니다.");
+        };
     }
 
     private String buildThumbnailPath(Long contentId, Long videoId, String extension) {
