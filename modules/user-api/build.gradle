@@ -48,8 +48,6 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
-	implementation 'software.amazon.awssdk:s3:2.20.162' // aws S3 sdk -> minio와 호환
-
     // ShedLock — user-api 2개 인스턴스 환경에서 스케줄러 중복 실행 방지
     implementation 'net.javacrumbs.shedlock:shedlock-spring:5.16.0'
     implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:5.16.0'
