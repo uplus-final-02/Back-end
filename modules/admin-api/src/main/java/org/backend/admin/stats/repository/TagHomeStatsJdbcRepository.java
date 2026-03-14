@@ -21,23 +21,25 @@ public class TagHomeStatsJdbcRepository {
 	/**
      * 홈 노출 태그(priority=1) 기준 집계 데이터 조회
      */
-    private static final String AGGREGATE_SQL = """
-        SELECT
-            t.tag_id,
-            ? AS stat_date,
-            COALESCE(SUM(c.total_view_count), 0) AS total_view_count,
-            COALESCE(SUM(c.bookmark_count), 0) AS total_bookmark_count,
-            CASE
-                WHEN COALESCE(SUM(c.total_view_count),0) = 0 THEN NULL
-                ELSE ROUND(SUM(c.bookmark_count) / SUM(c.total_view_count), 4)
-            END AS bookmark_rate
-        FROM tags t
-        JOIN content_tags ct ON ct.tag_id = t.tag_id
-        JOIN contents c ON c.content_id = ct.content_id
-        WHERE t.priority = 1
-          AND t.is_active = 1
-        GROUP BY t.tag_id
-        """;
+	private static final String AGGREGATE_SQL = """
+		    SELECT
+		        t.tag_id,
+		        ? AS stat_date,
+		        COALESCE(SUM(c.total_view_count), 0) AS total_view_count,
+		        COALESCE(SUM(c.bookmark_count), 0) AS total_bookmark_count,
+		        CASE
+		            WHEN COALESCE(SUM(c.total_view_count), 0) = 0 THEN NULL
+		            ELSE ROUND(SUM(c.bookmark_count) / SUM(c.total_view_count), 4)
+		        END AS bookmark_rate
+		    FROM tags t
+		    JOIN content_tags ct ON ct.tag_id = t.tag_id
+		    JOIN contents c
+		      ON c.content_id = ct.content_id
+		     AND c.status = 'ACTIVE'
+		    WHERE t.priority = 1
+		      AND t.is_active = 1
+		    GROUP BY t.tag_id
+		    """;
     
     /**
      * 통계 UPSERT
