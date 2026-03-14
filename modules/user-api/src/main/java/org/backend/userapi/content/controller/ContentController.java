@@ -44,7 +44,7 @@ public class ContentController {
     @GetMapping("/home/default-list")
     public ApiResponse<List<DefaultContentResponse>> getDefaultContentList(
             @RequestParam(required = false, defaultValue = "ADMIN") String uploaderType,
-            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) Long tag,
             @RequestParam(required = false) ContentAccessLevel accessLevel,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size
