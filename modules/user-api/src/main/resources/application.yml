@@ -109,9 +109,9 @@ app:
 
     # CloudFrontProperties 빈 생성 에러 방지용 더미 설정 (로컬 테스트 시 사용 안 함)
     cloudfront:
-      domain-name: ""
-      key-pair-id: ""
-      private-key-path: ""
+      domain-name: ${CLOUDFRONT_DOMAIN:}
+      key-pair-id: ${CLOUDFRONT_KEY_PAIR_ID:}
+      private-key-string: ${CLOUDFRONT_PRIVATE_KEY_STRING:}
       use-local: false
       sign-secret: ""
 
