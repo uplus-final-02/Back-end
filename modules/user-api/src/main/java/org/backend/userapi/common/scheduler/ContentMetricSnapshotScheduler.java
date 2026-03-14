@@ -53,7 +53,7 @@ public class ContentMetricSnapshotScheduler {
             snapshotService.createSnapshotsForBucket(bucketStartAt);
 
             long afterCount = snapshotRepository.countByIdBucketStartAt(bucketStartAt);
-            long processed = Math.max(0, afterCount - beforeCount);
+            long processed = snapshotRepository.countByIdBucketStartAt(bucketStartAt);
 
             if (processed == 0) {
                 jobRunWriterService.empty(run.getId(), "집계 대상/변화량 없음");

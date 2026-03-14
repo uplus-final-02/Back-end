@@ -53,7 +53,8 @@ public class MetricJobRunWriterService {
 
     private String safeMessage(Exception e) {
         String m = e.getMessage();
-        return (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
+        String msg = (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
+        return (msg.length() > 1000) ? msg.substring(0, 1000) : msg;
     }
 
     private String stackTrace(Exception e) {
