@@ -62,24 +62,10 @@ public class MetricJobRun extends BaseTimeEntity {
     @Column(name = "error_stack")
     private String errorStack;
 
-    // ─────────────────────────────────────────────────────────────
-    //  Factory & State
-    // ─────────────────────────────────────────────────────────────
-
     public static MetricJobRun startSnapshot(LocalDateTime bucketStartAt) {
         MetricJobRun r = new MetricJobRun();
         r.jobType = MetricJobType.SNAPSHOT_10M;
         r.bucketStartAt = bucketStartAt;
-        r.status = MetricJobStatus.STARTED;
-        r.startedAt = LocalDateTime.now();
-        r.processedCount = 0L;
-        return r;
-    }
-
-    public static MetricJobRun startTrending(LocalDateTime calculatedAt) {
-        MetricJobRun r = new MetricJobRun();
-        r.jobType = MetricJobType.TRENDING_1H;
-        r.calculatedAt = calculatedAt;
         r.status = MetricJobStatus.STARTED;
         r.startedAt = LocalDateTime.now();
         r.processedCount = 0L;
