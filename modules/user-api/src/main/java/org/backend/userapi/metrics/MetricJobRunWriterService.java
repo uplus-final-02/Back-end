@@ -25,6 +25,12 @@ public class MetricJobRunWriterService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MetricJobRun startTrending(LocalDateTime calculatedAt) {
+        return metricJobRunRepository.findByJobTypeAndCalculatedAt(MetricJobType.TRENDING_1H, calculatedAt)
+                .orElseGet(() -> metricJobRunRepository.save(MetricJobRun.startTrending(calculatedAt)));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void success(Long jobRunId, long processedCount, String message) {
         MetricJobRun run = metricJobRunRepository.findById(jobRunId)
                 .orElseThrow(() -> new IllegalStateException("JOB_RUN_NOT_FOUND: " + jobRunId));

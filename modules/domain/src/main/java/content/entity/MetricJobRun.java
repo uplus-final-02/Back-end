@@ -72,6 +72,16 @@ public class MetricJobRun extends BaseTimeEntity {
         return r;
     }
 
+    public static MetricJobRun startTrending(LocalDateTime calculatedAt) {
+        MetricJobRun r = new MetricJobRun();
+        r.jobType = MetricJobType.TRENDING_1H;
+        r.calculatedAt = calculatedAt;
+        r.status = MetricJobStatus.STARTED;
+        r.startedAt = LocalDateTime.now();
+        r.processedCount = 0L;
+        return r;
+    }
+
     public void markSuccess(long processedCount, String message) {
         this.status = MetricJobStatus.SUCCESS;
         this.processedCount = processedCount;
