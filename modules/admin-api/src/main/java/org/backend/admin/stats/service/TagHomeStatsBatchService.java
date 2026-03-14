@@ -19,7 +19,7 @@ public class TagHomeStatsBatchService {
 	private final TagHomeStatsJdbcRepository tagHomeStatsJdbcRepository;
 	
 	@Transactional
-    public void saveDailyStats(LocalDate statDate) {
+    public int saveDailyStats(LocalDate statDate) {
         validateStatDate(statDate);
 
         log.info("[TagHomeStats] 일별 통계 집계 시작: statDate={}", statDate);
@@ -29,13 +29,15 @@ public class TagHomeStatsBatchService {
 
         if (rows.isEmpty()) {
             log.info("[TagHomeStats] 저장 대상 데이터 없음: statDate={}", statDate);
-            return;
+            return 0;
         }
 
         int savedCount = tagHomeStatsJdbcRepository.upsert(rows);
 
         log.info("[TagHomeStats] 일별 통계 집계 완료: statDate={}, 대상건수={}, 저장건수={}",
                 statDate, rows.size(), savedCount);
+        
+        return savedCount;
     }
 	
 	private void validateStatDate(LocalDate statDate) {
