@@ -77,10 +77,10 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
      * @return 변경된 콘텐츠의 Slice
      */
     Slice<Content> findByUpdatedAtGreaterThanEqual(LocalDateTime lastUpdatedAt, Pageable pageable);
-  
-    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (인기순) ──────────────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    
+    // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ──────────────
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
@@ -99,8 +99,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             Pageable pageable);
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (최신순) ────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
@@ -136,8 +136,8 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("tag") String tag);
 
     // ── 추천 Fallback: 인기순 (조회수 + 북마크 기준) ──────────────────────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
     List<Content> findTopActiveByPopularity(Pageable pageable);

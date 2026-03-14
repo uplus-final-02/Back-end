@@ -8,6 +8,4 @@ import org.springframework.data.elasticsearch.repository.ElasticsearchRepository
 
 public interface ContentSearchRepository extends ElasticsearchRepository<ContentDocument, Long> {
 
-    @Query("{\"multi_match\":{\"query\":\"?0\",\"fields\":[\"title^3\",\"description\"],\"operator\":\"or\"}}")
-    Page<ContentDocument> searchByKeyword(String keyword, Pageable pageable);
 }

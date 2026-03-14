@@ -31,4 +31,16 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
 	}
+	
+	 @Bean(name = "searchLogExecutor")
+	    public Executor searchLogExecutor() {
+	        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+	        executor.setCorePoolSize(2);
+	        executor.setMaxPoolSize(5);
+	        executor.setQueueCapacity(500);
+	        executor.setThreadNamePrefix("search-log-");
+	        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
+	        executor.initialize();
+	        return executor;
+	    }
 }

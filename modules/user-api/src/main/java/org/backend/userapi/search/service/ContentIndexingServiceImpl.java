@@ -51,7 +51,11 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     private final TagVectorService tagVectorService;
     private final UserPreferredTagRepository userPreferredTagRepository;
 
+    // [피드백 반영] 현재는 단일 서버 환경을 가정하여 AtomicBoolean을 사용. 
+    // 향후 다중 인스턴스 환경(Scale-out) 시 Redis 기반 분산 락으로 고도화 예정.
     private final AtomicBoolean isIndexing = new AtomicBoolean(false);
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = 
+    	    new com.fasterxml.jackson.databind.ObjectMapper();
     
     private String lastIndexingStatus = "IDLE"; 
     private String lastErrorMessage = null;
@@ -99,7 +103,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 
                 log.info("인덱싱 진행 중... 누적 [{}건] 완료 (현재 커서 ID: {})", totalIndexed, lastId);
 
-            } while (contents.size() == pageSize); // 500개를 꽉 채워서 가져왔다면, 다음 데이터가 더 있을 확률이 높으므로 계속 진행
+            } while (contents.size() == pageSize);
 
             log.info("✅ 전체 콘텐츠 초고속 인덱싱 완료 (총 {}건)", totalIndexed);
             lastIndexingStatus = "SUCCESS";
@@ -145,12 +149,12 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             }
         }
         
-        final List<Float> finalVectorList = vectorList; // 람다 내부 접근용 final 변수
+        final List<Float> finalVectorList = vectorList; 
         
         // 2. 하이라이트 설정
         HighlightParameters hp = HighlightParameters.builder()
                 .withPreTags("<em>").withPostTags("</em>").build();
-        Highlight highlight = new Highlight(hp, List.of(new HighlightField("title"), new HighlightField("description")));
+        Highlight highlight = new Highlight(hp, List.of(new HighlightField("title"), new HighlightField("title.ngram"), new HighlightField("description"), new HighlightField("titleChosung"), new HighlightField("titleChosung.ngram")));
 
         // 3. 동적 Bool 쿼리 조합
         NativeQueryBuilder queryBuilder = NativeQuery.builder()
@@ -162,25 +166,49 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                                 
                                 b.must(m -> m.bool(bool -> {
                                     bool.should(s -> s.multiMatch(mm -> mm
-                                            .fields("title.ngram^15", "title^5", "tags^3", "description^2")
+                                    		.fields("title.ngram^5", "title^15", "tags^3", "tags.search^2", "description^2")
                                             .query(keyword)
                                             .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
                                     ));
                                     
+                                    // [피드백 반영] 가중치 의도 명확화
+                                    // 1순위: 제목 완전 일치 (100점)
                                     bool.should(s -> s.matchPhrase(mp -> mp
-                                            .field("title.ngram")
+                                            .field("title")
                                             .query(keyword)
-                                            .boost(20.0f)
+                                            .boost(200.0f)
+                                    ));
+                                    
+                                    // 2순위: 제목 부분 일치 (N-gram) (80점)
+                                    bool.should(s -> s.matchPhrase(mp -> mp
+                                    	    .field("title.ngram")
+                                    	    .query(keyword)
+                                    	    .boost(80.0f)    
+                                    ));
+
+                                    // 3순위: 제목 오타 허용 교정 검색 (50점)
+                                    bool.should(s -> s.match(ma -> ma
+                                            .field("title")
+                                            .query(keyword)
+                                            .fuzziness("AUTO")
+                                            .boost(50.0f)
+                                    ));
+                                    
+                                    bool.should(s -> s.multiMatch(mm -> mm
+                                            .fields("title.ngram^5", "tags^3", "tags.search^2", "description^1")
+                                            .query(keyword)
+                                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And) 
                                     ));
 
                                     bool.should(s -> s.matchPhrasePrefix(mpp -> mpp
                                             .field("description")
                                             .query(keyword)
-                                            .boost(1.5f)
+                                            .boost(0.5f)
                                     ));
 
                                     if (isChosungQuery) {
-                                    	String chosungKeyword = ChosungUtil.extract(keyword).replaceAll("\\s+", "");
+                                        // [피드백 반영] 초성 공통 로직 재사용
+                                    	String chosungKeyword = getChosungKeyword(keyword);
                                         bool.should(s -> s.multiMatch(mm -> mm
                                                 .fields("titleChosung^5", "titleChosung.ngram^3")
                                                 .query(chosungKeyword) 
@@ -217,17 +245,19 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                             }
                             return b;
                         }))
+                        // [피드백 반영] 조회수와 북마크가 비례하여 이중 부스팅되는 것을 방지하기 위해 
+                        // Log1p 스케일링과 낮은 factor(0.1, 0.2)를 적용한 후 Sum 합산 처리
                         .functions(fn -> fn.fieldValueFactor(fvf -> fvf
-                                .field("totalViewCount")
-                                .modifier(FieldValueFactorModifier.Log1p)
-                                .factor(0.1) 
-                                .missing(0.0)
+                        	    .field("totalViewCount")
+                        	    .modifier(FieldValueFactorModifier.Log1p)
+                        	    .factor(0.1)
+                        	    .missing(1.0)   
                         ))
                         .functions(fn -> fn.fieldValueFactor(fvf -> fvf
-                                .field("bookmarkCount")
-                                .modifier(FieldValueFactorModifier.Log1p)
-                                .factor(0.2) 
-                                .missing(0.0)
+                        	    .field("bookmarkCount")
+                        	    .modifier(FieldValueFactorModifier.Log1p)
+                        	    .factor(0.2)
+                        	    .missing(1.0) 
                         ))
                         .scoreMode(FunctionScoreMode.Sum)
                         .boostMode(FunctionBoostMode.Sum) 
@@ -247,8 +277,16 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             List<ContentDocument> contents = searchHits.stream()
                     .map(hit -> {
                         ContentDocument doc = hit.getContent();
-                        doc.setHighlightTitle(hit.getHighlightField("title").stream().findFirst().orElse(null));
-                        doc.setHighlightDescription(hit.getHighlightField("description").stream().findFirst().orElse(null));
+
+                        // 💡 일반 제목 하이라이트 우선, 없으면 초성 하이라이트로 대체
+                        String hl = hit.getHighlightField("title").stream().findFirst()
+                                .orElseGet(() -> hit.getHighlightField("titleChosung.ngram")
+                                        .stream().findFirst()
+                                        .orElse(null));
+
+                        doc.setHighlightTitle(hl);
+                        doc.setHighlightDescription(
+                                hit.getHighlightField("description").stream().findFirst().orElse(null));
                         return doc;
                     })
                     .toList();
@@ -287,76 +325,37 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     }
 
     @Override
-    public List<String> getSuggestions(String keyword) {
-    	if (!StringUtils.hasText(keyword)) return List.of();
-
-        boolean isChosungQuery = !keyword.matches(".*[가-힣].*");
-
-        NativeQuery query = NativeQuery.builder()
-                .withQuery(q -> q.bool(b -> {
-                    b.should(s -> s.match(m -> m.field("title.ngram").query(keyword)));
-                    
-                    // 💡 태그 검색 복구
-                    b.should(s -> s.match(m -> m.field("tags").query(keyword)));
-
-                    if (isChosungQuery) {
-                        // 💡 초성 공백 제거 복구
-                        String chosungKeyword = ChosungUtil.extract(keyword).replaceAll("\\s+", "");
-                        b.should(s -> s.match(m -> m.field("titleChosung.ngram").query(chosungKeyword)));
-                    }
-
-                    b.minimumShouldMatch("1");
-                    return b;
-                }))
-                .withPageable(Pageable.ofSize(10))
-                .build();
-
-        try {
-            return elasticsearchOperations.search(query, ContentDocument.class)
-                    .stream()
-                    .map(h -> h.getContent().getTitle())
-                    .distinct()
-                    .toList();
-        } catch (DataAccessException e) {
-            log.warn("[ES DOWN] 자동완성 ES 연결 실패 → 빈 결과 반환: keyword={}", keyword);
-            return List.of(); 
-        }
-    }
-
-    @Override
     public long countIndexedContents() {
         return contentSearchRepository.count();
     }
 
-    private ContentDocument toDocument(Content content) {
-    	List<String> tagNames = content.getContentTags().stream()
-                .map(ct -> ct.getTag().getName())
-                .collect(Collectors.toList());
+    // 💡 [피드백 반영 1] Description JSON 파싱 로직을 공통 메서드로 분리 (안전한 반환 보장)
+    private String parseDescription(String rawDescription) {
+        if (!StringUtils.hasText(rawDescription)) return rawDescription;
+        try {
+            com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(rawDescription);
+            if (rootNode.has("summary")) {
+                return rootNode.get("summary").asText();
+            }
+        } catch (Exception e) {
+            // 일반 텍스트면 원본 그대로 반환
+        }
+        return rawDescription;
+    }
 
-        List<Long> tagIds = content.getContentTags().stream()
+    // 💡 [피드백 반영 2] 초성 추출 로직 공통 메서드로 분리
+    private String getChosungKeyword(String keyword) {
+        return ChosungUtil.extract(keyword).replaceAll("\\s+", "");
+    }
+
+    private ContentDocument toDocument(Content content) {
+    	List<Long> tagIds = content.getContentTags().stream()
                 .map(ct -> ct.getTag().getId())
                 .collect(Collectors.toList());
 
         float[] tagVector = tagVectorService.buildContentVector(tagIds);
 
-        String rawChosung = ChosungUtil.extract(content.getTitle());
-        String noSpaceChosung = rawChosung != null ? rawChosung.replaceAll("\\s+", "") : "";
-        String combinedChosung = (rawChosung != null ? rawChosung : "") + " " + noSpaceChosung;
-
-        return ContentDocument.builder()
-                .contentId(content.getId())
-                .title(content.getTitle())
-                .titleChosung(combinedChosung)
-                .description(content.getDescription())
-                .tags(tagNames)
-                .contenttype(content.getType().name())
-                .status(content.getStatus().name())
-                .accessLevel(content.getAccessLevel().name())
-                .thumbnailUrl(content.getThumbnailUrl())
-                .totalViewCount(content.getTotalViewCount())
-                .bookmarkCount(content.getBookmarkCount())
-                .createdAt(content.getCreatedAt())
-                .updatedAt(content.getUpdatedAt())
+        return toSimpleDocument(content).toBuilder()
                 .tagVector(tagVector)
                 .build();
     }
@@ -370,12 +369,11 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         return normSq <= ZERO_VECTOR_EPS;
     }
 
-    // ── ES 검색 Fallback: DB LIKE (category/genre/tag 필터 모두 반영) ───────
+    // ── ES 검색 Fallback: DB LIKE ───────
     private Page<ContentDocument> searchFromDb(String keyword, String category, String genre, String tag, Pageable pageable) {
         try {
             Pageable dbPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
 
-            // category 문자열 → ContentType enum 변환 (null-safe)
             common.enums.ContentType categoryType = null;
             if (StringUtils.hasText(category)) {
                 try {
@@ -385,7 +383,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 }
             }
 
-            // genre/tag: null 또는 빈 문자열이면 null로 정규화 (JPQL 조건 스킵용)
             String genreFilter = StringUtils.hasText(genre) ? genre : null;
             String tagFilter   = StringUtils.hasText(tag)   ? tag   : null;
 
@@ -393,7 +390,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
             long total;
 
             if (StringUtils.hasText(keyword)) {
-                // 정렬 결정: pageable sort에 createdAt DESC 단독 존재 시 LATEST, 그 외 POPULAR
                 boolean isLatest = pageable.getSort().stream()
                         .anyMatch(order -> order.getProperty().equals("createdAt")
                                 && order.isDescending());
@@ -407,7 +403,6 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 }
                 total = contentRepository.countActiveByTitleLike(keyword, categoryType, genreFilter, tagFilter);
             } else {
-                // keyword 없음(필터만): 인기순 반환 (Fallback 상황 허용 수준)
                 contents = contentRepository.findTopActiveByPopularity(dbPageable);
                 total = contentRepository.countAllActive();
             }
@@ -431,11 +426,16 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
         List<String> tagNames = content.getContentTags().stream()
                 .map(ct -> ct.getTag().getName())
                 .collect(Collectors.toList());
+        
+        String rawChosung = ChosungUtil.extract(content.getTitle());
+        String noSpaceChosung = rawChosung != null ? rawChosung.replaceAll("\\s+", "") : "";
+        String combinedChosung = (rawChosung != null ? rawChosung : "") + " " + noSpaceChosung;
+        
         return ContentDocument.builder()
                 .contentId(content.getId())
                 .title(content.getTitle())
-                .titleChosung(ChosungUtil.extract(content.getTitle()))
-                .description(content.getDescription())
+                .titleChosung(combinedChosung)
+                .description(parseDescription(content.getDescription())) 
                 .tags(tagNames)
                 .contenttype(content.getType().name())
                 .status(content.getStatus().name())
@@ -445,7 +445,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
                 .bookmarkCount(content.getBookmarkCount())
                 .createdAt(content.getCreatedAt())
                 .updatedAt(content.getUpdatedAt())
-                .build(); // tagVector 생략 (벡터 연산 불필요)
+                .build(); 
     }
     
     @Override

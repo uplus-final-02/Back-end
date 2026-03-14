@@ -1,8 +1,5 @@
 package org.backend.userapi.search.dto;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.backend.userapi.search.document.ContentDocument;
 import org.springframework.util.StringUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,37 +31,17 @@ public record ContentSearchItem(
         @Schema(description = "콘텐츠 장르/태그 목록", example = "[\"초능력\", \"액션\", \"스릴러\"]", nullable = true)
         List<String> tags
 ) {
-    // 💡 JSON 파싱을 위한 ObjectMapper (static으로 선언해 재사용)
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     public static ContentSearchItem from(ContentDocument doc, String keyword) {
         return new ContentSearchItem(
                 doc.getContentId(),
                 doc.getTitle(),
                 doc.getHighlightTitle(),
-                // 💡 원본 통 JSON 문자열 대신, 파싱된 줄거리(summary)만 넣기!
-                extractSummaryFromJson(doc.getHighlightDescription()), 
+                // 💡 피드백 반영: 이미 인덱싱 단계에서 텍스트로 변환되었으므로 불필요한 JSON 파싱(Dead Code) 제거
+                doc.getHighlightDescription(), 
                 doc.getThumbnailUrl(),
                 determineMatchType(doc, keyword), 
                 doc.getTags()
         );
-    }
-
-    // 💡 JSON 문자열에서 "summary" 필드만 안전하게 추출하는 헬퍼 메서드
-    private static String extractSummaryFromJson(String jsonString) {
-        if (!StringUtils.hasText(jsonString)) {
-            return null;
-        }
-        try {
-            JsonNode rootNode = objectMapper.readTree(jsonString);
-            if (rootNode.has("summary")) {
-                return rootNode.get("summary").asText();
-            }
-        } catch (JsonProcessingException e) {
-            // 만약 JSON 형식이 아니라 일반 텍스트라면 그대로 반환
-            return jsonString;
-        }
-        return jsonString; // 파싱 실패 시 원본 반환 방어 로직
     }
 
     private static String determineMatchType(ContentDocument doc, String keyword) {

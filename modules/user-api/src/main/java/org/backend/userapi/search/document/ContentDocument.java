@@ -10,10 +10,10 @@ import java.util.List;
 
 @Getter
 @Setter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = "contents_v1", createIndex = true)
+@Document(indexName = "contents", createIndex = true)
 @Setting(settingPath = "elasticsearch/content-settings.json")
 @Mapping(mappingPath = "elasticsearch/content-mapping.json")
 public class ContentDocument {
@@ -21,10 +21,10 @@ public class ContentDocument {
     @Id
     private Long contentId;
 
-    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_analyzer")
+    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_search_analyzer")
     private String title;
 
-    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_analyzer")
+    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_search_analyzer")
     private String description;
 
     @Field(type = FieldType.Keyword)
@@ -63,5 +63,6 @@ public class ContentDocument {
     @Transient
     private String highlightDescription;
     
+ // 💡 피드백 반영: @Field는 content-mapping.json에서 관리 (autocomplete_analyzer + ngram subfield)
     private String titleChosung;
 }
