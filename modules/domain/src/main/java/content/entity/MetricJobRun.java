@@ -58,8 +58,7 @@ public class MetricJobRun extends BaseTimeEntity {
     @Column(name = "message", length = 1000)
     private String message;
 
-    @Lob
-    @Column(name = "error_stack")
+    @Column(name = "error_stack", columnDefinition = "LONGTEXT")
     private String errorStack;
 
     public static MetricJobRun startSnapshot(LocalDateTime bucketStartAt) {
