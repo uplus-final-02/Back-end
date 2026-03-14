@@ -1,8 +1,13 @@
 package org.backend.userapi.user.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import core.security.principal.JwtPrincipal;
+
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.user.dto.request.WithdrawRequest;
 import org.backend.userapi.user.dto.response.NicknameUpdateResponse;
 import org.backend.userapi.user.service.UserService;
 
@@ -29,5 +34,16 @@ public class UserController {
     NicknameUpdateResponse response = userService.updateNickname(userId, nickname);
 
     return ApiResponse.success(response);
+  }
+  
+  @DeleteMapping("/me")
+  public ApiResponse<Void> withdraw(
+          @AuthenticationPrincipal JwtPrincipal principal,
+          @RequestBody WithdrawRequest request
+  ) {
+
+      userService.withdraw(principal.getUserId(), request.getReason());
+
+      return ApiResponse.success(null);
   }
 }
