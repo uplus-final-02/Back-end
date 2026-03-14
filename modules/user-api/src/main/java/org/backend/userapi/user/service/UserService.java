@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.NicknameUpdateResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import common.enums.WithdrawalReason;
 import user.entity.User;
 import user.repository.UserRepository;
 
@@ -47,4 +49,16 @@ public class UserService {
         .nextChangeAvailableAt(LocalDateTime.now().plusDays(CHANGE_LIMIT_DAYS))
         .build();
   }
+  
+  public void withdraw(Long userId, WithdrawalReason reason) {
+
+	    User user = userRepository.findById(userId)
+	            .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+	    if (user.isWithdrawn()) {
+	        throw new IllegalStateException("이미 탈퇴 처리된 회원입니다.");
+	    }
+
+	    user.withdraw(reason);
+	}
 }
