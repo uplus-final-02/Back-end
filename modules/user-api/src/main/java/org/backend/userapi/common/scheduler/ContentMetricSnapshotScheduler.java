@@ -1,9 +1,11 @@
 package org.backend.userapi.common.scheduler;
 
+import content.repository.ContentMetricSnapshotRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.backend.userapi.content.service.ContentMetricSnapshotService;
+import org.backend.userapi.metrics.MetricJobRunWriterService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +18,8 @@ import java.time.temporal.ChronoUnit;
 public class ContentMetricSnapshotScheduler {
 
     private final ContentMetricSnapshotService snapshotService;
+    private final MetricJobRunWriterService jobRunWriterService;
+    private final ContentMetricSnapshotRepository snapshotRepository;
 
     /**
      * 10분마다 실행되는 스냅샷 집계 스케줄러
@@ -40,12 +44,27 @@ public class ContentMetricSnapshotScheduler {
 
         log.info("[Snapshot Scheduler] 10분 단위 지표 스냅샷 집계 시작. (버킷 시각: {})", bucketStartAt);
 
+        var run = jobRunWriterService.startSnapshot(bucketStartAt);
+
+        long beforeCount = snapshotRepository.countByIdBucketStartAt(bucketStartAt);
+
         try {
             // 비스 로직 호출
             snapshotService.createSnapshotsForBucket(bucketStartAt);
+
+            long afterCount = snapshotRepository.countByIdBucketStartAt(bucketStartAt);
+            long processed = snapshotRepository.countByIdBucketStartAt(bucketStartAt);
+
+            if (processed == 0) {
+                jobRunWriterService.empty(run.getId(), "집계 대상/변화량 없음");
+            } else {
+                jobRunWriterService.success(run.getId(), processed, "스냅샷 저장 완료");
+            }
+
             log.info("[Snapshot Scheduler] 스냅샷 집계 완료.");
         } catch (Exception e) {
             log.error("[Snapshot Scheduler] 스냅샷 집계 중 에러 발생: {}", e.getMessage(), e);
+            jobRunWriterService.failed(run.getId(), e);
         }
     }
 }

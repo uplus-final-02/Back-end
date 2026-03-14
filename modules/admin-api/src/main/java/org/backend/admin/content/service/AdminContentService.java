@@ -8,9 +8,11 @@ import org.backend.admin.content.dto.AdminContentDetailResponse;
 import org.backend.admin.content.dto.AdminContentListResponse;
 import org.backend.admin.content.dto.AdminContentUpdateRequest;
 import org.backend.admin.content.dto.AdminContentUpdateResponse;
+import org.backend.admin.content.dto.AdminThumbnailUploadResponse;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import common.entity.Tag;
 import common.enums.ContentStatus;
@@ -22,7 +24,13 @@ import content.entity.Video;
 import content.repository.ContentRepository;
 import content.repository.ContentTagRepository;
 import content.repository.VideoRepository;
+import core.storage.ObjectStorageService;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -34,6 +42,7 @@ public class AdminContentService {
 	private final TagRepository tagRepository;
 	private final ContentTagRepository contentTagRepository;
     private final VideoRepository videoRepository;
+    private final ObjectStorageService objectStorageService;
     
     
     // 콘텐츠 목록 조회
@@ -199,5 +208,100 @@ public class AdminContentService {
     	
     }
     	
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
 
+    public AdminThumbnailUploadResponse uploadThumbnail(Long contentId, Long videoId, MultipartFile file) {
+        validateFile(file);
+
+        String extension = resolveExtension(file.getOriginalFilename());
+        String contentType = resolveContentType(file.getContentType(), extension);
+        String objectPath = buildThumbnailPath(contentId, videoId, extension);
+        String uploadedThumbnailUrl = uploadAndBuildUrl(file, objectPath, extension, contentType);
+
+        return AdminThumbnailUploadResponse.builder()
+                .uploadedThumbnailUrl(uploadedThumbnailUrl)
+                .build();
+    }
+
+    private void validateFile(MultipartFile file) {
+    	System.out.println("originalFilename = " + file.getOriginalFilename());
+        System.out.println("contentType = " + file.getContentType());
+        System.out.println("size = " + file.getSize());
+        
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("업로드할 썸네일 파일이 비어 있습니다.");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        String extension = resolveExtension(originalFilename);
+
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("png, jpg, jpeg, webp 이미지 파일만 업로드 가능합니다.");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("이미지 파일만 업로드 가능합니다.");
+        }
+    }
+
+    private String resolveExtension(String originalFilename) {
+        if (originalFilename == null || !originalFilename.contains(".")) {
+            throw new IllegalArgumentException("파일 확장자를 확인할 수 없습니다.");
+        }
+
+        String extension = originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase();
+
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("지원하지 않는 썸네일 형식입니다.");
+        }
+
+        return extension;
+    }
+
+    private String resolveContentType(String contentType, String extension) {
+        if (contentType != null && contentType.startsWith("image/")) {
+            return contentType;
+        }
+
+        return switch (extension) {
+            case ".png" -> "image/png";
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".webp" -> "image/webp";
+            default -> throw new IllegalArgumentException("지원하지 않는 썸네일 형식입니다.");
+        };
+    }
+
+    private String buildThumbnailPath(Long contentId, Long videoId, String extension) {
+        String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
+        String uuid = UUID.randomUUID().toString();
+
+        return (videoId == null)
+                ? "images/thumbnails/%s/%d/%s%s".formatted(date, contentId, uuid, extension)
+                : "images/thumbnails/%s/%d/%d/%s%s".formatted(date, contentId, videoId, uuid, extension);
+    }
+
+    private String uploadAndBuildUrl(MultipartFile file, String objectPath, String extension, String contentType) {
+        Path tempFile = null;
+
+        try {
+            tempFile = Files.createTempFile("thumbnail-", extension);
+            file.transferTo(tempFile.toFile());
+
+            objectStorageService.uploadFromFile(objectPath, tempFile, contentType);
+            return objectStorageService.buildPublicUrl(objectPath);
+
+        } catch (IOException e) {
+            throw new IllegalStateException("썸네일 파일 처리 중 오류가 발생했습니다.", e);
+        } catch (Exception e) {
+            throw new IllegalStateException("썸네일 업로드에 실패했습니다.", e);
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
 }

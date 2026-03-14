@@ -56,7 +56,7 @@ public class SecurityConfig {
                 .requestMatchers("/admin/hls/**", "/api/admin/hls/**").permitAll() 
                 .requestMatchers("/admin/storage/**", "/api/admin/storage/**").permitAll() 
                 
-                .anyRequest().hasAuthority("ADMIN") 
+                .anyRequest().hasRole("ADMIN")
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
@@ -68,7 +68,9 @@ public class SecurityConfig {
         return http
             .securityMatcher("/**")
             .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated()) 
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health").permitAll()
+                .anyRequest().authenticated())
             .build();
     }
 

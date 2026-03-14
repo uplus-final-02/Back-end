@@ -19,8 +19,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // AWS SDK for CloudFront Signed URLs
-    implementation 'software.amazon.awssdk:cloudfront:2.20.26'
-    implementation 'software.amazon.awssdk:url-connection-client:2.20.26'
+    implementation 'software.amazon.awssdk:cloudfront:2.21.1'
+    implementation 'software.amazon.awssdk:url-connection-client:2.21.1'
     implementation platform('software.amazon.awssdk:bom:2.21.1')
     implementation 'software.amazon.awssdk:s3'
 }
