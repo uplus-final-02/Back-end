@@ -1,4 +1,3 @@
-// modules/admin-api/src/main/java/org/backend/admin/metrics/controller/AdminMetricSnapshotController.java
 package org.backend.admin.metrics.controller;
 
 import core.security.principal.JwtPrincipal;
@@ -23,10 +22,6 @@ public class AdminMetricSnapshotController {
 
     private final AdminMetricQueryService queryService;
 
-    /**
-     * 버킷 리스트
-     * 예) /admin/metrics/snapshots/buckets?from=2026-03-14T00:00:00&to=2026-03-15T00:00:00&page=0&size=50
-     */
     @GetMapping("/buckets")
     public List<AdminSnapshotBucketSummaryResponse> getBuckets(
             @AuthenticationPrincipal JwtPrincipal principal,

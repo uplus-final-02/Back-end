@@ -73,7 +73,7 @@ public class AdminMetricQueryService {
         return result;
     }
 
-    // 2) 트렌딩 상세(특정 calculatedAt) - 기존 trendingHistoryRepository 사용 (그대로)
+    // 2) 트렌딩 상세(특정 calculatedAt) - 기존 trendingHistoryRepository 사용
     public AdminTrendingDetailResponse getTrendingDetail(LocalDateTime calculatedAt, int limit) {
         List<TrendingHistory> histories = trendingHistoryRepository
                 .findAllByCalculatedAtOrderByRankingAsc(calculatedAt)
