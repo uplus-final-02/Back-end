@@ -1,0 +1,65 @@
+package org.backend.userapi.metrics;
+
+import common.enums.MetricJobType;
+import content.entity.MetricJobRun;
+import content.repository.MetricJobRunRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.time.LocalDateTime;
+
+@Service
+@RequiredArgsConstructor
+public class MetricJobRunWriterService {
+
+    private final MetricJobRunRepository metricJobRunRepository;
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MetricJobRun startSnapshot(LocalDateTime bucketStartAt) {
+        return metricJobRunRepository.findByJobTypeAndBucketStartAt(MetricJobType.SNAPSHOT_10M, bucketStartAt)
+                .orElseGet(() -> metricJobRunRepository.save(MetricJobRun.startSnapshot(bucketStartAt)));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MetricJobRun startTrending(LocalDateTime calculatedAt) {
+        return metricJobRunRepository.findByJobTypeAndCalculatedAt(MetricJobType.TRENDING_1H, calculatedAt)
+                .orElseGet(() -> metricJobRunRepository.save(MetricJobRun.startTrending(calculatedAt)));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void success(Long jobRunId, long processedCount, String message) {
+        MetricJobRun run = metricJobRunRepository.findById(jobRunId)
+                .orElseThrow(() -> new IllegalStateException("JOB_RUN_NOT_FOUND: " + jobRunId));
+        run.markSuccess(processedCount, message);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void empty(Long jobRunId, String message) {
+        MetricJobRun run = metricJobRunRepository.findById(jobRunId)
+                .orElseThrow(() -> new IllegalStateException("JOB_RUN_NOT_FOUND: " + jobRunId));
+        run.markEmpty(message);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failed(Long jobRunId, Exception e) {
+        MetricJobRun run = metricJobRunRepository.findById(jobRunId)
+                .orElseThrow(() -> new IllegalStateException("JOB_RUN_NOT_FOUND: " + jobRunId));
+        run.markFailed(safeMessage(e), stackTrace(e));
+    }
+
+    private String safeMessage(Exception e) {
+        String m = e.getMessage();
+        String msg = (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
+        return (msg.length() > 1000) ? msg.substring(0, 1000) : msg;
+    }
+
+    private String stackTrace(Exception e) {
+        StringWriter sw = new StringWriter();
+        e.printStackTrace(new PrintWriter(sw));
+        return sw.toString();
+    }
+}

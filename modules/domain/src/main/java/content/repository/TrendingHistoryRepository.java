@@ -21,5 +21,7 @@ public interface TrendingHistoryRepository extends JpaRepository<TrendingHistory
      * 복합 인덱스(idx_trending_history_calculated_at_ranking)를 타게 되어 성능이 최적화됩니다.
      */
     List<TrendingHistory> findAllByCalculatedAtOrderByRankingAsc(LocalDateTime calculatedAt);
+
+    long countByCalculatedAt(LocalDateTime calculatedAt);
 }
 
