@@ -51,4 +51,6 @@ public interface ContentMetricSnapshotRepository extends JpaRepository<ContentMe
 """)
     List<TrendingStatDto> findAggregatedStats(@Param("startTime") LocalDateTime startTime,
                                               @Param("endTime") LocalDateTime endTime);
+
+    long countByIdBucketStartAt(LocalDateTime bucketStartAt);
 }
