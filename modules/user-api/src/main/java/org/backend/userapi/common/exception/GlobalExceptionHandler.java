@@ -19,6 +19,7 @@ import org.springframework.data.elasticsearch.UncategorizedElasticsearchExceptio
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -217,10 +218,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(VideoNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleVideoNotFound(VideoNotFoundException e) {
         return ResponseEntity
-            .status(HttpStatus.NOT_FOUND) // 404 상태 코드
-            .body(new ApiResponse<>(404, e.getMessage(), null));
+                .status(HttpStatus.NOT_FOUND) // 404 상태 코드
+                .body(new ApiResponse<>(404, e.getMessage(), null));
     }
-    
+
     // ── 결제 멱등성 키 누락 (클라이언트 버그) → 400 ──────────────────
     @ExceptionHandler(PaymentIdempotencyException.class)
     public ResponseEntity<ApiResponse<Void>> handlePaymentIdempotency(PaymentIdempotencyException e) {
@@ -246,8 +247,8 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, e.getMessage(), null));
     }
-    
-    
+
+
     // ── MinIO 런타임 오류 (기동 후 장애) → 503 ──────────────────────────
     // checkAvailable()을 통과했더라도 실제 MinIO 호출에서 실패하면 StorageException 발생
     // → 500 대신 503으로 응답해 Degraded Mode 목표를 유지
@@ -275,7 +276,7 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "서버 내부 오류가 발생했습니다.", null));
     }
-    
+
     // (옵션) 최상위 Exception까지 잡고 싶다면 추가
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
@@ -291,7 +292,7 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, e.getMessage(), null));
     }
-    
+
     //찜 삭제 전용 404 예외 처리
     @ExceptionHandler(BookmarkNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleBookmarkNotFound(BookmarkNotFoundException e) {
@@ -299,25 +300,34 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, e.getMessage(), null));
     }
-    
+
     @ExceptionHandler(UplusUserNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleUplusNotFound(UplusUserNotFoundException e) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, e.getMessage(), null));
     }
-    
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException e) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, e.getMessage(), null));
     }
-    
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException e) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "이미 다른 계정에서 인증된 전화번호입니다.", null));
     }
+
+    // VideoPlay 접근권한 오류
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(AccessDeniedException e) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(500, e.getMessage(), null));
+    }
+
 }
