@@ -51,15 +51,33 @@ public class TagHomeStatsJdbcRepository {
 		    LEFT JOIN (
 		        SELECT
 		            ct.tag_id,
-		            SUM(c.total_view_count) AS total_view_count,
-		            SUM(c.bookmark_count) AS total_bookmark_count
+		            SUM(COALESCE(cms.snapshot_view_count, 0)) AS total_view_count,
+		            SUM(COALESCE(cms.snapshot_bookmark_count, 0)) AS total_bookmark_count
 		        FROM content_tags ct
 		        JOIN contents c
 		          ON c.content_id = ct.content_id
 		         AND c.status = 'ACTIVE'
+		        LEFT JOIN (
+		            SELECT
+		                s.content_id,
+		                s.snapshot_view_count,
+		                s.snapshot_bookmark_count
+		            FROM content_metric_snapshots s
+		            JOIN (
+		                SELECT
+		                    content_id,
+		                    MAX(bucket_start_at) AS max_bucket_start_at
+		                FROM content_metric_snapshots
+		                WHERE bucket_start_at < DATE_ADD(?, INTERVAL 1 DAY)
+		                GROUP BY content_id
+		            ) latest
+		              ON latest.content_id = s.content_id
+		             AND latest.max_bucket_start_at = s.bucket_start_at
+		        ) cms
+		          ON cms.content_id = c.content_id
 		        GROUP BY ct.tag_id
 		    ) base
-		        ON base.tag_id = t.tag_id
+		      ON base.tag_id = t.tag_id
 
 		    LEFT JOIN (
 		        SELECT
@@ -73,9 +91,10 @@ public class TagHomeStatsJdbcRepository {
 		        JOIN watch_histories wh
 		          ON wh.content_id = c.content_id
 		         AND wh.deleted_at IS NULL
+		         AND wh.created_at < DATE_ADD(?, INTERVAL 1 DAY)
 		        GROUP BY ct.tag_id
 		    ) w
-		        ON w.tag_id = t.tag_id
+		      ON w.tag_id = t.tag_id
 
 		    WHERE t.priority = 1
 		      AND t.is_active = 1
@@ -83,7 +102,6 @@ public class TagHomeStatsJdbcRepository {
 		    ORDER BY t.tag_id
 		    """;
 	
-    
     /**
      * 통계 UPSERT
      */
@@ -110,6 +128,7 @@ public class TagHomeStatsJdbcRepository {
 	            updated_at = NOW()
 	        """;
     
+	
 	// 집계 데이터 조회
 	public List<TagHomeStatsRow> findDailyStatsRows(LocalDate statDate) {
         return jdbcTemplate.query(
