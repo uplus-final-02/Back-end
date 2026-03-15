@@ -166,7 +166,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.transcoder-worker
-    container_name: transcoder-worker
+    #container_name: transcoder-worker
     depends_on:
       mysql:
         condition: service_healthy
@@ -180,6 +180,7 @@ services:
       - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_CONSUMER_CLIENT_ID: transcoder-${HOSTNAME}
     restart: unless-stopped
 
 volumes:
