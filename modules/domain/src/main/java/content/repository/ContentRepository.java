@@ -1,5 +1,6 @@
 package content.repository;
 
+import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
 import content.entity.Content;
@@ -45,6 +46,7 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("status") ContentStatus status,
             @Param("uploaderType") String uploaderType,
             @Param("tag") String tag
+
     );
 
     @Query("SELECT DISTINCT c FROM Content c " +
@@ -52,45 +54,51 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             "AND (:uploaderType IS NULL " +
             "     OR (:uploaderType = 'ADMIN' AND c.uploaderId IS NULL) " +
             "     OR (:uploaderType = 'USER' AND c.uploaderId IS NOT NULL)) " +
-            "AND (:tag IS NULL OR :tag = '' " +
+            "AND (:tag IS NULL " +
             "     OR EXISTS (SELECT 1 FROM c.contentTags sub_ct JOIN sub_ct.tag sub_t " +
-            "                WHERE sub_t.name = :tag AND sub_t.isActive = true))")
+            "                WHERE sub_t.id = :tag AND sub_t.isActive = true))" +
+            "AND (:accessLevel IS NULL OR :accessLevel = '' " +
+            "     OR c.accessLevel = :accessLevel) " +
+            "ORDER BY c.createdAt DESC")
     Slice<Content> findContentsWithFilters(
             @Param("status") ContentStatus status,
             @Param("uploaderType") String uploaderType,
-            @Param("tag") String tag,
+            @Param("tag") Long tag,
+            @Param("accessLevel") ContentAccessLevel accessLevel,
             Pageable pageable
     );
-  
+
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Content c SET c.totalViewCount = c.totalViewCount + :delta WHERE c.id = :id")
-      void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
-    
-    
+    void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+
+
     Page<Content> findByStatus(ContentStatus status, Pageable pageable);
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ────
+
     /**
      * 특정 시간(10분 전 등) 이후에 수정된 콘텐츠만 조회 (타겟팅 최적화)
+     *
      * @param lastUpdatedAt 기준 시각
-     * @param pageable 페이징 정보 (CHUNK_SIZE)
+     * @param pageable      페이징 정보 (CHUNK_SIZE)
      * @return 변경된 콘텐츠의 Slice
      */
     Slice<Content> findByUpdatedAtGreaterThanEqual(LocalDateTime lastUpdatedAt, Pageable pageable);
-  
+
     // ── ES 검색 Fallback: 제목 LIKE + category 필터 (인기순) ──────────────
     @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
-           "WHERE c.status = 'ACTIVE' " +
-           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "AND (:category IS NULL OR c.type = :category) " +
-           "AND (:genre IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
-           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
-           "AND (:tag IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
-           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
-           "ORDER BY c.totalViewCount DESC, c.createdAt DESC")
+            "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+            "WHERE c.status = 'ACTIVE' " +
+            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "AND (:category IS NULL OR c.type = :category) " +
+            "AND (:genre IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+            "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+            "AND (:tag IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+            "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
+            "ORDER BY c.totalViewCount DESC, c.createdAt DESC")
     List<Content> findActiveByTitleLikePopular(
             @Param("keyword") String keyword,
             @Param("category") ContentType category,
@@ -100,17 +108,17 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (최신순) ────
     @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
-           "WHERE c.status = 'ACTIVE' " +
-           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "AND (:category IS NULL OR c.type = :category) " +
-           "AND (:genre IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
-           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
-           "AND (:tag IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
-           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
-           "ORDER BY c.createdAt DESC, c.id DESC")
+            "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+            "WHERE c.status = 'ACTIVE' " +
+            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "AND (:category IS NULL OR c.type = :category) " +
+            "AND (:genre IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+            "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+            "AND (:tag IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+            "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true)) " +
+            "ORDER BY c.createdAt DESC, c.id DESC")
     List<Content> findActiveByTitleLikeLatest(
             @Param("keyword") String keyword,
             @Param("category") ContentType category,
@@ -120,15 +128,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     // ── ES 검색 Fallback: total count (genre/tag 필터 포함) ───────────────
     @Query("SELECT COUNT(DISTINCT c) FROM Content c " +
-           "WHERE c.status = 'ACTIVE' " +
-           "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "AND (:category IS NULL OR c.type = :category) " +
-           "AND (:genre IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
-           "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
-           "AND (:tag IS NULL OR EXISTS (" +
-           "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
-           "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true))")
+            "WHERE c.status = 'ACTIVE' " +
+            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "AND (:category IS NULL OR c.type = :category) " +
+            "AND (:genre IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct1 JOIN sub_ct1.tag sub_t1 " +
+            "    WHERE sub_t1.name = :genre AND sub_t1.isActive = true)) " +
+            "AND (:tag IS NULL OR EXISTS (" +
+            "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
+            "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true))")
     long countActiveByTitleLike(
             @Param("keyword") String keyword,
             @Param("category") ContentType category,
@@ -137,15 +145,15 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     // ── 추천 Fallback: 인기순 (조회수 + 북마크 기준) ──────────────────────
     @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
-           "WHERE c.status = 'ACTIVE' " +
-           "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
+            "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+            "WHERE c.status = 'ACTIVE' " +
+            "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
     List<Content> findTopActiveByPopularity(Pageable pageable);
 
     // ── ES 검색 Fallback (keyword 없음): total count용 ────────────────────
     @Query("SELECT COUNT(c) FROM Content c WHERE c.status = 'ACTIVE'")
     long countAllActive();
-    
+
     @Modifying
     @Query("UPDATE Content c SET c.bookmarkCount = c.bookmarkCount + 1 WHERE c.id = :contentId")
     void incrementBookmarkCount(@Param("contentId") Long contentId);
