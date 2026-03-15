@@ -58,9 +58,8 @@ public class UserUploadConfirmService {
         uc.updateContentStatus(common.enums.ContentStatus.HIDDEN);
 
         videoTranscodeEventPublisher.publish(
-                VideoTranscodeRequestedEvent.of(
+                VideoTranscodeRequestedEvent.ofUser(
                         uc.getId(),
-                        null,
                         uvf.getId(),
                         uvf.getOriginalUrl()
                 )
