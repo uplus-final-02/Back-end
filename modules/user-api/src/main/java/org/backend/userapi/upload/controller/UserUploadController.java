@@ -21,9 +21,9 @@ public class UserUploadController {
     @PostMapping("/draft")
     public UserUploadDraftResponse draft(
             @AuthenticationPrincipal JwtPrincipal principal,
-            @RequestParam Long parentContentId
+            @RequestBody UserUploadDraftRequest req
     ) {
-        return draftService.createDraft(principal, parentContentId);
+        return draftService.createDraft(principal, req.parentContentId());
     }
 
     @PostMapping("/presign")

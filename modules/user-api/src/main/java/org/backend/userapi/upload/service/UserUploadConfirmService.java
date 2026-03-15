@@ -1,16 +1,17 @@
 package org.backend.userapi.upload.service;
 
 import common.enums.TranscodeStatus;
+import common.enums.VideoStatus;
 import content.entity.UserContent;
 import content.entity.UserVideoFile;
 import content.repository.UserContentRepository;
 import content.repository.UserVideoFileRepository;
 import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
+import core.security.principal.JwtPrincipal;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
-import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.upload.dto.UserUploadConfirmRequest;
 import org.backend.userapi.upload.dto.UserUploadConfirmResponse;
@@ -37,36 +38,33 @@ public class UserUploadConfirmService {
         UserContent uc = userContentRepository.findById(req.userContentId())
                 .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND: " + req.userContentId()));
 
-        // 본인 소유 검증
         if (!uc.getUploaderId().equals(principal.getUserId())) {
             throw new IllegalArgumentException("FORBIDDEN: not owner");
         }
 
-        // 업로드 완료 검증 (0byte/미존재)
         var stat = safeStat(req.objectKey());
         if (stat.size() <= 0) {
             throw new IllegalStateException("UPLOAD_NOT_COMPLETED");
         }
 
-        UserVideoFile uvf = userVideoFileRepository.findByUserContentId(uc.getId())
-                .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND"));
+        UserVideoFile uvf = userVideoFileRepository.findByContent_Id(uc.getId())
+                .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND: contentId=" + uc.getId()));
 
-        // originalKey 저장 + WAITING
         uvf.updateOriginalKey(req.objectKey());
         uvf.updateTranscodeStatus(TranscodeStatus.WAITING);
 
-        // 이후 worker가 ffprobe로 duration 측정 → 180초 초과면 FAILED로 처리(추후 worker 로직에 추가 예정)
+        uvf.updateVideoStatus(VideoStatus.PRIVATE);
+
+        uc.updateContentStatus(common.enums.ContentStatus.HIDDEN);
+
         videoTranscodeEventPublisher.publish(
                 VideoTranscodeRequestedEvent.of(
-                        uc.getId(),          // contentId 자리에 userContentId를 넣어도 되고(워커는 경로용으로만 쓰면 됨)
-                        null,                // videoId 없음
+                        uc.getId(),
+                        null,
                         uvf.getId(),
                         uvf.getOriginalUrl()
                 )
         );
-
-        // user side status는 PRIVATE로 두는게 안전(트랜스코딩 끝나고 공개)
-        uc.markVideoPrivate();
 
         return new UserUploadConfirmResponse(
                 uc.getId(),
