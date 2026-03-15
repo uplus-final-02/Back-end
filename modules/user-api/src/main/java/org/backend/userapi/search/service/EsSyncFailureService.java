@@ -14,10 +14,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EsSyncFailureService {
 
-    private static final int MAX_RETRY = 5; // 5회 초과 시 포기 (수동 복구 대상)
+    private static final int MAX_RETRY = 5;
 
     private final EsSyncFailureRepository esSyncFailureRepository;
     private final ContentIndexingService contentIndexingService;
+    private final EsSyncRetryExecutor retryExecutor; // 💡 REQUIRES_NEW 전용 실행기
 
     // 실패 기록 저장 — 동일 contentId가 이미 있으면 retry_count만 증가
     @Transactional
@@ -37,34 +38,22 @@ public class EsSyncFailureService {
     }
 
     // 재시도 배치 — 스케줄러에서 주기적으로 호출
-    @Transactional
     public void retryAll() {
         List<EsSyncFailure> targets = esSyncFailureRepository.findRetryTargets(MAX_RETRY);
-
         if (targets.isEmpty()) return;
 
         log.info("[DLQ Retry] 재시도 대상: {}건", targets.size());
-
         int successCount = 0;
         int failCount = 0;
 
         for (EsSyncFailure failure : targets) {
-            try {
-                contentIndexingService.indexContent(failure.getContentId());
-                failure.markResolved();
+            boolean result = retryExecutor.retrySingle(failure, contentIndexingService);
+            if (result) {
                 successCount++;
                 log.info("[DLQ Retry] 재시도 성공: contentId={}", failure.getContentId());
-            } catch (Exception e) {
-                failure.incrementRetry(e.getMessage());
+            } else {
                 failCount++;
-
-                if (failure.getRetryCount() >= MAX_RETRY) {
-                    log.error("[DLQ Retry] 최대 재시도 초과 — 수동 복구 필요: contentId={}, retryCount={}",
-                            failure.getContentId(), failure.getRetryCount());
-                } else {
-                    log.warn("[DLQ Retry] 재시도 실패: contentId={}, retryCount={}",
-                            failure.getContentId(), failure.getRetryCount());
-                }
+                log.warn("[DLQ Retry] 재시도 실패: contentId={}", failure.getContentId());
             }
         }
 

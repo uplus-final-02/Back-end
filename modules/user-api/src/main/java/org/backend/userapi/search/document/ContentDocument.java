@@ -13,10 +13,12 @@ import java.util.List;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = "contents", createIndex = true)
+@Document(indexName = ContentDocument.INDEX_NAME, createIndex = false)
 @Setting(settingPath = "elasticsearch/content-settings.json")
 @Mapping(mappingPath = "elasticsearch/content-mapping.json")
 public class ContentDocument {
+
+    public static final String INDEX_NAME = "contents";
 
     @Id
     private Long contentId;
@@ -63,6 +65,5 @@ public class ContentDocument {
     @Transient
     private String highlightDescription;
     
- // 💡 피드백 반영: @Field는 content-mapping.json에서 관리 (autocomplete_analyzer + ngram subfield)
     private String titleChosung;
 }

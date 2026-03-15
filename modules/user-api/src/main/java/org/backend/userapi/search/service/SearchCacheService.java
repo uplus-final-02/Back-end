@@ -226,6 +226,9 @@ public class SearchCacheService {
      */
     String buildCacheKey(String keyword, String category, String genre, String tag,
                          String sort, int page, int size) {
+    	// TODO: 한국어 키워드 포함 시 키가 길어질 수 있음
+        //       키 길이 문제 발생 시 SHA-256 해싱으로 교체 고려
+        //       DigestUtils.sha256Hex(raw).substring(0, 16)
         return CACHE_KEY_PREFIX
                 + encode(nvl(keyword).toLowerCase(Locale.ROOT)) + "|"
                 + encode(nvl(category).toUpperCase(Locale.ROOT)) + "|"

@@ -36,7 +36,6 @@ public record ContentSearchItem(
                 doc.getContentId(),
                 doc.getTitle(),
                 doc.getHighlightTitle(),
-                // 💡 피드백 반영: 이미 인덱싱 단계에서 텍스트로 변환되었으므로 불필요한 JSON 파싱(Dead Code) 제거
                 doc.getHighlightDescription(), 
                 doc.getThumbnailUrl(),
                 determineMatchType(doc, keyword), 

@@ -6,6 +6,7 @@ import java.util.List;
 import org.backend.userapi.search.entity.SearchLog;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,10 @@ public interface SearchLogRepository extends JpaRepository<SearchLog, Long> {
     	ORDER BY cnt DESC
     	""")
     List<Object[]> findTopKeywords(@Param("since") LocalDateTime since, Pageable pageable);
+    
+    @Modifying
+    @Query(value = "DELETE FROM search_log WHERE searched_at < :cutoff " +
+                   "ORDER BY id ASC LIMIT 10000",
+           nativeQuery = true)
+    int deleteOldBatch(@Param("cutoff") LocalDateTime cutoff);
 }

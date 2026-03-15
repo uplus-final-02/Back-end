@@ -72,7 +72,7 @@ public class SuggestionServiceImpl implements SuggestionService {
 
         try {
             SearchResponse<ContentDocument> response = elasticsearchClient.search(s -> s
-                    .index("contents")
+            		.index(ContentDocument.INDEX_NAME)
                     .size(0) // 문서는 안 가져옴
                     .suggest(sg -> sg
                             .suggesters("title-suggest", ts -> ts
