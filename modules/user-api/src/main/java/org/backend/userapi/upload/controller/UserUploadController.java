@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/user/uploads")
+@RequestMapping("api/user/uploads")
 public class UserUploadController {
 
     private final UserUploadDraftService draftService;
