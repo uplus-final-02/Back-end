@@ -55,5 +55,7 @@ public class ProcessedKafkaEventJdbcRepository {
     public void markProcessed(String eventId, long videoId) {
         jdbcTemplate.update(INSERT_SQL, eventId, videoId);
     }
-
+    public void markProcessed(String eventId) {
+        jdbcTemplate.update(INSERT_SQL, eventId, -1L);
+    }
 }

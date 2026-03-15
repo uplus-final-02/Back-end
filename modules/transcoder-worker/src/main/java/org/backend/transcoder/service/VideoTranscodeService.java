@@ -1,7 +1,9 @@
 package org.backend.transcoder.service;
 
 import common.enums.TranscodeStatus;
+import content.entity.UserVideoFile;
 import content.entity.VideoFile;
+import content.repository.UserVideoFileRepository;
 import content.repository.VideoFileRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.storage.MinioObjectStorageService;
@@ -20,14 +22,25 @@ import java.util.Comparator;
 public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
+    private final UserVideoFileRepository userVideoFileRepository;
     private final ObjectStorageService objectStorageService;
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final VideoFileStatusService statusService;
+    private final UserVideoFileStatusService userStatusService;
+
+    private static final int USER_MAX_DURATION_SEC = 180;
 
     public void transcode(VideoTranscodeRequestedEvent event) {
         // ① 이벤트 레벨 멱등성: 동일 eventId 중복 처리 방지 (Outbox at-least-once 보상)
         if (processedEventRepository.isProcessed(event.eventId())) {
             log.info("[TRANSCODE][SKIP_DUPLICATE] 이미 처리된 이벤트 — eventId={}", event.eventId());
+            return;
+        }
+
+        String reqType = (event.requestType() == null) ? "HLS_ADMIN" : event.requestType();
+
+        if ("HLS_USER".equalsIgnoreCase(reqType)) {
+            transcodeUser(event);
             return;
         }
 
@@ -90,6 +103,79 @@ public class VideoTranscodeService {
             if (workDir != null) {
                 try {
                     log.info("[TRANSCODE][WORKDIR] {}", workDir);
+                    deleteRecursively(workDir);
+                } catch (Exception ignore) {}
+            }
+        }
+    }
+
+    private void transcodeUser(VideoTranscodeRequestedEvent event) {
+        Long userVideoFileId = event.videoFileId();
+
+        UserVideoFile uvf = userVideoFileRepository.findById(userVideoFileId)
+                .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND: " + userVideoFileId));
+
+        // DONE이면 스킵 + processed 기록
+        if (uvf.getTranscodeStatus() == TranscodeStatus.DONE) {
+            log.info("[TRANSCODE][SKIP][USER] already DONE. userVideoFileId={}", userVideoFileId);
+            processedEventRepository.markProcessed(event.eventId());
+            return;
+        }
+
+        Path workDir = null;
+        try {
+            log.info("[TRANSCODE][START][USER] eventId={}, userVideoFileId={}, originalKey={}",
+                    event.eventId(), userVideoFileId, event.originalKey());
+
+            userStatusService.markProcessing(userVideoFileId);
+
+            workDir = Files.createTempDirectory("transcode-user-" + userVideoFileId + "-");
+            Path inputMp4 = workDir.resolve("input.mp4");
+            Path hlsDir = workDir.resolve("hls");
+            Files.createDirectories(hlsDir);
+
+            objectStorageService.downloadToFile(event.originalKey(), inputMp4);
+
+            int durationSec = probeDurationSec(inputMp4);
+            if (durationSec > USER_MAX_DURATION_SEC) {
+                log.warn("[TRANSCODE][REJECT][USER] duration over limit. durationSec={}, limitSec={}",
+                        durationSec, USER_MAX_DURATION_SEC);
+
+                userStatusService.markFailed(userVideoFileId);
+                processedEventRepository.markProcessed(event.eventId());
+                return;
+            }
+
+            Path master = hlsDir.resolve("master.m3u8");
+            runFfmpegAbrHls(inputMp4, hlsDir, master);
+
+            String baseKey = "hls-user/" + userVideoFileId;
+            uploadDirectoryToMinio(hlsDir, baseKey);
+
+            String hlsMasterKey = baseKey + "/master.m3u8";
+
+            userStatusService.markDone(userVideoFileId, hlsMasterKey, durationSec);
+            processedEventRepository.markProcessed(event.eventId());
+
+            log.info("[TRANSCODE][DONE][USER] eventId={}, userVideoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), userVideoFileId, hlsMasterKey, durationSec);
+
+        } catch (Exception e) {
+            log.error("[TRANSCODE][FAILED][USER] userVideoFileId={}, cause={}", userVideoFileId, e.getMessage(), e);
+
+            try {
+                userStatusService.markFailed(userVideoFileId);
+            } catch (Exception markFailEx) {
+                log.error("[TRANSCODE][FAILED][USER][MARK_FAIL_ERROR] userVideoFileId={}, cause={}",
+                        userVideoFileId, markFailEx.getMessage(), markFailEx);
+            }
+
+            throw new IllegalStateException("TRANSCODE_FAILED_USER", e);
+
+        } finally {
+            if (workDir != null) {
+                try {
+                    log.info("[TRANSCODE][WORKDIR][USER] {}", workDir);
                     deleteRecursively(workDir);
                 } catch (Exception ignore) {}
             }
