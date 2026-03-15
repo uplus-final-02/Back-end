@@ -1,24 +1,26 @@
 package org.backend.admin.stats.service;
 
-import org.backend.admin.stats.repository.TagHomeStatsJdbcRepository;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.backend.admin.stats.dto.AdminHomeTagStatsResponse;
 import org.backend.admin.stats.repository.TagHomeStatsJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TagHomeStatsBatchService {
+public class AdminStatsService {
 
-	private final TagHomeStatsJdbcRepository tagHomeStatsJdbcRepository;
-	
-	@Transactional
+    private final TagHomeStatsJdbcRepository tagHomeStatsJdbcRepository;
+
+    // 홈 노출 태그 일별 통계를 집계하여 저장
+    @Transactional
     public int saveDailyStats(LocalDate statDate) {
         validateStatDate(statDate);
 
@@ -46,4 +48,20 @@ public class TagHomeStatsBatchService {
         }
     }
 	
+	// 태그 통계 조회
+	// statDate가 null이면 최신 일자 기준 조회
+    @Transactional(readOnly = true)
+    public List<AdminHomeTagStatsResponse> getHomeTagStats(LocalDate statDate) {
+        LocalDate targetDate = statDate;
+
+        if (targetDate == null) {
+            targetDate = tagHomeStatsJdbcRepository.findLatestStatDate();
+        }
+
+        if (targetDate == null) {
+            return Collections.emptyList();
+        }
+
+        return tagHomeStatsJdbcRepository.findByStatDate(targetDate);
+    }
 }

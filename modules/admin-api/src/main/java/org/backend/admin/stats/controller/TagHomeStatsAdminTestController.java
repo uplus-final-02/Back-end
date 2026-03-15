@@ -3,7 +3,7 @@ package org.backend.admin.stats.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.admin.stats.dto.TagHomeStatsBatchResponse;
-import org.backend.admin.stats.service.TagHomeStatsBatchService;
+import org.backend.admin.stats.service.AdminStatsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,7 +15,7 @@ import java.time.LocalDate;
 @RequestMapping("/admin/stats/home-tags")
 public class TagHomeStatsAdminTestController {
 
-    private final TagHomeStatsBatchService tagHomeStatsBatchService;
+	private final AdminStatsService adminStatsService;
 
     /**
      * 홈 노출 태그 통계 배치를 수동 실행한다.
@@ -37,7 +37,7 @@ public class TagHomeStatsAdminTestController {
 
         log.info("[TagHomeStatsTest] 수동 배치 실행 시작: statDate={}", targetDate);
 
-        int savedCount = tagHomeStatsBatchService.saveDailyStats(targetDate);
+        int savedCount = adminStatsService.saveDailyStats(targetDate);
 
         long elapsedMs = System.currentTimeMillis() - start;
 
