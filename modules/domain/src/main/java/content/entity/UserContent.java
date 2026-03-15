@@ -77,4 +77,20 @@ public class UserContent extends BaseTimeEntity {
     public void updateContentStatus(ContentStatus status) {
         this.contentStatus = status;
     }
+
+    public void updateTitle(String title) {
+        this.title = title;
+    }
+
+    public void updateDescription(String description) {
+        this.description = description;
+    }
+
+    public ContentStatus getContentStatus() {
+        return this.contentStatus;
+    }
+
+    public void markDeleted() {
+        this.contentStatus = ContentStatus.DELETED;
+    }
 }
