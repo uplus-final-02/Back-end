@@ -85,7 +85,7 @@ public class ContentService {
         return convertToDefaultContentResponses(contents);
     }
 
-    public List<DefaultContentResponse> getDefaultContents(String uploaderType, Long tag, ContentAccessLevel accessLevel, Pageable pageable) {
+    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, ContentAccessLevel accessLevel, ContentType contentType, Pageable pageable) {
 
         if (uploaderType != null && uploaderType.equals("CREATOR")) uploaderType = "USER";
         // 1. DB 레벨 필터링: 'ACTIVE' 상태, 제공자, 태그 조건이 모두 적용된 데이터 조회 (N+1 방지)
@@ -94,6 +94,7 @@ public class ContentService {
                 uploaderType,
                 tag,
                 accessLevel,
+                contentType,
                 pageable
         );
 
