@@ -53,15 +53,19 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             "     OR (:uploaderType = 'USER' AND c.uploaderId IS NOT NULL)) " +
             "AND (:tag IS NULL " +
             "     OR EXISTS (SELECT 1 FROM c.contentTags sub_ct JOIN sub_ct.tag sub_t " +
-            "                WHERE sub_t.id = :tag AND sub_t.isActive = true))" +
+            "                WHERE sub_t.name = :tag AND sub_t.isActive = true))" +
             "AND (:accessLevel IS NULL OR :accessLevel = '' " +
             "     OR c.accessLevel = :accessLevel) " +
+            "AND (:contentType IS NULL OR :contentType = '' " +
+            "     OR c.type = :contentType) " +
             "ORDER BY c.createdAt DESC")
     Slice<Content> findContentsWithFilters(
             @Param("status") ContentStatus status,
             @Param("uploaderType") String uploaderType,
-            @Param("tag") Long tag,
+            @Param("tag") String tag,
             @Param("accessLevel") ContentAccessLevel accessLevel,
+            @Param("contentType") ContentType contentType,
+
             Pageable pageable
     );
 

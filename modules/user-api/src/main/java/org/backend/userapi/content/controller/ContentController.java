@@ -1,6 +1,7 @@
 package org.backend.userapi.content.controller;
 
 import common.enums.ContentAccessLevel;
+import common.enums.ContentType;
 import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
@@ -44,13 +45,14 @@ public class ContentController {
     @GetMapping("/home/default-list")
     public ApiResponse<List<DefaultContentResponse>> getDefaultContentList(
             @RequestParam(required = false, defaultValue = "ADMIN") String uploaderType,
-            @RequestParam(required = false) Long tag,
+            @RequestParam(required = false) String tag,
             @RequestParam(required = false) ContentAccessLevel accessLevel,
+            @RequestParam(required = false) ContentType contentType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, accessLevel, pageable);
+        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, accessLevel, contentType, pageable);
         return ApiResponse.success(response);
     }
 
