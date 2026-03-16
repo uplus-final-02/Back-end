@@ -199,15 +199,15 @@ public class VideoService {
       return;
     }
 
-    // 유료인데 비로그인이면 거부
-//    if (jwtPrincipal == null) {
-//        throw new AccessDeniedException("로그인이 필요합니다.");
-//    }
+    // 2. 비로그인 유저가 유료 콘텐츠에 접근 시도 시
+    if (jwtPrincipal == null) {
+        throw new AccessDeniedException("로그인이 필요한 콘텐츠입니다.");
+    }
     
     boolean isPaid = jwtPrincipal.isPaid();
     boolean isUplus = jwtPrincipal.isUplus();
 
-    // 2. 베이직 콘텐츠는 유료 구독자 또는 U+ 회원 접근 가능
+    // 3. 베이직 콘텐츠는 유료 구독자 또는 U+ 회원 접근 가능
     if ("BASIC".equalsIgnoreCase(requiredLevel)) {
         if (!isPaid && !isUplus) {
             throw new AccessDeniedException("베이직 구독 또는 LG U+ 회원 인증이 필요합니다.");
@@ -215,7 +215,7 @@ public class VideoService {
         return;
     }
 
-    // 3. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
+    // 4. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
     if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
         if (!isUplus) {
             throw new AccessDeniedException("LG U+ 회원 전용 콘텐츠입니다.");
