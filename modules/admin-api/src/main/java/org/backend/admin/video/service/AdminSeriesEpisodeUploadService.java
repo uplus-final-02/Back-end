@@ -1,5 +1,7 @@
 package org.backend.admin.video.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import common.enums.ContentType;
 import common.enums.TranscodeStatus;
 import common.enums.VideoStatus;
@@ -9,7 +11,6 @@ import content.entity.VideoFile;
 import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import content.repository.VideoRepository;
-import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.security.principal.JwtPrincipal;
 import core.storage.ObjectNotFoundException;
@@ -18,8 +19,10 @@ import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
 import org.backend.admin.exception.ContentNotFoundException;
 import org.backend.admin.exception.UploadNotCompletedException;
+import org.backend.admin.kafka.outbox.VideoTranscodeOutboxJdbcRepository;
 import org.backend.admin.video.dto.AdminSeriesEpisodeConfirmRequest;
 import org.backend.admin.video.dto.AdminSeriesEpisodeConfirmResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -32,7 +35,12 @@ public class AdminSeriesEpisodeUploadService {
     private final VideoRepository videoRepository;
     private final VideoFileRepository videoFileRepository;
     private final ObjectStorageService objectStorageService;
-    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
+
+    private final ObjectMapper objectMapper;
+    private final VideoTranscodeOutboxJdbcRepository outboxRepository;
+
+    @Value("${app.kafka.topics.video-transcode-admin}")
+    private String adminTopic;
 
     @Transactional
     public AdminSeriesEpisodeConfirmResponse confirmUpload(
@@ -76,14 +84,19 @@ public class AdminSeriesEpisodeUploadService {
         vf.updateOriginalKey(req.objectKey());
         vf.updateTranscodeStatus(TranscodeStatus.WAITING);
 
-        videoTranscodeEventPublisher.publish(
-                VideoTranscodeRequestedEvent.of(
-                        series.getId(),
-                        video.getId(),
-                        vf.getId(),
-                        vf.getOriginalUrl()
-                )
+        VideoTranscodeRequestedEvent event = VideoTranscodeRequestedEvent.of(
+                series.getId(),
+                video.getId(),
+                vf.getId(),
+                vf.getOriginalUrl()
         );
+
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            outboxRepository.save(event.eventId(), "ADMIN", vf.getId(), adminTopic, payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("이벤트 직렬화 실패: " + event.eventId(), e);
+        }
 
         return new AdminSeriesEpisodeConfirmResponse(
                 series.getId(),
