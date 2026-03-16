@@ -1,20 +1,24 @@
 package org.backend.userapi.upload.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import common.enums.ContentStatus;
 import common.enums.TranscodeStatus;
 import common.enums.VideoStatus;
 import content.entity.UserContent;
 import content.entity.UserVideoFile;
 import content.repository.UserContentRepository;
 import content.repository.UserVideoFileRepository;
-import core.events.video.VideoTranscodeEventPublisher;
 import core.events.video.VideoTranscodeRequestedEvent;
 import core.security.principal.JwtPrincipal;
 import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.kafka.outbox.VideoTranscodeOutboxJdbcRepository;
 import org.backend.userapi.upload.dto.UserUploadConfirmRequest;
 import org.backend.userapi.upload.dto.UserUploadConfirmResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,7 +30,12 @@ public class UserUploadConfirmService {
     private final UserContentRepository userContentRepository;
     private final UserVideoFileRepository userVideoFileRepository;
     private final ObjectStorageService objectStorageService;
-    private final VideoTranscodeEventPublisher videoTranscodeEventPublisher;
+
+    private final VideoTranscodeOutboxJdbcRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+
+    @Value("${app.kafka.topics.video-transcode-user}")
+    private String userTopic;
 
     @Transactional
     public UserUploadConfirmResponse confirm(JwtPrincipal principal, UserUploadConfirmRequest req) {
@@ -52,18 +61,21 @@ public class UserUploadConfirmService {
 
         uvf.updateOriginalKey(req.objectKey());
         uvf.updateTranscodeStatus(TranscodeStatus.WAITING);
-
         uvf.updateVideoStatus(VideoStatus.PRIVATE);
+        uc.updateContentStatus(ContentStatus.HIDDEN);
 
-        uc.updateContentStatus(common.enums.ContentStatus.HIDDEN);
-
-        videoTranscodeEventPublisher.publish(
-                VideoTranscodeRequestedEvent.ofUser(
-                        uc.getId(),
-                        uvf.getId(),
-                        uvf.getOriginalUrl()
-                )
+        VideoTranscodeRequestedEvent event = VideoTranscodeRequestedEvent.ofUser(
+                uc.getId(),
+                uvf.getId(),
+                uvf.getOriginalUrl()
         );
+
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            outboxRepository.saveUser(event.eventId(), uvf.getId(), userTopic, payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("EVENT_SERIALIZE_FAILED: " + event.eventId(), e);
+        }
 
         return new UserUploadConfirmResponse(
                 uc.getId(),
