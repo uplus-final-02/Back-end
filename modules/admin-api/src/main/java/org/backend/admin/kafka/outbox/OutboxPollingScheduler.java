@@ -3,6 +3,7 @@ package org.backend.admin.kafka.outbox;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.admin.kafka.VideoTranscodeKafkaPublisher;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -34,39 +35,31 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class OutboxPollingScheduler {
 
-    private static final String TOPIC = VideoTranscodeKafkaPublisher.TOPIC;
-    private static final int BATCH_SIZE = 100;
-    private static final long KAFKA_ACK_TIMEOUT_SEC = 10;
-
     private final VideoTranscodeOutboxJdbcRepository outboxRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
+    @Value("${app.kafka.topics.video-transcode-admin}")
+    private String topic;
+
+    private static final int BATCH_SIZE = 100;
+    private static final long KAFKA_ACK_TIMEOUT_SEC = 10;
+
     @Scheduled(fixedDelay = 5_000)
     public void pollAndPublish() {
-        List<VideoTranscodeOutboxJdbcRepository.OutboxRow> rows =
-                outboxRepository.findOldest(BATCH_SIZE);
+        var rows = outboxRepository.findOldest(BATCH_SIZE);
+        if (rows.isEmpty()) return;
 
-        if (rows.isEmpty()) {
-            return;
-        }
-
-        log.debug("[OUTBOX] 미발행 이벤트 {}건 처리 시작", rows.size());
-
-        for (VideoTranscodeOutboxJdbcRepository.OutboxRow row : rows) {
+        for (var row : rows) {
             try {
-                // payload는 outbox 삽입 시 직렬화된 JSON — 역직렬화 없이 그대로 전송
                 kafkaTemplate
-                        .send(TOPIC, String.valueOf(row.videoFileId()), row.payload())
-                        .get(KAFKA_ACK_TIMEOUT_SEC, TimeUnit.SECONDS);   // 브로커 ACK 대기
+                        .send(topic, String.valueOf(row.videoFileId()), row.payload())
+                        .get(KAFKA_ACK_TIMEOUT_SEC, TimeUnit.SECONDS);
 
                 outboxRepository.deleteById(row.id());
 
-                log.info("[OUTBOX] 발행 완료 id={}, eventId={}", row.id(), row.eventId());
-
             } catch (Exception e) {
-                // 발행 실패 → 행 유지, 다음 폴링 주기에 자동 재시도
-                log.error("[OUTBOX] 발행 실패 id={}, eventId={} — 다음 폴링 주기에 재시도: {}",
-                        row.id(), row.eventId(), e.getMessage());
+                log.error("[OUTBOX] 발행 실패 id={}, eventId={} — 재시도: {}",
+                        row.id(), row.eventId(), e.getMessage(), e);
             }
         }
     }

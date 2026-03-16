@@ -162,11 +162,10 @@ services:
     ports:
       - "${ADMIN_API_PORT}:8080"
 
-  transcoder-worker:
+  transcoder-worker-user:
     build:
       context: .
       dockerfile: docker/Dockerfile.transcoder-worker
-    #container_name: transcoder-worker
     depends_on:
       mysql:
         condition: service_healthy
@@ -175,12 +174,38 @@ services:
       minio:
         condition: service_healthy
       user-api:
-        condition: service_healthy  # user-api Flyway 완료 후 기동 (스키마 선행 보장)
+        condition: service_healthy
     env_file:
       - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_KAFKA_CONSUMER_CLIENT_ID: transcoder-${HOSTNAME}
+
+      VIDEO_TRANSCODE_TOPIC: ${VIDEO_TRANSCODE_USER_TOPIC:-video.transcode.user.requested}
+
+      SPRING_KAFKA_CONSUMER_GROUP_ID: ${TRANSCODER_USER_GROUP_ID:-transcoder-worker-user}
+    restart: unless-stopped
+
+  transcoder-worker-admin:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.transcoder-worker
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      user-api:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+      VIDEO_TRANSCODE_TOPIC: ${VIDEO_TRANSCODE_ADMIN_TOPIC:-video.transcode.admin.requested}
+
+      SPRING_KAFKA_CONSUMER_GROUP_ID: ${TRANSCODER_ADMIN_GROUP_ID:-transcoder-worker-admin}
     restart: unless-stopped
 
 volumes:

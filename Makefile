@@ -1,68 +1,111 @@
-# -----------------------------
-# Makefile (Back-end root)
-# -----------------------------
-N ?= 3
-TOPIC ?= video.transcode.requested
-PARTITIONS ?= 3
-GROUP ?= transcoder-worker
+# =========================
+# Config
+# =========================
+USER_N ?= 3
+ADMIN_N ?= 1
 
+USER_TOPIC ?= video.transcode.user.requested
+ADMIN_TOPIC ?= video.transcode.admin.requested
+
+USER_PARTITIONS ?= 3
+ADMIN_PARTITIONS ?= 1
+
+USER_GROUP ?= transcoder-worker-user
+ADMIN_GROUP ?= transcoder-worker-admin
+
+COMPOSE ?= docker compose
 KAFKA_CONTAINER ?= kafka
-KAFKA_BOOTSTRAP ?= kafka:9092
-KAFKA_TOPICS := /opt/kafka/bin/kafka-topics.sh
-KAFKA_GROUPS := /opt/kafka/bin/kafka-consumer-groups.sh
 
-.PHONY: up down reset \
-        up-workers ps logs \
-        kafka-ensure-topic kafka-partitions kafka-describe kafka-members kafka-group
+# =========================
+# Help
+# =========================
+.PHONY: help
+help:
+	@echo "Targets:"
+	@echo "  make up-all                 - 전체 기동(기본 3:1)"
+	@echo "  make up-workers             - 워커만 (3:1) 스케일 포함"
+	@echo "  make kafka-setup            - 토픽 생성/파티션 보장(user/admin)"
+	@echo "  make ps                     - 컨테이너 목록"
+	@echo "  make logs SERVICE=...       - 서비스 로그 팔로우"
+	@echo "  make kafka-members          - consumer group 할당 확인"
+	@echo "  make down                   - 컨테이너 내림(볼륨 유지)"
+	@echo "  make reset                  - 컨테이너+볼륨 삭제(DB/MinIO 데이터 초기화)"
+	@echo ""
+	@echo "Vars:"
+	@echo "  USER_N=3 ADMIN_N=1 USER_PARTITIONS=3 ADMIN_PARTITIONS=1"
+	@echo "  USER_TOPIC=... ADMIN_TOPIC=... USER_GROUP=... ADMIN_GROUP=..."
 
-up:
-	docker compose up -d --build
+# =========================
+# Up / Down
+# =========================
+.PHONY: up-all
+up-all: up-workers kafka-setup kafka-members ps
 
-down:
-	docker compose down
-
-# ⚠️ DB/MinIO 데이터까지 싹 초기화(볼륨 삭제)
-reset:
-	docker compose down -v
-
-# -----------------------------
-# Transcoder workers (scale)
-# -----------------------------
+.PHONY: up-workers
 up-workers:
-	docker compose up -d --build --scale transcoder-worker=$(N)
-	$(MAKE) kafka-partitions TOPIC=$(TOPIC) PARTITIONS=$(PARTITIONS)
-	$(MAKE) ps SERVICE=transcoder-worker
-	$(MAKE) kafka-members GROUP=$(GROUP)
+	$(COMPOSE) up -d --build \
+		--scale transcoder-worker-user=$(USER_N) \
+		--scale transcoder-worker-admin=$(ADMIN_N)
 
+.PHONY: down
+down:
+	$(COMPOSE) down
+
+.PHONY: reset
+reset:
+	$(COMPOSE) down -v
+
+# =========================
+# Observability
+# =========================
+.PHONY: ps
 ps:
-	docker compose ps $(SERVICE)
+	$(COMPOSE) ps
 
+.PHONY: logs
 logs:
-	docker compose logs -f $(SERVICE)
+	$(COMPOSE) logs -f $(SERVICE)
 
-# -----------------------------
-# Kafka topic helpers
-# -----------------------------
-kafka-ensure-topic:
-	@echo "[INFO] Ensure topic exists: $(TOPIC) (partitions=$(PARTITIONS))"
-	docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) --create --if-not-exists --topic $(TOPIC) --partitions $(PARTITIONS) --replication-factor 1 || true'
+# =========================
+# Kafka helpers
+# =========================
+define KAFKA_CREATE_TOPIC
+docker exec -it $(KAFKA_CONTAINER) bash -lc '/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+  --create --if-not-exists --topic $(1) --partitions $(2) --replication-factor 1 || true'
+endef
 
-kafka-describe:
-	docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) --describe --topic $(TOPIC)'
+define KAFKA_ALTER_PARTITIONS
+docker exec -it $(KAFKA_CONTAINER) bash -lc '/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+  --alter --topic $(1) --partitions $(2) || true'
+endef
 
-kafka-partitions: kafka-ensure-topic
-	@echo "[INFO] Topic=$(TOPIC), TargetPartitions=$(PARTITIONS)"
-	@echo "[INFO] Current topic 상태:"
-	@docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) --describe --topic $(TOPIC) || true'
+define KAFKA_DESCRIBE_TOPIC
+docker exec -it $(KAFKA_CONTAINER) bash -lc '/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+  --describe --topic $(1) || true'
+endef
+
+define KAFKA_GROUP_MEMBERS
+docker exec -it $(KAFKA_CONTAINER) bash -lc '/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group $(1) --members --verbose || true'
+endef
+
+.PHONY: kafka-setup
+kafka-setup:
+	@echo "[INFO] Ensure topics/partitions..."
+	@echo "[INFO] USER_TOPIC=$(USER_TOPIC), partitions=$(USER_PARTITIONS)"
+	$(call KAFKA_CREATE_TOPIC,$(USER_TOPIC),$(USER_PARTITIONS))
+	$(call KAFKA_ALTER_PARTITIONS,$(USER_TOPIC),$(USER_PARTITIONS))
+	$(call KAFKA_DESCRIBE_TOPIC,$(USER_TOPIC))
 	@echo ""
-	@echo "[INFO] Alter partitions (이미 같으면 무시)"
-	@docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) --alter --topic $(TOPIC) --partitions $(PARTITIONS) || true'
-	@echo ""
-	@echo "[INFO] After:"
-	@docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_TOPICS) --bootstrap-server $(KAFKA_BOOTSTRAP) --describe --topic $(TOPIC)'
+	@echo "[INFO] ADMIN_TOPIC=$(ADMIN_TOPIC), partitions=$(ADMIN_PARTITIONS)"
+	$(call KAFKA_CREATE_TOPIC,$(ADMIN_TOPIC),$(ADMIN_PARTITIONS))
+	$(call KAFKA_ALTER_PARTITIONS,$(ADMIN_TOPIC),$(ADMIN_PARTITIONS))
+	$(call KAFKA_DESCRIBE_TOPIC,$(ADMIN_TOPIC))
 
-kafka-group:
-	docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_GROUPS) --bootstrap-server $(KAFKA_BOOTSTRAP) --describe --group $(GROUP) || true'
-
+.PHONY: kafka-members
 kafka-members:
-	docker exec -it $(KAFKA_CONTAINER) bash -lc '$(KAFKA_GROUPS) --bootstrap-server $(KAFKA_BOOTSTRAP) --describe --group $(GROUP) --members --verbose || true'
+	@echo "[INFO] GROUP=$(USER_GROUP)"
+	$(call KAFKA_GROUP_MEMBERS,$(USER_GROUP))
+	@echo ""
+	@echo "[INFO] GROUP=$(ADMIN_GROUP)"
+	$(call KAFKA_GROUP_MEMBERS,$(ADMIN_GROUP))
