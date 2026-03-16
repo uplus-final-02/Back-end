@@ -167,5 +167,12 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     	       "WHERE c.id IN :ids ORDER BY c.id ASC")
     	List<Content> findAllWithTagsByIds(@Param("ids") List<Long> ids);
     
-    
+    @Query("SELECT c FROM Content c " +
+    	       "WHERE (c.updatedAt > :watermark) " +
+    	       "   OR (c.updatedAt = :watermark AND c.id > :lastId) " +
+    	       "ORDER BY c.updatedAt ASC, c.id ASC")
+    	List<Content> findUpdatedAfterCursor(
+    	        @Param("watermark") LocalDateTime watermark,
+    	        @Param("lastId") Long lastId,
+    	        Pageable pageable);
 }

@@ -1,24 +1,21 @@
 package org.backend.userapi.search.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.backend.userapi.common.scheduler.SchedulerWatermarkJdbcRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
 import content.entity.Content;
 import content.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.backend.userapi.common.scheduler.SchedulerWatermarkJdbcRepository;
-import org.backend.userapi.search.service.EsSyncFailureService;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 
 /**
  * DB에서 변경된 콘텐츠를 주기적으로 Elasticsearch에 인덱싱하는 실시간 동기화 스케줄러.
@@ -40,6 +37,7 @@ public class ContentRealtimeSyncScheduler {
 
     private static final String WATERMARK_KEY  = "scheduler:es-sync:watermark";
     private static final String SCHEDULER_NAME = "esSyncTask";
+    private static final int CHUNK_SIZE = 500;
 
     private final ContentRepository contentRepository;
     private final ContentIndexingService contentIndexingService;
@@ -50,7 +48,9 @@ public class ContentRealtimeSyncScheduler {
     @Value("${app.search.realtime-sync.enabled:true}")
     private boolean realtimeSyncEnabled;
 
+    // 인메모리 폴백용
     private LocalDateTime lastSyncedAt = LocalDateTime.now().minusMinutes(5);
+    private Long lastSyncedId = 0L;
 
     @Scheduled(fixedDelayString = "${app.search.realtime-sync.interval-ms:30000}")
     @SchedulerLock(
@@ -63,23 +63,22 @@ public class ContentRealtimeSyncScheduler {
             return;
         }
 
-        // ── 1. 워터마크 로드 (Redis → MySQL → 인메모리) ──────────────────
-        LocalDateTime watermark = loadWatermark();
-        LocalDateTime newWatermark = watermark; // 💡 청크 내 max 추적용
+        // ── 1. 워터마크 커서 로드 (Redis → MySQL → 인메모리) ─────────────
+        SchedulerWatermarkJdbcRepository.WatermarkCursor cursor = loadWatermarkCursor();
+        LocalDateTime watermark = cursor.watermark();
+        Long lastId = cursor.lastId();
 
         int successCount = 0;
         int failCount = 0;
 
-        // [피드백 반영] Slice 기반 배치 처리 — 워터마크가 크게 뒤처져도 OOM 방지
-        // updatedAt ASC 정렬로 offset 기반 페이징 안정화
-        Pageable chunkPageable = PageRequest.of(0, 500,
-                Sort.by(Sort.Direction.ASC, "updatedAt"));
-        Slice<Content> slice;
-
+        // ── 2. 커서 기반 배치 처리 ───────────────────────────────────────
+        // updatedAt + id 복합 커서로 동일 updatedAt 중복 읽기 방지
+        List<Content> chunk;
         do {
-            slice = contentRepository.findByUpdatedAtGreaterThanEqual(watermark, chunkPageable);
+            chunk = contentRepository.findUpdatedAfterCursor(
+                    watermark, lastId, PageRequest.of(0, CHUNK_SIZE));
 
-            for (Content content : slice.getContent()) {
+            for (Content content : chunk) {
                 try {
                     contentIndexingService.indexContent(content.getId());
                     successCount++;
@@ -94,27 +93,25 @@ public class ContentRealtimeSyncScheduler {
                     log.error("[ES Sync] 영구 실패 의심 (contentId={}): {}",
                             content.getId(), e.getMessage());
                 }
-
-                // 💡 청크 내 max(updatedAt) 추적
-                if (content.getUpdatedAt() != null
-                        && content.getUpdatedAt().isAfter(newWatermark)) {
-                    newWatermark = content.getUpdatedAt();
-                }
             }
 
-            chunkPageable = chunkPageable.next();
+            // 커서 전진: 마지막 항목의 updatedAt + id
+            if (!chunk.isEmpty()) {
+                Content last = chunk.get(chunk.size() - 1);
+                watermark = last.getUpdatedAt();
+                lastId = last.getId();
+            }
 
-        } while (slice.hasNext());
+        } while (chunk.size() == CHUNK_SIZE);
 
-        // ── 2. 워터마크 저장 (MySQL → Redis → 인메모리) ──────────────────
-        // [피드백 반영] Poison Pill 방어 — 실패 있어도 워터마크 무조건 전진 (무한 루프 방지)
-        if (newWatermark.isAfter(watermark)) {
-            saveWatermark(newWatermark);
-            log.debug("[ES Sync] 완료. success={}, fail={}, watermark={}",
-                    successCount, failCount, newWatermark);
+        // ── 3. 워터마크 저장 ─────────────────────────────────────────────
+        if (successCount > 0 || failCount > 0) {
+            saveWatermarkCursor(watermark, lastId);
+            log.debug("[ES Sync] 완료. success={}, fail={}, watermark={}, lastId={}",
+                    successCount, failCount, watermark, lastId);
         } else {
-            // 처리할 콘텐츠가 없었던 경우 현재 시각으로 전진
-            saveWatermark(LocalDateTime.now());
+            // 처리할 콘텐츠가 없으면 현재 시각으로 전진, lastId 초기화
+            saveWatermarkCursor(LocalDateTime.now(), 0L);
         }
 
         if (failCount > 0) {
@@ -124,48 +121,71 @@ public class ContentRealtimeSyncScheduler {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    //  워터마크 3계층 폴백 (기존 로직 유지)
+    //  워터마크 3계층 폴백 — timestamp + lastId 커서 관리
     // ──────────────────────────────────────────────────────────────────────────
 
-    private LocalDateTime loadWatermark() {
-        String stored = null;
+    private SchedulerWatermarkJdbcRepository.WatermarkCursor loadWatermarkCursor() {
+        // 1차: Redis
         try {
-            stored = redisTemplate.opsForValue().get(WATERMARK_KEY);
+            String stored = redisTemplate.opsForValue().get(WATERMARK_KEY);
+            if (stored != null) {
+                return parseRedisCursor(stored);
+            }
         } catch (DataAccessException e) {
             log.warn("[ES Sync] Redis 워터마크 조회 실패 — MySQL 폴백 시도: {}", e.getMessage());
         }
 
-        if (stored != null) {
-            try {
-                return LocalDateTime.parse(stored);
-            } catch (DateTimeParseException e) {
-                log.error("[ES Sync] Redis 워터마크 파싱 실패 (형식 오류, 코드 확인 필요) " +
-                          "— MySQL 폴백 시도: stored='{}', error={}", stored, e.getMessage());
-            }
-        }
-
+        // 2차: MySQL
         try {
-            return watermarkRepository.load(SCHEDULER_NAME).orElse(lastSyncedAt);
+            return watermarkRepository.loadCursor(SCHEDULER_NAME)
+                    .orElse(new SchedulerWatermarkJdbcRepository.WatermarkCursor(
+                            lastSyncedAt, lastSyncedId));
         } catch (DataAccessException e) {
             log.warn("[ES Sync] MySQL 워터마크 조회도 실패 — 인메모리 폴백: {}", e.getMessage());
         }
 
-        return lastSyncedAt;
+        // 3차: 인메모리
+        return new SchedulerWatermarkJdbcRepository.WatermarkCursor(lastSyncedAt, lastSyncedId);
     }
 
-    private void saveWatermark(LocalDateTime newWatermark) {
-        lastSyncedAt = newWatermark;
+    private void saveWatermarkCursor(LocalDateTime watermark, Long lastId) {
+        lastSyncedAt = watermark;
+        lastSyncedId = lastId;
 
+        // MySQL
         try {
-            watermarkRepository.save(SCHEDULER_NAME, newWatermark);
+            watermarkRepository.saveCursor(SCHEDULER_NAME, watermark, lastId);
         } catch (DataAccessException e) {
             log.warn("[ES Sync] MySQL 워터마크 저장 실패 (인메모리 유지): {}", e.getMessage());
         }
 
+        // Redis — "2026-03-16T10:00:00.123|12345" 형태
         try {
-            redisTemplate.opsForValue().set(WATERMARK_KEY, newWatermark.toString());
+            redisTemplate.opsForValue().set(WATERMARK_KEY,
+                    watermark.toString() + "|" + lastId);
         } catch (DataAccessException e) {
-            log.warn("[ES Sync] Redis 워터마크 저장 실패 — MySQL이 소스 오브 트루스로 동작 중: {}", e.getMessage());
+            log.warn("[ES Sync] Redis 워터마크 저장 실패: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Redis 저장 형태 파싱: "2026-03-16T10:00:00.123|12345"
+     * 하위 호환: 기존 timestamp만 저장된 경우 lastId=0으로 처리
+     */
+    private SchedulerWatermarkJdbcRepository.WatermarkCursor parseRedisCursor(String stored) {
+        try {
+            int sep = stored.lastIndexOf('|');
+            if (sep > 0) {
+                LocalDateTime ts = LocalDateTime.parse(stored.substring(0, sep));
+                Long id = Long.parseLong(stored.substring(sep + 1));
+                return new SchedulerWatermarkJdbcRepository.WatermarkCursor(ts, id);
+            }
+            // 하위 호환: 기존에 timestamp만 저장된 경우
+            return new SchedulerWatermarkJdbcRepository.WatermarkCursor(
+                    LocalDateTime.parse(stored), 0L);
+        } catch (Exception e) {
+            log.error("[ES Sync] Redis 워터마크 파싱 실패 — MySQL 폴백: stored='{}'", stored);
+            throw e;
         }
     }
 }
