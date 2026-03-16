@@ -1,5 +1,7 @@
 package org.backend.userapi.content.controller;
 
+import common.enums.ContentAccessLevel;
+import common.enums.ContentType;
 import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
@@ -42,13 +44,15 @@ public class ContentController {
     // 2. 기본 콘텐츠 목록 (제공자별 - uploaderType, 태그별 - tag)
     @GetMapping("/home/default-list")
     public ApiResponse<List<DefaultContentResponse>> getDefaultContentList(
-            @RequestParam(required = false) String uploaderType,
+            @RequestParam(required = false, defaultValue = "ADMIN") String uploaderType,
             @RequestParam(required = false) String tag,
+            @RequestParam(required = false) ContentAccessLevel accessLevel,
+            @RequestParam(required = false) ContentType contentType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, pageable);
+        List<DefaultContentResponse> response = contentService.getDefaultContents(uploaderType, tag, accessLevel, contentType, pageable);
         return ApiResponse.success(response);
     }
 
@@ -75,7 +79,7 @@ public class ContentController {
 
     @GetMapping("/home/trending")
     public ApiResponse<List<TrendingResponse>> getTrendingContents(
-        @RequestParam(defaultValue = "10") int limit
+            @RequestParam(defaultValue = "10") int limit
     ) {
         return new ApiResponse<>(200, "인기 차트 조회 성공", trendingContentService.getTrendingList(limit));
     }

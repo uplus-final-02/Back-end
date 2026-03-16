@@ -91,7 +91,23 @@ public class VideoService {
         VideoFile videoFile = videoFileRepository.findByVideoId(videoId).orElse(null);
 
         // HlsUrlProvider를 통해 URL 생성 (Local or CloudFront)
-        String hlsUrl = (videoFile != null) ? hlsUrlProvider.getHlsUrl(videoFile.getId()) : null;
+        // 실제 서비스한다면, 밑의 코드가 맞음. 하지만 16000개의 동영상을 저장하지 않고, 일부만 저장하고 매핑만 하도록 할거임
+        //       String hlsUrl = (videoFile != null) ? hlsUrlProvider.getHlsUrl(videoFile.getId()) : null;
+
+        String hlsUrl = null;
+
+        if (videoFile != null && videoFile.getHlsUrl() != null) {
+            // "https://domain/hls/461/master.m3u8" 구조라고 가정할 때 parts[4]가 숫자 ID
+            String[] parts = videoFile.getHlsUrl().split("/");
+
+            try {
+                Long extractedId = Long.parseLong(parts[1]);
+                hlsUrl = hlsUrlProvider.getHlsUrl(extractedId);
+            } catch (Exception e) {
+                // 파싱 실패 등 예외 발생 시 안전하게 기존 id로 폴백(Fallback)
+                hlsUrl = hlsUrlProvider.getHlsUrl(videoFile.getId());
+            }
+        }
 
         long durationSec = (videoFile != null) ? videoFile.getDurationSec() : 0;
 
@@ -183,15 +199,15 @@ public class VideoService {
       return;
     }
 
-    // 유료인데 비로그인이면 거부
-//    if (jwtPrincipal == null) {
-//        throw new AccessDeniedException("로그인이 필요합니다.");
-//    }
+    // 2. 비로그인 유저가 유료 콘텐츠에 접근 시도 시
+    if (jwtPrincipal == null) {
+        throw new AccessDeniedException("로그인이 필요한 콘텐츠입니다.");
+    }
     
     boolean isPaid = jwtPrincipal.isPaid();
     boolean isUplus = jwtPrincipal.isUplus();
 
-    // 2. 베이직 콘텐츠는 유료 구독자 또는 U+ 회원 접근 가능
+    // 3. 베이직 콘텐츠는 유료 구독자 또는 U+ 회원 접근 가능
     if ("BASIC".equalsIgnoreCase(requiredLevel)) {
         if (!isPaid && !isUplus) {
             throw new AccessDeniedException("베이직 구독 또는 LG U+ 회원 인증이 필요합니다.");
@@ -199,7 +215,7 @@ public class VideoService {
         return;
     }
 
-    // 3. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
+    // 4. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
     if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
         if (!isUplus) {
             throw new AccessDeniedException("LG U+ 회원 전용 콘텐츠입니다.");

@@ -1,18 +1,24 @@
 package org.backend.transcoder.service;
 
 import common.enums.TranscodeStatus;
+import content.entity.UserVideoFile;
 import content.entity.VideoFile;
+import content.repository.UserVideoFileRepository;
 import content.repository.VideoFileRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
-import core.storage.MinioObjectStorageService;
 import core.storage.ObjectStorageService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.transcoder.config.TranscodeConcurrencyProperties;
+import org.backend.transcoder.exception.TranscodeNonRetryableException;
+import org.backend.transcoder.exception.TranscodeRetryableException;
 import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.*;
 import java.util.Comparator;
+import java.util.concurrent.Semaphore;
 
 @Slf4j
 @Service
@@ -20,30 +26,62 @@ import java.util.Comparator;
 public class VideoTranscodeService {
 
     private final VideoFileRepository videoFileRepository;
+    private final UserVideoFileRepository userVideoFileRepository;
     private final ObjectStorageService objectStorageService;
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final VideoFileStatusService statusService;
+    private final UserVideoFileStatusService userStatusService;
+
+    private final TranscodeConcurrencyProperties concurrencyProperties;
+
+    private static final int USER_MAX_DURATION_SEC = 180;
+
+    private Semaphore ffmpegSemaphore;
+
+    @PostConstruct
+    void init() {
+        int permits = Math.max(1, concurrencyProperties.getMaxConcurrentFfmpeg());
+        this.ffmpegSemaphore = new Semaphore(permits, true);
+        log.info("[TRANSCODE][CONCURRENCY] maxConcurrentFfmpeg={}", permits);
+    }
 
     public void transcode(VideoTranscodeRequestedEvent event) {
-        // ① 이벤트 레벨 멱등성: 동일 eventId 중복 처리 방지 (Outbox at-least-once 보상)
         if (processedEventRepository.isProcessed(event.eventId())) {
-            log.info("[TRANSCODE][SKIP_DUPLICATE] 이미 처리된 이벤트 — eventId={}", event.eventId());
+            log.info("[TRANSCODE][SKIP_DUPLICATE] already processed. eventId={}", event.eventId());
             return;
         }
 
-        VideoFile vf = videoFileRepository.findById(event.videoFileId())
-                .orElseThrow(() -> new IllegalStateException("VIDEO_FILE_NOT_FOUND: " + event.videoFileId()));
+        String reqType = (event.requestType() == null) ? "HLS_ADMIN" : event.requestType();
 
-        // ② 상태 레벨 멱등성: TranscodeStatus.DONE 이면 processed 기록 후 스킵
+        try {
+            if ("HLS_USER".equalsIgnoreCase(reqType)) {
+                transcodeUser(event);
+            } else {
+                transcodeAdmin(event);
+            }
+        } catch (TranscodeNonRetryableException e) {
+            safeMarkProcessed(event);
+            throw e;
+        } catch (TranscodeRetryableException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new TranscodeRetryableException("TRANSCODE_FAILED", e);
+        }
+    }
+
+    private void transcodeAdmin(VideoTranscodeRequestedEvent event) {
+        VideoFile vf = videoFileRepository.findById(event.videoFileId())
+                .orElseThrow(() -> new TranscodeNonRetryableException("VIDEO_FILE_NOT_FOUND: " + event.videoFileId()));
+
         if (vf.getTranscodeStatus() == TranscodeStatus.DONE) {
-            log.info("[TRANSCODE][SKIP] already DONE. videoFileId={}", vf.getId());
+            log.info("[TRANSCODE][SKIP][ADMIN] already DONE. videoFileId={}", vf.getId());
             processedEventRepository.markProcessed(event.eventId(), event.videoId());
             return;
         }
 
         Path workDir = null;
         try {
-            log.info("[TRANSCODE][START] eventId={}, videoFileId={}, originalKey={}",
+            log.info("[TRANSCODE][START][ADMIN] eventId={}, videoFileId={}, originalKey={}",
                     event.eventId(), event.videoFileId(), event.originalKey());
 
             statusService.markProcessing(event.videoFileId());
@@ -56,7 +94,7 @@ public class VideoTranscodeService {
             objectStorageService.downloadToFile(event.originalKey(), inputMp4);
 
             Path master = hlsDir.resolve("master.m3u8");
-            runFfmpegAbrHls(inputMp4, hlsDir, master);
+            withFfmpegPermit(event, () -> runFfmpegAbrHls(inputMp4, hlsDir, master));
 
             int durationSec = probeDurationSec(inputMp4);
 
@@ -65,34 +103,151 @@ public class VideoTranscodeService {
 
             String hlsMasterKey = baseKey + "/master.m3u8";
 
-            // 5) DB 상태 업데이트 + 멱등성 키 기록
-            // statusService.markDone() : REQUIRES_NEW 트랜잭션으로 VideoFile 상태를 DONE으로 커밋
-            // markProcessed()          : statusService와 별개 트랜잭션 (JdbcTemplate 직접 사용)
             statusService.markDone(event.videoFileId(), hlsMasterKey, durationSec);
             processedEventRepository.markProcessed(event.eventId(), event.videoId());
 
-            log.info("[TRANSCODE][DONE] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
+            log.info("[TRANSCODE][DONE][ADMIN] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
                     event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
 
+        } catch (TranscodeNonRetryableException e) {
+            safeMarkAdminFailed(event);
+            throw e;
         } catch (Exception e) {
-            log.error("[TRANSCODE][FAILED] videoFileId={}, cause={}", event.videoFileId(), e.getMessage(), e);
-
-            try {
-                statusService.markFailed(event.videoFileId());
-            } catch (Exception markFailEx) {
-                log.error("[TRANSCODE][FAILED][MARK_FAIL_ERROR] videoFileId={}, cause={}",
-                        event.videoFileId(), markFailEx.getMessage(), markFailEx);
-            }
-
-            throw new IllegalStateException("TRANSCODE_FAILED", e);
-
+            safeMarkAdminFailed(event);
+            throw new TranscodeRetryableException("TRANSCODE_FAILED_ADMIN", e);
         } finally {
-            if (workDir != null) {
-                try {
-                    log.info("[TRANSCODE][WORKDIR] {}", workDir);
-                    deleteRecursively(workDir);
-                } catch (Exception ignore) {}
+            cleanup(workDir, "[ADMIN]");
+        }
+    }
+
+    private void safeMarkAdminFailed(VideoTranscodeRequestedEvent event) {
+        try {
+            statusService.markFailed(event.videoFileId());
+        } catch (Exception markFailEx) {
+            log.error("[TRANSCODE][FAILED][ADMIN][MARK_FAIL_ERROR] videoFileId={}, cause={}",
+                    event.videoFileId(), markFailEx.getMessage(), markFailEx);
+        }
+    }
+
+    private void transcodeUser(VideoTranscodeRequestedEvent event) {
+        Long userVideoFileId = event.videoFileId();
+
+        UserVideoFile uvf = userVideoFileRepository.findById(userVideoFileId)
+                .orElseThrow(() -> new TranscodeNonRetryableException("USER_VIDEO_FILE_NOT_FOUND: " + userVideoFileId));
+
+        if (uvf.getTranscodeStatus() == TranscodeStatus.DONE) {
+            log.info("[TRANSCODE][SKIP][USER] already DONE. userVideoFileId={}", userVideoFileId);
+            processedEventRepository.markProcessed(event.eventId());
+            return;
+        }
+
+        Path workDir = null;
+        try {
+            log.info("[TRANSCODE][START][USER] eventId={}, userVideoFileId={}, originalKey={}",
+                    event.eventId(), userVideoFileId, event.originalKey());
+
+            userStatusService.markProcessing(userVideoFileId);
+
+            workDir = Files.createTempDirectory("transcode-user-" + userVideoFileId + "-");
+            Path inputMp4 = workDir.resolve("input.mp4");
+            Path hlsDir = workDir.resolve("hls");
+            Files.createDirectories(hlsDir);
+
+            objectStorageService.downloadToFile(event.originalKey(), inputMp4);
+
+            int durationSec = probeDurationSec(inputMp4);
+            if (durationSec > USER_MAX_DURATION_SEC) {
+                log.warn("[TRANSCODE][REJECT][USER] duration over limit. durationSec={}, limitSec={}",
+                        durationSec, USER_MAX_DURATION_SEC);
+
+                userStatusService.markFailed(userVideoFileId);
+                processedEventRepository.markProcessed(event.eventId());
+                throw new TranscodeNonRetryableException("USER_VIDEO_DURATION_OVER_LIMIT");
             }
+
+            Path master = hlsDir.resolve("master.m3u8");
+            withFfmpegPermit(event, () -> runFfmpegAbrHls(inputMp4, hlsDir, master));
+
+            String baseKey = "hls-user/" + userVideoFileId;
+            uploadDirectoryToMinio(hlsDir, baseKey);
+
+            String hlsMasterKey = baseKey + "/master.m3u8";
+
+            userStatusService.markDone(userVideoFileId, hlsMasterKey, durationSec);
+            processedEventRepository.markProcessed(event.eventId());
+
+            log.info("[TRANSCODE][DONE][USER] eventId={}, userVideoFileId={}, hlsKey={}, durationSec={}",
+                    event.eventId(), userVideoFileId, hlsMasterKey, durationSec);
+
+        } catch (TranscodeNonRetryableException e) {
+            safeMarkUserFailed(userVideoFileId);
+            throw e;
+        } catch (Exception e) {
+            safeMarkUserFailed(userVideoFileId);
+            throw new TranscodeRetryableException("TRANSCODE_FAILED_USER", e);
+        } finally {
+            cleanup(workDir, "[USER]");
+        }
+    }
+
+    private void safeMarkUserFailed(Long userVideoFileId) {
+        try {
+            userStatusService.markFailed(userVideoFileId);
+        } catch (Exception markFailEx) {
+            log.error("[TRANSCODE][FAILED][USER][MARK_FAIL_ERROR] userVideoFileId={}, cause={}",
+                    userVideoFileId, markFailEx.getMessage(), markFailEx);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    private void withFfmpegPermit(VideoTranscodeRequestedEvent event, ThrowingRunnable job) throws Exception {
+        acquirePermitOrThrow(event);
+        try {
+            job.run();
+        } finally {
+            ffmpegSemaphore.release();
+            log.info("[TRANSCODE][PERMIT] released. eventId={}, available={}",
+                    event.eventId(), ffmpegSemaphore.availablePermits());
+        }
+    }
+
+    private void acquirePermitOrThrow(VideoTranscodeRequestedEvent event) {
+        try {
+            log.info("[TRANSCODE][PERMIT] waiting... eventId={}, available={}",
+                    event.eventId(), ffmpegSemaphore.availablePermits());
+
+            ffmpegSemaphore.acquire();
+
+            log.info("[TRANSCODE][PERMIT] acquired. eventId={}, available={}",
+                    event.eventId(), ffmpegSemaphore.availablePermits());
+
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new TranscodeRetryableException("TRANSCODE_INTERRUPTED_WHILE_WAITING_PERMIT", ie);
+        }
+    }
+
+    private void safeMarkProcessed(VideoTranscodeRequestedEvent event) {
+        try {
+            if (event.videoId() != null) {
+                processedEventRepository.markProcessed(event.eventId(), event.videoId());
+            } else {
+                processedEventRepository.markProcessed(event.eventId());
+            }
+        } catch (Exception ignore) {
+        }
+    }
+
+    private void cleanup(Path workDir, String tag) {
+        if (workDir == null) return;
+        try {
+            log.info("[TRANSCODE][WORKDIR]{} {}", tag, workDir);
+            deleteRecursively(workDir);
+        } catch (Exception ignore) {
         }
     }
 
@@ -132,12 +287,9 @@ public class VideoTranscodeService {
         ProcessBuilder pb = new ProcessBuilder(
                 "ffmpeg",
                 "-y",
-
                 "-analyzeduration", "100M",
                 "-probesize", "100M",
-
                 "-i", inputMp4.toAbsolutePath().toString(),
-
                 "-filter_complex", filter,
 
                 "-map", "[v1080o]", "-map", "0:a:0?",
@@ -191,7 +343,7 @@ public class VideoTranscodeService {
         String out = new String(p.getInputStream().readAllBytes());
         int code = p.waitFor();
         if (code != 0) {
-            throw new IllegalStateException("FFMPEG_ABR_FAILED code=" + code + "\n" + out);
+            throw new TranscodeRetryableException("FFMPEG_ABR_FAILED code=" + code + "\n" + out);
         }
     }
 
@@ -208,7 +360,7 @@ public class VideoTranscodeService {
         String out = new String(p.getInputStream().readAllBytes()).trim();
         int code = p.waitFor();
         if (code != 0 || out.isBlank()) {
-            throw new IllegalStateException("FFPROBE_FAILED code=" + code + ", out=" + out);
+            throw new TranscodeRetryableException("FFPROBE_FAILED code=" + code + ", out=" + out);
         }
         double sec = Double.parseDouble(out);
         return (int) Math.round(sec);
@@ -224,7 +376,6 @@ public class VideoTranscodeService {
 
                         String contentType = detectContentType(path);
                         objectStorageService.uploadFromFile(key, path, contentType);
-
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }

@@ -3,7 +3,7 @@
     "title": {
       "type": "text",
       "analyzer": "nori_analyzer",
-      "search_analyzer": "nori_analyzer",
+      "search_analyzer": "nori_search_analyzer",
       "fields": {
         "ngram": {
           "type": "text",
@@ -27,9 +27,18 @@
     "description": {
       "type": "text",
       "analyzer": "nori_analyzer",
-      "search_analyzer": "nori_analyzer"
+      "search_analyzer": "nori_search_analyzer"
     },
-    "tags": { "type": "keyword" },
+    "tags": {
+      "type": "keyword",
+      "fields": {
+        "search": {
+          "type": "text",
+          "analyzer": "nori_analyzer",
+          "search_analyzer": "nori_search_analyzer"
+        }
+      }
+    },
     "contenttype": { "type": "keyword" },
     "status": { "type": "keyword" },
     "accessLevel": { "type": "keyword" },

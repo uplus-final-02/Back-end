@@ -7,6 +7,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Configuration
 @EnableAsync
 public class AsyncConfig {
@@ -31,4 +34,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
 	}
+	
+	 @Bean(name = "searchLogExecutor")
+	    public Executor searchLogExecutor() {
+	        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+	        executor.setCorePoolSize(2);
+	        executor.setMaxPoolSize(5);
+	        executor.setQueueCapacity(500);
+	        executor.setThreadNamePrefix("search-log-");
+	        executor.setRejectedExecutionHandler((r, exec) ->
+	        log.warn("[SearchLog] 검색 로그 큐 가득 참 — 로그 항목 버림 " +
+	                 "(activeThreads={}, queueSize={})",
+	        exec.getActiveCount(), exec.getQueue().size())
+	);
+	        executor.initialize();
+	        return executor;
+	    }
 }

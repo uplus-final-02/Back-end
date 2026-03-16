@@ -1,18 +1,5 @@
 package org.backend.userapi.search.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.backend.userapi.search.document.ContentDocument;
-import org.backend.userapi.search.dto.ContentSearchItem;
-import org.backend.userapi.search.dto.ContentSearchResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
-import user.repository.UserPreferredTagRepository;
-
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -23,6 +10,22 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import org.backend.userapi.search.document.ContentDocument;
+import org.backend.userapi.search.dto.ContentSearchItem;
+import org.backend.userapi.search.dto.ContentSearchResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import user.repository.UserPreferredTagRepository;
 
 /**
  * 검색 결과 Redis 캐시 — Cache-Aside 패턴 + 로그인 사용자 Java 재정렬.
@@ -158,20 +161,26 @@ public class SearchCacheService {
 
         List<ContentSearchItem> contents = base.contents();
 
-        // index 기반 stable sort: 동점이면 원래 인덱스(BM25 relevance) 유지
         List<ContentSearchItem> reranked = IntStream.range(0, contents.size())
                 .boxed()
                 .sorted(Comparator
-                        .comparingInt((Integer i) -> tagMatchScore(contents.get(i).tags(), preferredTags))
+                        .comparingInt((Integer i) -> {
+                            ContentSearchItem item = contents.get(i);
+                            // 💡 제목 직접 매칭된 콘텐츠는 태그 재정렬 대상에서 제외 → 항상 상위 고정
+                            if (StringUtils.hasText(item.highlightTitle())) {
+                                return Integer.MAX_VALUE;
+                            }
+                            return tagMatchScore(item.tags(), preferredTags);
+                        })
                         .reversed()
-                        .thenComparingInt(i -> i))
+                        .thenComparingInt(i -> i)) // 동점 시 원래 ES 점수 순서 유지
                 .map(contents::get)
                 .toList();
 
         log.debug("[Rerank] 재정렬 완료: userId={}, preferredTags={}, items={}",
                 userId, preferredTags.size(), reranked.size());
 
-        return new ContentSearchResponse(reranked, base.hasNext());
+        return new ContentSearchResponse(reranked, base.hasNext(), base.didYouMean());
     }
 
     /**
@@ -217,6 +226,9 @@ public class SearchCacheService {
      */
     String buildCacheKey(String keyword, String category, String genre, String tag,
                          String sort, int page, int size) {
+    	// TODO: 한국어 키워드 포함 시 키가 길어질 수 있음
+        //       키 길이 문제 발생 시 SHA-256 해싱으로 교체 고려
+        //       DigestUtils.sha256Hex(raw).substring(0, 16)
         return CACHE_KEY_PREFIX
                 + encode(nvl(keyword).toLowerCase(Locale.ROOT)) + "|"
                 + encode(nvl(category).toUpperCase(Locale.ROOT)) + "|"

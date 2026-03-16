@@ -10,21 +10,23 @@ import java.util.List;
 
 @Getter
 @Setter
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = "contents_v1", createIndex = true)
+@Document(indexName = ContentDocument.INDEX_NAME, createIndex = true)
 @Setting(settingPath = "elasticsearch/content-settings.json")
 @Mapping(mappingPath = "elasticsearch/content-mapping.json")
 public class ContentDocument {
 
+    public static final String INDEX_NAME = "contents";
+
     @Id
     private Long contentId;
 
-    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_analyzer")
+    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_search_analyzer")
     private String title;
 
-    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_analyzer")
+    @Field(type = FieldType.Text, analyzer = "nori_analyzer", searchAnalyzer = "nori_search_analyzer")
     private String description;
 
     @Field(type = FieldType.Keyword)

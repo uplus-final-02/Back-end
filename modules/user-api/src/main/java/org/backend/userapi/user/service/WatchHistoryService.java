@@ -9,6 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -127,7 +128,12 @@ public class WatchHistoryService {
 
     List<WatchHistory> histories = watchHistoryRepository.findAllByUserIdForStatistics(userId);
 
-    int totalWatchedCount = 0;
+    Set<Long> completedContentIds = histories.stream()
+        .filter(h -> h.getStatus() == HistoryStatus.COMPLETED)
+        .map(WatchHistory::getContentId)
+        .collect(Collectors.toSet());
+
+    int totalWatchedCount = completedContentIds.size();
     int totalWatchTime = 0;
 
     List<Long> contentIds = histories.stream()
@@ -146,24 +152,25 @@ public class WatchHistoryService {
     }
 
     for (WatchHistory history : histories) {
-      boolean isCompleted = history.getStatus() == HistoryStatus.COMPLETED;
       int watchTime = history.getLastPositionSec() != null ? history.getLastPositionSec() : 0;
+      totalWatchTime += watchTime; // 모든 에피소드의 시청 시간을 합산
 
       List<TagInfo> tags = multiTagMap.getOrDefault(history.getContentId(), new ArrayList<>());
-
-      if (!tags.isEmpty()) {
-        // 시청 영상 태그 누적
-        for (TagInfo tag : tags) {
-          GenreStatTracker tracker = statMap.get(tag.getTagId());
-          if (tracker != null) {
-            if (isCompleted) tracker.watchedCount++;
-            tracker.watchTime += watchTime;
-          }
+      for (TagInfo tag : tags) {
+        GenreStatTracker tracker = statMap.get(tag.getTagId());
+        if (tracker != null) {
+          tracker.watchTime += watchTime; // 장르별 시청 시간 업데이트
         }
+      }
+    }
 
-        // 전체 통계 기준값
-        if (isCompleted) totalWatchedCount++;
-        totalWatchTime += watchTime;
+    for (Long cId : completedContentIds) {
+      List<TagInfo> tags = multiTagMap.getOrDefault(cId, new ArrayList<>());
+      for (TagInfo tag : tags) {
+        GenreStatTracker tracker = statMap.get(tag.getTagId());
+        if (tracker != null) {
+          tracker.watchedCount++; // 작품당 한번 카운트
+        }
       }
     }
 

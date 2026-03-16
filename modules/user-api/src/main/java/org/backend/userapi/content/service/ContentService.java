@@ -1,6 +1,7 @@
 package org.backend.userapi.content.service;
 
 import common.entity.Tag;
+import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
 import content.entity.Content;
@@ -55,13 +56,13 @@ public class ContentService {
         // (같은 작품의 1화, 2화를 봤다면 가장 최근인 2화만 남김)
         Map<Long, WatchHistory> distinctHistoryMap = new LinkedHashMap<>();
         for (WatchHistory wh : histories) {
-        	
-        	// 삭제된 콘텐츠 시청기록 조회에서 제외
-        	Content content = wh.getVideo().getContent();
-        	if (content.getStatus() != ContentStatus.ACTIVE) {
+
+            // 삭제된 콘텐츠 시청기록 조회에서 제외
+            Content content = wh.getVideo().getContent();
+            if (content.getStatus() != ContentStatus.ACTIVE) {
                 continue;
             }
-        	
+
 //            Long contentId = wh.getVideo().getContent().getId();
             Long contentId = content.getId();
 
@@ -84,13 +85,16 @@ public class ContentService {
         return convertToDefaultContentResponses(contents);
     }
 
-    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, Pageable pageable) {
+    public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, ContentAccessLevel accessLevel, ContentType contentType, Pageable pageable) {
 
+        if (uploaderType != null && uploaderType.equals("CREATOR")) uploaderType = "USER";
         // 1. DB 레벨 필터링: 'ACTIVE' 상태, 제공자, 태그 조건이 모두 적용된 데이터 조회 (N+1 방지)
         Slice<Content> contentSlice = contentRepository.findContentsWithFilters(
                 ContentStatus.ACTIVE, // 🔥 상태 파라미터 명시적 전달
                 uploaderType,
                 tag,
+                accessLevel,
+                contentType,
                 pageable
         );
 
@@ -134,7 +138,7 @@ public class ContentService {
 
         // IN 쿼리로 유저를 일괄 조회한 뒤 바로 Map으로 수집
         List<UserNicknameInfo> results = userRepository.findNicknamesByIds(uploaderIds);
-        
+
         return results.stream()
                 .collect(Collectors.toMap(
                         UserNicknameInfo::getId,
@@ -165,14 +169,14 @@ public class ContentService {
                 .orElseThrow(() -> new ContentNotFoundException(
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
-        
+
         // 삭제된 콘텐츠의 경우 상세페이지 조회X
         if (content.getStatus() != ContentStatus.ACTIVE) {
             throw new ContentNotFoundException(
                     "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
             );
         }
-        
+
         return ContentDetailResponse.builder()
                 .contentId(content.getId())
                 .type(content.getType())
@@ -198,6 +202,13 @@ public class ContentService {
                 .orElseThrow(() -> new ContentNotFoundException(
                         "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
                 ));
+
+        // 삭제된 콘텐츠의 경우 연관된 에피소드 조회X
+        if (content.getStatus() != ContentStatus.ACTIVE) {
+            throw new ContentNotFoundException(
+                    "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
+            );
+        }
         
 
 //        if (content.getType() != ContentType.SERIES) {
