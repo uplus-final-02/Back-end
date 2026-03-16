@@ -46,6 +46,9 @@ public class HistoryService {
         int totalDuration = 0;
         if (video.getVideoFile() != null) {
             totalDuration = video.getVideoFile().getDurationSec();
+        } // user 영상이라면 아무것도 하지 않음
+        else if (video.getContent().getUploaderId() != null) {
+            return null;
         }
 
         updateHistoryStatusAndPosition(history, userId, videoId, totalDuration, request);
