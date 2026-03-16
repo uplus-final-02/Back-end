@@ -2,7 +2,9 @@ package org.backend.userapi.user.service;
 
 import common.enums.HistoryStatus;
 import common.repository.TagRepository;
+import content.entity.UserWatchHistory;
 import content.repository.ContentTagRepository;
+import content.repository.UserWatchHistoryRepository;
 import content.repository.WatchHistoryRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -14,6 +16,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.GenreStatisticsResponse;
+import org.backend.userapi.user.dto.response.UserWatchHistoryListResponse;
+import org.backend.userapi.user.dto.response.UserWatchHistoryResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
 import org.backend.userapi.user.dto.response.WatchStatisticsResponse;
@@ -32,6 +36,7 @@ import java.util.stream.Collectors;
 public class WatchHistoryService {
 
   private final WatchHistoryRepository watchHistoryRepository;
+  private final UserWatchHistoryRepository userWatchHistoryRepository;
   private final ContentTagRepository contentTagRepository;
   private final TagRepository tagRepository;
 
@@ -104,6 +109,35 @@ public class WatchHistoryService {
     }
 
     return WatchHistoryListResponse.builder()
+        .watchHistory(dtoList)
+        .nextCursor(nextCursor)
+        .hasNext(slice.hasNext())
+        .build();
+  }
+
+  public UserWatchHistoryListResponse getUserWatchHistories(Long userId, Long cursor, Pageable pageable) {
+    Slice<UserWatchHistory> slice = userWatchHistoryRepository.findHistoriesByCursor(userId, cursor, pageable);
+
+    List<UserWatchHistoryResponse> dtoList = slice.getContent().stream().map(history ->
+        UserWatchHistoryResponse.builder()
+            .historyId(history.getId())
+            .userContentId(history.getUserContent().getId())
+            .title(history.getUserContent().getTitle())
+            .description(history.getUserContent().getDescription())
+            .thumbnailUrl(history.getUserContent().getParentContent().getThumbnailUrl())
+            .contentStatus(history.getUserContent().getContentStatus().name())
+            .lastWatchedAt(history.getLastWatchedAt())
+            .deletedAt(history.getDeletedAt())
+            .build()
+    ).collect(Collectors.toList());
+
+    String nextCursor = null;
+    if (slice.hasNext() && !dtoList.isEmpty()) {
+      Long lastHistoryId = dtoList.get(dtoList.size() - 1).getHistoryId();
+      nextCursor = String.valueOf(lastHistoryId);
+    }
+
+    return UserWatchHistoryListResponse.builder()
         .watchHistory(dtoList)
         .nextCursor(nextCursor)
         .hasNext(slice.hasNext())
