@@ -38,6 +38,13 @@ public class SchedulerWatermarkJdbcRepository {
             "INSERT INTO scheduler_watermark (scheduler_name, watermark, updated_at) " +
             "VALUES (?, ?, NOW(3)) " +
             "ON DUPLICATE KEY UPDATE watermark = VALUES(watermark), updated_at = NOW(3)";
+    
+    private static final String LOAD_CURSOR_SQL =
+            "SELECT watermark, last_id FROM scheduler_watermark WHERE scheduler_name = ?";
+    private static final String SAVE_CURSOR_SQL =
+            "INSERT INTO scheduler_watermark (scheduler_name, watermark, last_id, updated_at) " +
+            "VALUES (?, ?, ?, NOW(3)) " +
+            "ON DUPLICATE KEY UPDATE watermark = VALUES(watermark), last_id = VALUES(last_id), updated_at = NOW(3)";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -61,6 +68,30 @@ public class SchedulerWatermarkJdbcRepository {
             return Optional.empty();   // 최초 실행 시 행 없음 → 정상
         }
     }
+    
+    public Optional<WatermarkCursor> loadCursor(String schedulerName) {
+        try {
+            return Optional.ofNullable(
+                jdbcTemplate.queryForObject(LOAD_CURSOR_SQL, (rs, rowNum) -> {
+                    Timestamp ts = rs.getTimestamp("watermark");
+                    long lastId = rs.getLong("last_id");
+                    if (ts == null) return null;
+                    return new WatermarkCursor(ts.toLocalDateTime(), lastId);
+                }, schedulerName)
+            );
+        } catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
+
+   
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void saveCursor(String schedulerName, LocalDateTime watermark, Long lastId) {
+        jdbcTemplate.update(SAVE_CURSOR_SQL, schedulerName,
+                Timestamp.valueOf(watermark), lastId != null ? lastId : 0L);
+    }
+    
+    public record WatermarkCursor(LocalDateTime watermark, Long lastId) {}
 
     /**
      * 워터마크를 MySQL에 저장(UPSERT).

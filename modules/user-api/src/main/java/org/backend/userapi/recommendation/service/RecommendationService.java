@@ -1,11 +1,13 @@
 package org.backend.userapi.recommendation.service;
 
-import common.enums.HistoryStatus;
-import content.entity.Content;
-import content.repository.ContentRepository;
-import content.repository.WatchHistoryRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.backend.userapi.recommendation.dto.RecommendationResponse;
 import org.backend.userapi.recommendation.dto.RecommendedContentResponse;
 import org.backend.userapi.search.document.ContentDocument;
@@ -19,12 +21,15 @@ import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import user.repository.UserPreferredTagRepository;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.stream.Collectors;
+import common.enums.ContentStatus;
+import common.enums.HistoryStatus;
+import content.entity.Content;
+import content.repository.ContentRepository;
+import content.repository.WatchHistoryRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import user.repository.UserPreferredTagRepository;
 
 /**
  * HNSW 기반 2-Stage 하이브리드 개인화 추천 서비스.
@@ -552,9 +557,8 @@ public class RecommendationService {
      */
     private RecommendationResponse recommendFromDb(Long userId, boolean extended) {
         try {
-            List<Content> contents = contentRepository.findTopActiveByPopularity(
-                    PageRequest.of(0, RESULT_SIZE)
-            );
+            List<Content> contents = contentRepository.findTopActiveByPopularity(ContentStatus.ACTIVE, PageRequest.of(0, RESULT_SIZE));
+
 
             // 시청 이력 조회 (DB 직접 — ES 무관)
             LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);

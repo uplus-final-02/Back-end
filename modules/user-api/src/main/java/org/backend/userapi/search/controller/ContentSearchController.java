@@ -8,12 +8,16 @@ import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
 import org.backend.userapi.search.service.ContentIndexingService;
+import org.backend.userapi.search.service.EsSyncFailureService;
 import org.backend.userapi.search.service.SearchCacheService;
+import org.backend.userapi.search.service.SearchLogService;
+import org.backend.userapi.search.service.SuggestionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,12 +27,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import core.security.principal.JwtPrincipal;
-import lombok.RequiredArgsConstructor;
-
 // 💡 Swagger 어노테이션 임포트
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 
 @Tag(name = "검색 API", description = "콘텐츠 검색, 실시간 추천 및 엘라스틱서치 관리 API")
 @RestController
@@ -38,11 +41,15 @@ public class ContentSearchController {
 
     private final ContentIndexingService contentIndexingService;
     private final SearchCacheService searchCacheService;
+    private final SuggestionService suggestionService;
+    private final SearchLogService searchLogService;
+    private final EsSyncFailureService esSyncFailureService;
 
     @Operation(
         summary = "전체 콘텐츠 재색인 (Admin)", 
         description = "DB의 전체 콘텐츠 데이터를 엘라스틱서치에 백그라운드로 다시 색인합니다. (시간 소요됨)"
     )
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/index/rebuild")
     public ResponseEntity<ApiResponse<Void>> rebuildIndex() {
         contentIndexingService.indexAllContents();
@@ -83,26 +90,40 @@ public class ContentSearchController {
                 keyword, category, genre, tag, userId, sort, pageable);
 
         boolean isAlternative = false;
+        int actualResultCount = response.contents().size();
+        
+        String didYouMean = null;
+        if (actualResultCount == 0 && StringUtils.hasText(keyword)) {
+            didYouMean = suggestionService.getDidYouMean(keyword);
+        }
+        
         if (response.contents().isEmpty()) {
             Page<ContentDocument> altPage = contentIndexingService.getAlternativeContents(pageable);
-            response = ContentSearchResponse.from(altPage, keyword); 
+            response = ContentSearchResponse.from(altPage, keyword);
             isAlternative = true;
+        }
+        
+        if (didYouMean != null) {
+            response = response.withDidYouMean(didYouMean);
         }
 
         String message;
-        if (isAlternative) {
-            if (StringUtils.hasText(keyword)) {
-                message = "'" + keyword + "'에 대한 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
-            } else {
-                message = "선택하신 조건에 맞는 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
-            }
-        } else if (response.contents().isEmpty()) {
+        if (actualResultCount == 0 && !isAlternative) {
             message = "조건에 맞는 검색 결과가 없습니다.";
+        } else if (isAlternative) {
+            message = StringUtils.hasText(keyword)
+                ? "'" + keyword + "'에 대한 결과가 없어, 인기 추천 콘텐츠를 제공합니다."
+                : "선택하신 조건에 맞는 결과가 없어, 인기 추천 콘텐츠를 제공합니다.";
         } else {
             message = "검색 결과를 성공적으로 조회했습니다.";
         }
+        
+        if (StringUtils.hasText(keyword)) {
+            searchLogService.log(keyword, actualResultCount, userId);
+        }
 
         return ResponseEntity.ok(new ApiResponse<>(200, message, response));
+
     }
 
     @Operation(
@@ -117,7 +138,7 @@ public class ContentSearchController {
              return ResponseEntity.ok(new ApiResponse<>(200, "검색어를 입력해주세요.", List.of())); 
         }
         
-        List<String> suggestions = contentIndexingService.getSuggestions(keyword);
+        List<String> suggestions = suggestionService.getSuggestions(keyword);
         
         String message = suggestions.isEmpty()
                 ? "추천 자동완성 검색어가 없습니다."
@@ -125,11 +146,12 @@ public class ContentSearchController {
 
         return ResponseEntity.ok(new ApiResponse<>(200, message, suggestions));
     }
-    
+       
     @Operation(
-        summary = "인덱싱 상태 조회", 
-        description = "현재 백그라운드에서 진행 중인 엘라스틱서치 색인 작업의 상태를 조회합니다."
-    )
+            summary = "인덱싱 상태 조회", 
+            description = "현재 백그라운드에서 진행 중인 엘라스틱서치 색인 작업의 상태를 조회합니다. (Admin)"
+        )
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/index/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getIndexingStatus() {
         Map<String, Object> status = contentIndexingService.getIndexingStatus();
@@ -153,5 +175,29 @@ public class ContentSearchController {
         ContentSearchResponse response = ContentSearchResponse.from(relatedPage, null);
         
         return ResponseEntity.ok(new ApiResponse<>(200, "연관/인기 콘텐츠를 성공적으로 조회했습니다.", response));
+    }
+    
+    // 어드민용 조회 엔드포인트
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/search/log/zero-results")
+    public ResponseEntity<ApiResponse<List<String>>> getZeroResultKeywords(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(new ApiResponse<>(200, "결과 없는 검색어 목록",
+                searchLogService.getZeroResultKeywords(days)));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/search/log/top-keywords")
+    public ResponseEntity<ApiResponse<List<String>>> getTopKeywords(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(new ApiResponse<>(200, "인기 검색어 목록",
+                searchLogService.getTopKeywords(days)));
+    }
+    
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/search/dlq/retry")
+    public ResponseEntity<ApiResponse<Void>> retryDlq() {
+        esSyncFailureService.retryAll();
+        return ResponseEntity.ok(new ApiResponse<>(200, "DLQ 수동 재시도 완료", null));
     }
 }

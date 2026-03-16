@@ -10,8 +10,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = {"org.backend", "core", "user", "common", "content", "interaction"})
-@EntityScan(basePackages = {"user.entity", "common.entity", "content.entity", "interaction.entity"})
-@EnableJpaRepositories(basePackages = {"user.repository", "common.repository", "content.repository", "interaction.repository"})
+@EntityScan(basePackages = {"user.entity", "common.entity", "content.entity", "interaction.entity", "org.backend.userapi.search.entity"})
+@EnableJpaRepositories(basePackages = {"user.repository", "common.repository", "content.repository", "interaction.repository", "org.backend.userapi.search.repository"})
 @EnableElasticsearchRepositories(basePackages = "org.backend.userapi.search.repository")
 @EnableJpaAuditing
 @EnableScheduling

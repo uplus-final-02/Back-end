@@ -77,10 +77,10 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
      * @return 변경된 콘텐츠의 Slice
      */
     Slice<Content> findByUpdatedAtGreaterThanEqual(LocalDateTime lastUpdatedAt, Pageable pageable);
-  
-    // ── ES 검색 Fallback: 제목 LIKE + category 필터 (인기순) ──────────────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    
+    // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (인기순) ──────────────
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
@@ -96,11 +96,12 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("category") ContentType category,
             @Param("genre") String genre,
             @Param("tag") String tag,
+            @Param("status") ContentStatus status,
             Pageable pageable);
 
     // ── ES 검색 Fallback: 제목 LIKE + category/genre/tag 필터 (최신순) ────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "AND (:category IS NULL OR c.type = :category) " +
@@ -116,6 +117,7 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
             @Param("category") ContentType category,
             @Param("genre") String genre,
             @Param("tag") String tag,
+            @Param("status") ContentStatus status,
             Pageable pageable);
 
     // ── ES 검색 Fallback: total count (genre/tag 필터 포함) ───────────────
@@ -130,19 +132,21 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
            "    SELECT 1 FROM c.contentTags sub_ct2 JOIN sub_ct2.tag sub_t2 " +
            "    WHERE sub_t2.name = :tag AND sub_t2.isActive = true))")
     long countActiveByTitleLike(
-            @Param("keyword") String keyword,
+    		@Param("keyword") String keyword,
             @Param("category") ContentType category,
             @Param("genre") String genre,
-            @Param("tag") String tag);
+            @Param("tag") String tag,
+            @Param("status") ContentStatus status);
 
     // ── 추천 Fallback: 인기순 (조회수 + 북마크 기준) ──────────────────────
-    @Query("SELECT DISTINCT c FROM Content c " +
-           "LEFT JOIN FETCH c.contentTags ct LEFT JOIN FETCH ct.tag " +
+    // 💡 수정됨: DISTINCT 및 LEFT JOIN FETCH 삭제
+    @Query("SELECT c FROM Content c " +
            "WHERE c.status = 'ACTIVE' " +
            "ORDER BY c.totalViewCount DESC, c.bookmarkCount DESC")
-    List<Content> findTopActiveByPopularity(Pageable pageable);
+    List<Content> findTopActiveByPopularity(@Param("status") ContentStatus status, Pageable pageable);
 
-    // ── ES 검색 Fallback (keyword 없음): total count용 ────────────────────
+    // 'ACTIVE' 하드코딩 — ContentStatus.ACTIVE enum과 결합됨
+    // enum 이름 변경 시 이 쿼리도 함께 수정 필요
     @Query("SELECT COUNT(c) FROM Content c WHERE c.status = 'ACTIVE'")
     long countAllActive();
     
@@ -153,4 +157,22 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     @Modifying
     @Query("UPDATE Content c SET c.bookmarkCount = c.bookmarkCount - 1 WHERE c.id = :contentId AND c.bookmarkCount > 0")
     void decrementBookmarkCount(@Param("contentId") Long contentId);
+    
+    @Query("SELECT c.id FROM Content c WHERE c.id > :lastId ORDER BY c.id ASC")
+    List<Long> findIdsCursor(@Param("lastId") Long lastId, Pageable pageable);
+    
+    @Query("SELECT DISTINCT c FROM Content c " +
+    	       "LEFT JOIN FETCH c.contentTags ct " +
+    	       "LEFT JOIN FETCH ct.tag " +
+    	       "WHERE c.id IN :ids ORDER BY c.id ASC")
+    	List<Content> findAllWithTagsByIds(@Param("ids") List<Long> ids);
+    
+    @Query("SELECT c FROM Content c " +
+    	       "WHERE (c.updatedAt > :watermark) " +
+    	       "   OR (c.updatedAt = :watermark AND c.id > :lastId) " +
+    	       "ORDER BY c.updatedAt ASC, c.id ASC")
+    	List<Content> findUpdatedAfterCursor(
+    	        @Param("watermark") LocalDateTime watermark,
+    	        @Param("lastId") Long lastId,
+    	        Pageable pageable);
 }
