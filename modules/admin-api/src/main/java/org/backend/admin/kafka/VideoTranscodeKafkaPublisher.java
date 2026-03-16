@@ -17,14 +17,14 @@ public class VideoTranscodeKafkaPublisher implements VideoTranscodeEventPublishe
     private final ObjectMapper objectMapper;
 
     @Value("${app.kafka.topics.video-transcode-admin}")
-    private String userTopic;
+    private String adminTopic;
 
     @Override
     public void publish(VideoTranscodeRequestedEvent event) {
         String key = (event.videoFileId() != null) ? String.valueOf(event.videoFileId())
                 : (event.contentId() != null ? String.valueOf(event.contentId()) : event.eventId());
 
-        kafkaTemplate.send(userTopic, key, toJson(event));
+        kafkaTemplate.send(adminTopic, key, toJson(event));
     }
 
     private String toJson(VideoTranscodeRequestedEvent event) {
