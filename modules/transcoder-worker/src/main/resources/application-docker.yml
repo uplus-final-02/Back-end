@@ -18,13 +18,18 @@ spring:
     consumer:
       group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID:transcoder-worker}
       auto-offset-reset: earliest
+      max-poll-records: 1
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.interval.ms: 7200000
 
 app:
   kafka:
     topics:
       video-transcode: ${VIDEO_TRANSCODE_TOPIC:video.transcode.user.requested}
+  transcode:
+    max-concurrent-ffmpeg: ${TRANSCODE_MAX_CONCURRENT_FFMPEG:1}
 
   storage:
     s3:
