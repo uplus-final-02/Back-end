@@ -101,7 +101,7 @@ public class VideoService {
             String[] parts = videoFile.getHlsUrl().split("/");
 
             try {
-                Long extractedId = Long.parseLong(parts[4]);
+                Long extractedId = Long.parseLong(parts[1]);
                 hlsUrl = hlsUrlProvider.getHlsUrl(extractedId);
             } catch (Exception e) {
                 // 파싱 실패 등 예외 발생 시 안전하게 기존 id로 폴백(Fallback)
