@@ -126,13 +126,13 @@ public class ContentRealtimeSyncScheduler {
 
     private SchedulerWatermarkJdbcRepository.WatermarkCursor loadWatermarkCursor() {
         // 1차: Redis
-        try {
+    	try {
             String stored = redisTemplate.opsForValue().get(WATERMARK_KEY);
             if (stored != null) {
                 return parseRedisCursor(stored);
             }
-        } catch (DataAccessException e) {
-            log.warn("[ES Sync] Redis 워터마크 조회 실패 — MySQL 폴백 시도: {}", e.getMessage());
+        } catch (Exception e) {
+            log.warn("[ES Sync] Redis 워터마크 조회/파싱 실패 — MySQL 폴백 시도: {}", e.getMessage());
         }
 
         // 2차: MySQL
