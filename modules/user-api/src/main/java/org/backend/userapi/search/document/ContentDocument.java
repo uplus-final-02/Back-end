@@ -13,7 +13,7 @@ import java.util.List;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = ContentDocument.INDEX_NAME, createIndex = false)
+@Document(indexName = ContentDocument.INDEX_NAME, createIndex = true)
 @Setting(settingPath = "elasticsearch/content-settings.json")
 @Mapping(mappingPath = "elasticsearch/content-mapping.json")
 public class ContentDocument {
