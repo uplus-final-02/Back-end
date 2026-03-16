@@ -159,6 +159,7 @@ public class UserContentIndexingServiceImpl implements UserContentIndexingServic
         return UserContentDocument.builder()
                 .userContentId(uc.getId())
                 .parentContentId(uc.getParentContent().getId())
+                .uploaderId(uc.getUploaderId())
                 .title(uc.getTitle())
                 .tags(tagNames)
                 .contentStatus(uc.getContentStatus().name())

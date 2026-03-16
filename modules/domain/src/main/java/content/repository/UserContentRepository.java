@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface UserContentRepository extends JpaRepository<UserContent, Long> {
@@ -46,6 +47,15 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
             ORDER BY uc.id ASC
             """)
     List<UserContent> findAllWithParentTagsByIds(@Param("ids") List<Long> ids);
+
+    /**
+     * 실시간 동기화 스케줄러용: updatedAt 이후 변경된 UserContent 조회.
+     *
+     * <p>ContentRealtimeSyncScheduler와 동일한 워터마크 기반 동기화에 사용한다.
+     *
+     * @param updatedAt 워터마크 기준 시각
+     */
+    List<UserContent> findByUpdatedAtAfter(LocalDateTime updatedAt);
 
     /**
      * DB Fallback 추천용: ACTIVE 콘텐츠 인기순 조회.
