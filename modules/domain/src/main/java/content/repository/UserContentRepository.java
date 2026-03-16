@@ -1,12 +1,16 @@
 package content.repository;
 
 import content.entity.UserContent;
+
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.time.LocalDateTime;
+
 
 public interface UserContentRepository extends JpaRepository<UserContent, Long> {
 
@@ -60,4 +64,30 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
             ORDER BY uc.totalViewCount DESC, uc.bookmarkCount DESC
             """)
     List<UserContent> findTopActiveByPopularity(Pageable pageable);
+    
+ // 크리에이터 탭: 특정 관리자 콘텐츠에 매핑된 ACTIVE 유저 콘텐츠 조회
+    @Query("""
+        SELECT uc FROM UserContent uc
+        WHERE uc.parentContent.id = :parentContentId
+          AND uc.contentStatus = 'ACTIVE'
+        ORDER BY uc.createdAt DESC
+        """)
+    List<UserContent> findActiveByParentContentId(
+            @Param("parentContentId") Long parentContentId,
+            Pageable pageable);
+
+    // 실시간 동기화용 — updatedAt + id 복합 커서
+    @Query("""
+        SELECT uc FROM UserContent uc
+        WHERE (uc.updatedAt > :watermark)
+           OR (uc.updatedAt = :watermark AND uc.id > :lastId)
+        ORDER BY uc.updatedAt ASC, uc.id ASC
+        """)
+    List<UserContent> findUpdatedAfterCursor(
+            @Param("watermark") LocalDateTime watermark,
+            @Param("lastId") Long lastId,
+            Pageable pageable);
+    
+    @Query("SELECT u FROM UserContent u WHERE u.contentStatus = 'ACTIVE' ORDER BY u.createdAt DESC")
+    List<UserContent> findAllActiveContents(Pageable pageable);
 }

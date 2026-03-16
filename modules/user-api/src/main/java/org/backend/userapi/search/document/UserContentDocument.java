@@ -30,7 +30,7 @@ import java.util.List;
 @AllArgsConstructor
 @Document(indexName = "user_contents_v1", createIndex = true)
 @Setting(settingPath = "elasticsearch/content-settings.json")
-@Mapping(mappingPath = "elasticsearch/content-mapping.json")
+@Mapping(mappingPath = "elasticsearch/user-content-mapping.json")
 public class UserContentDocument {
 
     @Id
@@ -53,6 +53,9 @@ public class UserContentDocument {
 
     @Field(type = FieldType.Keyword)
     private String accessLevel;
+    
+    @Field(type = FieldType.Long)
+    private Long uploaderId;
 
     @Field(type = FieldType.Keyword, index = false)
     private String thumbnailUrl;
