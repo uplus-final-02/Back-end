@@ -11,6 +11,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Repository
@@ -26,10 +27,9 @@ public class TagHomeStatsJdbcRepository {
      * - ACTIVE 콘텐츠만 집계
      * - watch_histories.deleted_at IS NULL 만 집계
      */
-	private static final String AGGREGATE_SQL = """
+	private static final String AGGREGATE_SQL_TEMPLATE = """
 		    SELECT
 		        t.tag_id,
-		        ? AS stat_date,
 
 		        COALESCE(base.total_view_count, 0) AS total_view_count,
 		        COALESCE(base.total_bookmark_count, 0) AS total_bookmark_count,
@@ -68,7 +68,7 @@ public class TagHomeStatsJdbcRepository {
 		                    content_id,
 		                    MAX(bucket_start_at) AS max_bucket_start_at
 		                FROM content_metric_snapshots
-		                WHERE bucket_start_at < DATE_ADD(?, INTERVAL 1 DAY)
+		                WHERE bucket_start_at < '%s'
 		                GROUP BY content_id
 		            ) latest
 		              ON latest.content_id = s.content_id
@@ -91,7 +91,7 @@ public class TagHomeStatsJdbcRepository {
 		        JOIN watch_histories wh
 		          ON wh.content_id = c.content_id
 		         AND wh.deleted_at IS NULL
-		         AND wh.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+		         AND wh.created_at < '%s'
 		        GROUP BY ct.tag_id
 		    ) w
 		      ON w.tag_id = t.tag_id
@@ -131,21 +131,26 @@ public class TagHomeStatsJdbcRepository {
 	
 	// 집계 데이터 조회
 	public List<TagHomeStatsRow> findDailyStatsRows(LocalDate statDate) {
-        return jdbcTemplate.query(
-                AGGREGATE_SQL,
-                (rs, rowNum) -> new TagHomeStatsRow(
-                        statDate,
-                        rs.getLong("tag_id"),
-                        rs.getLong("total_view_count"),
-                        rs.getLong("total_bookmark_count"),
-                        rs.getBigDecimal("bookmark_rate"),
-                        rs.getLong("total_watch_count"),
-                        rs.getLong("completed_watch_count"),
-                        rs.getBigDecimal("completion_rate")
-                ),
-                Date.valueOf(statDate)
-        );
-    }
+	    String upperBound = statDate.plusDays(1)
+	            .atStartOfDay()
+	            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+	    String aggregateSql = AGGREGATE_SQL_TEMPLATE.formatted(upperBound, upperBound);
+
+	    return jdbcTemplate.query(
+	            aggregateSql,
+	            (rs, rowNum) -> new TagHomeStatsRow(
+	                    statDate,
+	                    rs.getLong("tag_id"),
+	                    rs.getLong("total_view_count"),
+	                    rs.getLong("total_bookmark_count"),
+	                    rs.getBigDecimal("bookmark_rate"),
+	                    rs.getLong("total_watch_count"),
+	                    rs.getLong("completed_watch_count"),
+	                    rs.getBigDecimal("completion_rate")
+	            )
+	    );
+	}
 	
 	/**
      * 통계 batch upsert
