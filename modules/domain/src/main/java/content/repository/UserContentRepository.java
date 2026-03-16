@@ -3,6 +3,7 @@ package content.repository;
 import content.entity.UserContent;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -70,4 +71,8 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
             ORDER BY uc.totalViewCount DESC, uc.bookmarkCount DESC
             """)
     List<UserContent> findTopActiveByPopularity(Pageable pageable);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE UserContent uc SET uc.totalViewCount = uc.totalViewCount + :delta WHERE uc.id = :id")
+    void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
 }

@@ -1,6 +1,7 @@
 package org.backend.userapi.common.scheduler;
 
 import content.repository.ContentRepository;
+import content.repository.UserContentRepository;
 import content.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,13 +25,15 @@ public class ViewCountFlushScheduler {
     private final StringRedisTemplate redisTemplate;
     private final VideoRepository videoRepository;
     private final ContentRepository contentRepository;
+    private final UserContentRepository userContentRepository;
 
     // Redis Key Prefix
     private static final String CONTENT_VIEW_KEY_PREFIX = "content:view:";
     private static final String VIDEO_VIEW_KEY_PREFIX = "video:view:";
+    private static final String USER_CONTENT_VIEW_KEY_PREFIX = "usercontent:view:"; // 🌟 추가됨
 
     /**
-     * 3분마다 Redis에 쌓인 조회수를 DB에 반영(Flush)합니다.
+     * 5분마다 Redis에 쌓인 조회수를 DB에 반영(Flush)합니다.
      * cron: cron: "0 0/5 * * * *" (5분 간격으로 정각 0초에 실행. 예: 0분 0초, 5분 0초, 5분 0초...)
      */
     @Scheduled(cron = "0 0/5 * * * *")
@@ -50,9 +53,12 @@ public class ViewCountFlushScheduler {
         // 2. 컨텐츠(시리즈) 조회수 동기화
         int flushedContentCount = flushCounts(CONTENT_VIEW_KEY_PREFIX, "Content");
 
+        // 3. 유저 콘텐츠 조회수 동기화 (🌟 신규 추가)
+        int flushedUserContentCount = flushCounts(USER_CONTENT_VIEW_KEY_PREFIX, "UserContent");
+
         long endTime = System.currentTimeMillis();
-        log.info("[Scheduler] Redis 조회수 DB 동기화 완료. (Video: {}건, Content: {}건 반영, 소요시간: {}ms)",
-            flushedVideoCount, flushedContentCount, (endTime - startTime));
+        log.info("[Scheduler] Redis 조회수 DB 동기화 완료. (Video: {}건, Content: {}건, UserContent: {}건 반영, 소요시간: {}ms)",
+            flushedVideoCount, flushedContentCount, flushedUserContentCount, (endTime - startTime));
     }
 
     /**
@@ -103,6 +109,8 @@ public class ViewCountFlushScheduler {
                     videoRepository.incrementViewCount(id, viewCountDelta);
                 } else if ("Content".equals(type)) {
                     contentRepository.incrementViewCount(id, viewCountDelta);
+                } else if ("UserContent".equals(type)) {
+                    userContentRepository.incrementViewCount(id, viewCountDelta);
                 }
                 updateCount++;
             } catch (Exception e) {
