@@ -1,11 +1,9 @@
 package org.backend.userapi.video.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import common.entity.Tag;
 import common.enums.ContentStatus;
 import common.enums.VideoStatus;
 import lombok.*;
-import org.backend.userapi.content.dto.ContentDetailResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -49,6 +47,11 @@ public class VideoPlayDto {
     private String signature;
     private String keyPairId;
 
+    // 유저콘텐츠 전용
+    // 🌟 원본(부모) 콘텐츠 정보 추가
+    private ParentContentInfo parentContent;
+    private ContentStatus contentStatus;
+
     // --- Inner Classes ---
 
     @Getter
@@ -76,6 +79,14 @@ public class VideoPlayDto {
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         private Long prevVideoId;
+    }
+
+    @Getter
+    @Builder
+    public static class ParentContentInfo {
+        private Long contentId;
+        private String title;
+        private String thumbnailUrl;
     }
 
     // 메시지를 동적으로 생성하는 편의 메서드
