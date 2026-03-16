@@ -29,7 +29,7 @@ app:
     topics:
       video-transcode: ${VIDEO_TRANSCODE_TOPIC:video.transcode.user.requested}
   transcode:
-    max-concurrent-ffmpeg: ${TRANSCODE_MAX_CONCURRENT_FFMPEG:1}
+    max-concurrent-ffmpeg: ${TRANSCODE_MAX_CONCURRENT_FFMPEG:2}
 
   storage:
     s3:
