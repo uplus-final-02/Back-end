@@ -91,7 +91,23 @@ public class VideoService {
         VideoFile videoFile = videoFileRepository.findByVideoId(videoId).orElse(null);
 
         // HlsUrlProvider를 통해 URL 생성 (Local or CloudFront)
-        String hlsUrl = (videoFile != null) ? hlsUrlProvider.getHlsUrl(videoFile.getId()) : null;
+        // 실제 서비스한다면, 밑의 코드가 맞음. 하지만 16000개의 동영상을 저장하지 않고, 일부만 저장하고 매핑만 하도록 할거임
+        //       String hlsUrl = (videoFile != null) ? hlsUrlProvider.getHlsUrl(videoFile.getId()) : null;
+
+        String hlsUrl = null;
+
+        if (videoFile != null && videoFile.getHlsUrl() != null) {
+            // "https://domain/hls/461/master.m3u8" 구조라고 가정할 때 parts[4]가 숫자 ID
+            String[] parts = videoFile.getHlsUrl().split("/");
+
+            try {
+                Long extractedId = Long.parseLong(parts[4]);
+                hlsUrl = hlsUrlProvider.getHlsUrl(extractedId);
+            } catch (Exception e) {
+                // 파싱 실패 등 예외 발생 시 안전하게 기존 id로 폴백(Fallback)
+                hlsUrl = hlsUrlProvider.getHlsUrl(videoFile.getId());
+            }
+        }
 
         long durationSec = (videoFile != null) ? videoFile.getDurationSec() : 0;
 
