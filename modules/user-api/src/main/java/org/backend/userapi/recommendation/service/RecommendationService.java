@@ -37,11 +37,10 @@ import java.util.stream.Collectors;
  * │                                                                         │
  * │  Stage 2  (내부 / 정밀 랭킹)  — 최종 50개 선정                            │
  * │                                                                         │
- * │  최종 점수 = W_SIMILARITY     × tagSimilarity   (ES kNN 코사인, 0~1)     │
- * │           + W_POPULARITY     × popularityScore  (후보 내 정규화, 0~1)    │
- * │           + W_FRESHNESS      × freshnessScore   (지수 감쇠, 0~1)        │
- * │           + W_POPULARITY_RANK × popRankScore    (TODO: 팀원 API, 0~1)   │
- * │           + watchPenalty                        (시청 이력 차등 감점)     │
+ * │  최종 점수 = W_SIMILARITY  × tagSimilarity   (ES kNN 코사인, 0~1)       │
+ * │           + W_POPULARITY  × popularityScore  (후보 내 정규화, 0~1)      │
+ * │           + W_FRESHNESS   × freshnessScore   (지수 감쇠, 0~1)          │
+ * │           + watchPenalty                     (시청 이력 차등 감점)       │
  * │                                                                         │
  * │  watchPenalty                                                            │
  * │    STARTED   (0~60초)   → -0.70  거의 안 봄, 강하게 하단 배치             │
@@ -52,10 +51,6 @@ import java.util.stream.Collectors;
  * │    기본 (hasMore: true) : 상위 15개    ← 홈 화면 초기 노출                │
  * │    extended             : 상위 50개    ← "더 알아보기" 클릭 시             │
  * │                                                                         │
- * │  TODO: W_POPULARITY_RANK 자리                                            │
- * │    팀원 인기 순위 API 완성 후 아래 단계로 가중치 재배분:                    │
- * │    W_SIMILARITY 0.60→0.55 / W_POPULARITY 0.25→0.15 / W_FRESHNESS 유지   │
- * │    W_POPULARITY_RANK 0.00→0.20 으로 활성화                              │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 @Slf4j
@@ -86,17 +81,11 @@ public class RecommendationService {
 
     // ── 점수 가중치 (합계 = 1.0) ──────────────────────────────────
     /** 태그 유사도 — 유저 취향 매칭 (핵심 신호) */
-    private static final double W_SIMILARITY      = 0.60;
-    /** 인기도 — 조회수 + 북마크 기반 상대 정규화 */
-    private static final double W_POPULARITY      = 0.25;
+    private static final double W_SIMILARITY  = 0.60;
+    /** 인기도 — 조회수 + 북마크 기반 후보 내 상대 정규화 */
+    private static final double W_POPULARITY  = 0.25;
     /** 신선도 — 최신 콘텐츠 우대 (지수 감쇠) */
-    private static final double W_FRESHNESS       = 0.15;
-    /**
-     * [TODO] 인기 순위 API 가중치 자리.
-     * 팀원 API 완성 후 0.20으로 올리고, W_SIMILARITY·W_POPULARITY 를 조정.
-     * getPopularityRankScore() 메서드 참고.
-     */
-    private static final double W_POPULARITY_RANK = 0.00;
+    private static final double W_FRESHNESS   = 0.15;
 
     // ── 시청 이력 패널티 ──────────────────────────────────────────
     /** 거의 안 본 콘텐츠 (0~60초) — 강하게 하단 배치 */
@@ -468,10 +457,9 @@ public class RecommendationService {
 
         double popularityScore = c.popularityRaw() / maxPopularity;  // 0~1 정규화
 
-        double score = W_SIMILARITY      * c.similarity()
-                     + W_POPULARITY      * popularityScore
-                     + W_FRESHNESS       * c.freshnessScore()
-                     + W_POPULARITY_RANK * getPopularityRankScore(c.doc().getContentId());
+        double score = W_SIMILARITY  * c.similarity()
+                     + W_POPULARITY  * popularityScore
+                     + W_FRESHNESS   * c.freshnessScore();
 
         // 시청 이력 패널티 적용
         HistoryStatus watchStatus = watchStatusMap.get(c.doc().getContentId());
@@ -616,25 +604,4 @@ public class RecommendationService {
         return normSq <= ZERO_VECTOR_EPS;
     }
 
-    /**
-     * [TODO] 인기 순위 점수 — 팀원 인기 순위 API 연동 예정.
-     *
-     * <pre>
-     *   구현 후 처리:
-     *   1. W_POPULARITY_RANK = 0.20 으로 변경
-     *   2. W_SIMILARITY 0.60→0.55, W_POPULARITY 0.25→0.15 로 재배분
-     *   3. 이 메서드에서 실제 점수(0~1) 반환
-     *
-     *   예시:
-     *     return popularityRankService.getScore(contentId);
-     *     // 1위 → 1.0, 꼴찌 → 0.0 식의 정규화 값
-     * </pre>
-     *
-     * @param contentId 콘텐츠 ID
-     * @return 0.0 (구현 전 기본값)
-     */
-    private double getPopularityRankScore(Long contentId) {
-        // TODO: 팀원 인기 순위 API 완성 후 구현
-        return 0.0;
-    }
 }
