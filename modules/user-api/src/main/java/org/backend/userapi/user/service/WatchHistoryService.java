@@ -30,6 +30,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import content.entity.WatchHistory;
+import content.entity.Content;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -139,6 +140,9 @@ public class WatchHistoryService {
                     Long parentId = entry.getKey();
                     List<UserWatchHistory> historyList = entry.getValue();
 
+                    // 그룹 내 첫 번째 요소에서 부모 콘텐츠 추출
+                    Content parentContent = historyList.get(0).getUserContent().getParentContent();
+
                     List<UserWatchHistoryResponse> historyResponses = historyList.stream()
                             .map(history -> UserWatchHistoryResponse.builder()
                                     .historyId(history.getId())
@@ -146,7 +150,7 @@ public class WatchHistoryService {
                                     .parentContentId(parentId)
                                     .title(history.getUserContent().getTitle())
                                     .description(history.getUserContent().getDescription())
-                                    .thumbnailUrl(history.getUserContent().getParentContent().getThumbnailUrl())
+                                    .thumbnailUrl(history.getUserContent().getThumbnailUrl())
                                     .contentStatus(history.getUserContent().getContentStatus().name())
                                     .lastWatchedAt(history.getLastWatchedAt())
                                     .deletedAt(history.getDeletedAt())
@@ -155,6 +159,8 @@ public class WatchHistoryService {
 
                     return UserWatchHistoryGroupResponse.builder()
                             .parentContentId(parentId)
+                            .parentTitle(parentContent.getTitle())
+                            .parentThumbnailUrl(parentContent.getThumbnailUrl())
                             .watchHistories(historyResponses)
                             .build();
                 })

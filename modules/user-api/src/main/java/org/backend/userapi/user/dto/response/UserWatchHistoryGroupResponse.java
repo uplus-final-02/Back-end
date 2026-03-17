@@ -8,5 +8,7 @@ import lombok.Getter;
 @Builder
 public class UserWatchHistoryGroupResponse {
     private Long parentContentId;
+    private String parentTitle;
+    private String parentThumbnailUrl;
     private List<UserWatchHistoryResponse> watchHistories;
 }
