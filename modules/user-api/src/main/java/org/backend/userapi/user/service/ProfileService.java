@@ -7,10 +7,10 @@ import org.backend.userapi.user.dto.response.ProfileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import common.enums.SubscriptionStatus;
 import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
-import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
@@ -50,9 +50,8 @@ public class ProfileService {
         .collect(Collectors.toList());
 
     // 구독 상태 확인 ("SUBSCRIBED" / "NONE")
-    boolean isSubscribed = subscriptionsRepository.findByUser_Id(userId)
-    	    .map(Subscriptions::isAvailable)
-    	    .orElse(false);
+    boolean isSubscribed = subscriptionsRepository
+    	    .existsByUser_IdAndSubscriptionStatus(userId, SubscriptionStatus.ACTIVE);
 
     String subStatus = isSubscribed ? "SUBSCRIBED" : "NONE";
 
@@ -81,6 +80,7 @@ public class ProfileService {
         .lastNicknameChangedAt(user.getUpdatedAt())
         .build();
   }
+  
   @Transactional 
   public ProfileResponse updateProfileImage(Long userId, String newImageUrl) {
       // 1. 유저 조회
