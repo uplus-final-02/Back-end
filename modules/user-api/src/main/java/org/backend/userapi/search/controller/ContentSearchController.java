@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.backend.userapi.common.dto.ApiResponse;
+import org.backend.userapi.recommendation.dto.UserRecommendedContentResponse;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.dto.ContentSearchResponse;
 import org.backend.userapi.search.service.ContentIndexingService;
@@ -12,6 +13,7 @@ import org.backend.userapi.search.service.EsSyncFailureService;
 import org.backend.userapi.search.service.SearchCacheService;
 import org.backend.userapi.search.service.SearchLogService;
 import org.backend.userapi.search.service.SuggestionService;
+import org.backend.userapi.search.service.UserContentSearchService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,7 +29,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import core.security.principal.JwtPrincipal;
-// 💡 Swagger 어노테이션 임포트
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,6 +45,7 @@ public class ContentSearchController {
     private final SuggestionService suggestionService;
     private final SearchLogService searchLogService;
     private final EsSyncFailureService esSyncFailureService;
+    private final UserContentSearchService userContentSearchService;
 
     @Operation(
         summary = "전체 콘텐츠 재색인 (Admin)", 
@@ -200,4 +202,90 @@ public class ContentSearchController {
         esSyncFailureService.retryAll();
         return ResponseEntity.ok(new ApiResponse<>(200, "DLQ 수동 재시도 완료", null));
     }
+    
+    @Operation(
+        summary = "크리에이터 전체 피드 / 콘텐츠별 영상 목록",
+        description = "parentContentId가 없으면 전체 유저 영상을, 있으면 해당 OTT 콘텐츠에 매핑된 영상만 반환합니다."
+    )
+    @GetMapping("/search/creator")
+    public ResponseEntity<ApiResponse<List<UserRecommendedContentResponse>>> searchCreatorContents(
+            @Parameter(description = "관리자 콘텐츠 ID (선택: 전체 조회 시 생략)", example = "16264")
+            @RequestParam(required = false) Long parentContentId, // 🌟 필수 아님!
+            @Parameter(description = "페이지 번호", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기", example = "15")
+            @RequestParam(defaultValue = "15") int size
+    ) {
+        int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize,
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        // 이름 변경: searchByParentContentId -> searchCreatorContents
+        List<UserRecommendedContentResponse> results =
+                userContentSearchService.searchCreatorContents(parentContentId, pageable);
+
+        String message = results.isEmpty()
+                ? "조회할 크리에이터 영상이 없습니다."
+                : "크리에이터 영상을 성공적으로 조회했습니다.";
+
+        return ResponseEntity.ok(new ApiResponse<>(200, message, results));
+    }
+
+    @Operation(
+        summary = "크리에이터 페이지 — 특정 유저가 올린 영상 목록",
+        description = "uploaderId로 해당 유저의 공개 영상 목록을 반환합니다."
+    )
+    @GetMapping("/search/creator/user")
+    public ResponseEntity<ApiResponse<List<UserRecommendedContentResponse>>> searchByUploader(
+            @Parameter(description = "업로더 유저 ID", example = "1")
+            @RequestParam Long uploaderId,
+            @Parameter(description = "페이지 번호", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기", example = "15")
+            @RequestParam(defaultValue = "15") int size
+    ) {
+        int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize,
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        List<UserRecommendedContentResponse> results =
+                userContentSearchService.searchByUploaderId(uploaderId, pageable);
+
+        String message = results.isEmpty()
+                ? "해당 크리에이터의 영상이 없습니다."
+                : "크리에이터 영상을 성공적으로 조회했습니다.";
+
+        return ResponseEntity.ok(new ApiResponse<>(200, message, results));
+    }
+    
+    @Operation(
+        summary = "크리에이터 영상 키워드 검색",
+        description = "유저 업로드 영상을 제목으로 검색합니다. 태그 검색은 지원하지 않습니다."
+    )
+    @GetMapping("/search/creator/search")
+    public ResponseEntity<ApiResponse<List<UserRecommendedContentResponse>>> searchCreatorByKeyword(
+            @Parameter(description = "검색 키워드", example = "무빙")
+            @RequestParam String keyword,
+            @Parameter(description = "페이지 번호", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기", example = "15")
+            @RequestParam(defaultValue = "15") int size
+    ) {
+        if (!StringUtils.hasText(keyword)) {
+            throw new IllegalArgumentException("검색어를 입력해주세요.");
+        }
+
+        int safeSize = (size <= 0) ? 15 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize);
+
+        List<UserRecommendedContentResponse> results =
+                userContentSearchService.searchByKeyword(keyword, pageable);
+
+        String message = results.isEmpty()
+                ? "검색 결과가 없습니다."
+                : "크리에이터 영상 검색 결과를 조회했습니다.";
+
+        return ResponseEntity.ok(new ApiResponse<>(200, message, results));
+    }
+
 }

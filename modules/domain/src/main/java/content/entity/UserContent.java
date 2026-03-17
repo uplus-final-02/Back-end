@@ -35,6 +35,9 @@ public class UserContent extends BaseTimeEntity {
 
     @Column(name = "description", columnDefinition = "json")
     private String description;
+    
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "content_status", nullable = false, length = 20)
@@ -58,6 +61,7 @@ public class UserContent extends BaseTimeEntity {
             Content parentContent,
             String title,
             String description,
+            String thumbnailUrl, 
             ContentStatus contentStatus,
             Long uploaderId,
             ContentAccessLevel accessLevel
@@ -65,6 +69,7 @@ public class UserContent extends BaseTimeEntity {
         this.parentContent = parentContent;
         this.title = title;
         this.description = description;
+        this.thumbnailUrl = thumbnailUrl;
 
         this.contentStatus = (contentStatus != null) ? contentStatus : ContentStatus.HIDDEN;
         this.uploaderId = uploaderId;
@@ -93,4 +98,10 @@ public class UserContent extends BaseTimeEntity {
     public void markDeleted() {
         this.contentStatus = ContentStatus.DELETED;
     }
+    
+    public void updateThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+    
+    
 }
