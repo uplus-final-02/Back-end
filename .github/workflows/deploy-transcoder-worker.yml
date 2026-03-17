@@ -2,7 +2,7 @@ name: Deploy Transcoder Worker
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'deploy/#263-worker' ]
     paths:
       - 'modules/transcoder-worker/**'
       - 'modules/core/**'
@@ -66,6 +66,6 @@ jobs:
           
               'echo \"${{ secrets.ENV_FILE }}\" > .env',
           
-              'sudo docker compose -f docker-compose.transcoder-worker.yml up -d --build',
+              'sudo docker compose -f docker-compose.transcoder-worker.yml up -d --build --scale transcoder-worker-user=3 --scale transcoder-worker-admin=1',
               'sudo docker image prune -f'
             ]"

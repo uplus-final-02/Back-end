@@ -7,4 +7,6 @@ public interface HlsUrlProvider {
      * 운영 환경: https://cdn.example.com/hls/{id}/master.m3u8?signature=...
      */
     String getHlsUrl(Long videoFileId);
+
+    String getHlsUserUrl(Long userVideoFileId);
 }
