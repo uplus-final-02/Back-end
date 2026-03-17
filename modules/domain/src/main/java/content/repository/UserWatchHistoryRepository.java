@@ -15,4 +15,6 @@ import java.util.Optional;
 public interface UserWatchHistoryRepository extends JpaRepository<UserWatchHistory, Long> {
     Optional<UserWatchHistory> findByUserId(Long userId);
 
+    @Query("SELECT uwh FROM UserWatchHistory uwh WHERE uwh.userId = :userId AND uwh.userContent.id = :contentId")
+    Optional<UserWatchHistory> findByUserIdAndContentId(@Param("userId") Long userId, @Param("contentId") Long contentId);
 }

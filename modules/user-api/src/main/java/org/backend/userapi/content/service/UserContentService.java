@@ -5,8 +5,10 @@ import common.enums.VideoStatus;
 import content.entity.Content;
 import content.entity.UserContent;
 import content.entity.UserVideoFile;
+import content.entity.UserWatchHistory;
 import content.repository.UserContentRepository;
 import content.repository.UserVideoFileRepository;
+import content.repository.UserWatchHistoryRepository;
 import core.security.principal.JwtPrincipal;
 import core.storage.service.HlsUrlProvider;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,8 @@ import org.springframework.util.StringUtils;
 import user.entity.User;
 import user.repository.UserRepository;
 
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +32,7 @@ public class UserContentService {
     private final UserContentRepository userContentRepository;
     private final UserVideoFileRepository userVideoFileRepository;
     private final UserRepository userRepository;
+    private final UserWatchHistoryRepository userWatchHistoryRepository;
     private final HlsUrlProvider hlsUrlProvider;
 
     @Transactional
@@ -160,6 +164,20 @@ public class UserContentService {
                                                 .map(User::getNickname)
                                                 .orElse("Unknown");
 
+        // 유저콘텐츠 시청 기록 업데이트 / 저장
+        Optional<UserWatchHistory> history = userWatchHistoryRepository.findByUserIdAndContentId(userId, userContentId);
+        if (history.isPresent()) {
+            history.get().updateLastWatchedAt(LocalDateTime.now());
+        } else {
+            UserWatchHistory newHistory = UserWatchHistory.builder()
+                                                          .userId(userId)
+                                                          .userContent(userContent)
+                                                          .lastWatchedAt(LocalDateTime.now())
+                                                          .build();
+
+            userWatchHistoryRepository.save(newHistory);
+        }
+
         // 5. 북마크(또는 좋아요) 여부 조회 (해당 Repository가 있다면 주입받아 사용)
         //boolean isBookmarked = userContentBookmarkRepository.existsByUserIdAndUserContentId(userId, userContentId);
 
@@ -182,7 +200,7 @@ public class UserContentService {
                            .videoId(userContent.getId())             // DTO의 videoId 자리에 userContentId 삽입
                            .title(userContent.getTitle())
                            .description(userContent.getDescription())
-                           .thumbnailUrl(null)
+                           .thumbnailUrl(userContent.getThumbnailUrl())
                            .viewCount(userContent.getTotalViewCount())
                            .durationSec(durationSec)
                            .createdAt(userContent.getCreatedAt())
