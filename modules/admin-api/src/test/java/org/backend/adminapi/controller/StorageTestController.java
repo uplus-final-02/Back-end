@@ -2,15 +2,20 @@ package org.backend.adminapi.controller;
 
 import core.storage.ObjectStorageService;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+// import lombok.RequiredArgsConstructor; 👈 지웠습니다!
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequiredArgsConstructor
+// @RequiredArgsConstructor 👈 지웠습니다!
 public class StorageTestController {
 
     private final ObjectStorageService objectStorageService;
+
+    // 🌟 롬복 대신 직접 생성자를 만들어 주입합니다. (이게 스프링 공식 권장 방식이기도 합니다)
+    public StorageTestController(ObjectStorageService objectStorageService) {
+        this.objectStorageService = objectStorageService;
+    }
 
     @GetMapping("/admin/storage/test")
     public String test() {
