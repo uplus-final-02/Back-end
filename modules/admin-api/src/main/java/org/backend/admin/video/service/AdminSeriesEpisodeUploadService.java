@@ -39,8 +39,8 @@ public class AdminSeriesEpisodeUploadService {
     private final ObjectMapper objectMapper;
     private final VideoTranscodeOutboxJdbcRepository outboxRepository;
 
-    @Value("${app.kafka.topics.video-transcode-admin}")
-    private String adminTopic;
+    @Value("${app.kafka.topics.video-transcode-admin-requested}")
+    private String adminRequestedTopic;
 
     @Transactional
     public AdminSeriesEpisodeConfirmResponse confirmUpload(
@@ -93,7 +93,7 @@ public class AdminSeriesEpisodeUploadService {
 
         try {
             String payload = objectMapper.writeValueAsString(event);
-            outboxRepository.save(event.eventId(), "ADMIN", vf.getId(), adminTopic, payload);
+            outboxRepository.save(event.eventId(), "ADMIN", vf.getId(), adminRequestedTopic, payload);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("이벤트 직렬화 실패: " + event.eventId(), e);
         }

@@ -60,6 +60,13 @@ public class Content extends BaseTimeEntity {
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
 
+    @Column(name = "publish_requested", nullable = false)
+    private boolean publishRequested;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "publish_desired_status", nullable = false, length = 20)
+    private ContentStatus publishDesiredStatus;
+
     // [수정] 팀원이 추가한 중간 엔티티 리스트
     @OneToMany(mappedBy = "content", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 100)
@@ -72,10 +79,12 @@ public class Content extends BaseTimeEntity {
         this.description = description;
         this.thumbnailUrl = thumbnailUrl;
         this.uploaderId = uploaderId;
-        this.status = status != null ? status : ContentStatus.ACTIVE;
+        this.status = status != null ? status : ContentStatus.HIDDEN;
         this.accessLevel = accessLevel != null ? accessLevel : ContentAccessLevel.FREE;
         this.totalViewCount = 0L;
         this.bookmarkCount = 0L;
+        this.publishRequested = false;
+        this.publishDesiredStatus = ContentStatus.HIDDEN;
     }
 
     public void incrementTotalViewCount() { this.totalViewCount++; }
@@ -86,13 +95,13 @@ public class Content extends BaseTimeEntity {
                 .map(ContentTag::getTag)
                 .collect(Collectors.toList());
     }
-    
+
     public void updateMetadata(
             String title,
             String description,
             String thumbnailUrl,
             ContentAccessLevel accessLevel,
-            ContentStatus status
+            ContentStatus desiredStatus
     ) {
         this.title = title;
         this.description = description;
@@ -101,11 +110,56 @@ public class Content extends BaseTimeEntity {
         if (accessLevel != null) {
             this.accessLevel = accessLevel;
         }
-        if (status != null) {
-            this.status = status;
+
+        if (desiredStatus != null) {
+            this.publishDesiredStatus = desiredStatus;
+
+            if (desiredStatus == ContentStatus.HIDDEN) {
+                this.publishRequested = false;
+                if (this.status != ContentStatus.DELETED) {
+                    this.status = ContentStatus.HIDDEN;
+                }
+            } else if (desiredStatus == ContentStatus.ACTIVE) {
+                this.publishRequested = true;
+                if (this.status != ContentStatus.DELETED) {
+                    this.status = ContentStatus.HIDDEN;
+                }
+            }
         }
     }
-    
+
+    public void requestPublish() {
+        if (this.status == ContentStatus.DELETED) {
+            throw new IllegalStateException("DELETED_CONTENT_CANNOT_PUBLISH");
+        }
+        this.publishRequested = true;
+        if (this.publishDesiredStatus != ContentStatus.ACTIVE) {
+            this.publishDesiredStatus = ContentStatus.ACTIVE;
+        }
+        if (this.status != ContentStatus.DELETED) {
+            this.status = ContentStatus.HIDDEN;
+        }
+    }
+
+    public void cancelPublishRequest() {
+        this.publishRequested = false;
+        if (this.status != ContentStatus.DELETED) {
+            this.status = ContentStatus.HIDDEN;
+        }
+    }
+
+    public void activate() {
+        if (this.status != ContentStatus.DELETED) {
+            this.status = ContentStatus.ACTIVE;
+        }
+    }
+
+    public void hide() {
+        if (this.status != ContentStatus.DELETED) {
+            this.status = ContentStatus.HIDDEN;
+        }
+    }
+
     public void delete() {
         this.status = ContentStatus.DELETED;
     }

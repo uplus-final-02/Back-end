@@ -6,6 +6,7 @@ import content.entity.VideoFile;
 import content.repository.UserVideoFileRepository;
 import content.repository.VideoFileRepository;
 import core.events.video.VideoTranscodeRequestedEvent;
+import core.events.video.VideoTranscodeResultEvent;
 import core.storage.ObjectStorageService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.backend.transcoder.config.TranscodeConcurrencyProperties;
 import org.backend.transcoder.exception.TranscodeNonRetryableException;
 import org.backend.transcoder.exception.TranscodeRetryableException;
 import org.backend.transcoder.kafka.ProcessedKafkaEventJdbcRepository;
+import org.backend.transcoder.kafka.VideoTranscodeResultPublisher;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.*;
@@ -31,7 +33,7 @@ public class VideoTranscodeService {
     private final ProcessedKafkaEventJdbcRepository processedEventRepository;
     private final VideoFileStatusService statusService;
     private final UserVideoFileStatusService userStatusService;
-
+    private final VideoTranscodeResultPublisher resultPublisher;
     private final TranscodeConcurrencyProperties concurrencyProperties;
 
     private static final int USER_MAX_DURATION_SEC = 180;
@@ -108,7 +110,7 @@ public class VideoTranscodeService {
 
             log.info("[TRANSCODE][DONE][ADMIN] eventId={}, videoFileId={}, hlsKey={}, durationSec={}",
                     event.eventId(), event.videoFileId(), hlsMasterKey, durationSec);
-
+            resultPublisher.publish(VideoTranscodeResultEvent.done(event, hlsMasterKey, durationSec));
         } catch (TranscodeNonRetryableException e) {
             safeMarkAdminFailed(event);
             throw e;
@@ -126,6 +128,7 @@ public class VideoTranscodeService {
         } catch (Exception markFailEx) {
             log.error("[TRANSCODE][FAILED][ADMIN][MARK_FAIL_ERROR] videoFileId={}, cause={}",
                     event.videoFileId(), markFailEx.getMessage(), markFailEx);
+            resultPublisher.publish(VideoTranscodeResultEvent.failed(event, "TRANSCODE_FAILED_ADMIN"));
         }
     }
 

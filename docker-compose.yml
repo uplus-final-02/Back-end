@@ -179,10 +179,10 @@ services:
       - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-
       VIDEO_TRANSCODE_TOPIC: ${VIDEO_TRANSCODE_USER_TOPIC:-video.transcode.user.requested}
-
+      VIDEO_TRANSCODE_RESULT_TOPIC: ${VIDEO_TRANSCODE_USER_RESULT_TOPIC:-video.transcode.user.result}
       SPRING_KAFKA_CONSUMER_GROUP_ID: ${TRANSCODER_USER_GROUP_ID:-transcoder-worker-user}
+      TRANSCODE_MAX_CONCURRENT_FFMPEG: ${TRANSCODE_USER_MAX_CONCURRENT_FFMPEG:-2}
     restart: unless-stopped
 
   transcoder-worker-admin:
@@ -202,10 +202,10 @@ services:
       - .env
     environment:
       SPRING_PROFILES_ACTIVE: docker
-
       VIDEO_TRANSCODE_TOPIC: ${VIDEO_TRANSCODE_ADMIN_TOPIC:-video.transcode.admin.requested}
-
+      VIDEO_TRANSCODE_RESULT_TOPIC: ${VIDEO_TRANSCODE_ADMIN_RESULT_TOPIC:-video.transcode.admin.result}
       SPRING_KAFKA_CONSUMER_GROUP_ID: ${TRANSCODER_ADMIN_GROUP_ID:-transcoder-worker-admin}
+      TRANSCODE_MAX_CONCURRENT_FFMPEG: ${TRANSCODE_ADMIN_MAX_CONCURRENT_FFMPEG:-2}
     restart: unless-stopped
 
 volumes:

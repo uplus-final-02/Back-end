@@ -27,7 +27,8 @@ spring:
 app:
   kafka:
     topics:
-      video-transcode: ${VIDEO_TRANSCODE_TOPIC:video.transcode.user.requested}
+      video-transcode: ${VIDEO_TRANSCODE_TOPIC}
+      video-transcode-result: ${VIDEO_TRANSCODE_RESULT_TOPIC}
   transcode:
     max-concurrent-ffmpeg: ${TRANSCODE_MAX_CONCURRENT_FFMPEG:2}
 
