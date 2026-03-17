@@ -47,6 +47,13 @@ public class UserContentDocument {
     @Field(type = FieldType.Keyword)
     private List<String> tags;
 
+    /**
+     * 업로더 유저 ID.
+     * 크리에이터 페이지에서 특정 유저의 콘텐츠만 검색/필터링할 때 사용.
+     */
+    @Field(type = FieldType.Long)
+    private Long uploaderId;
+
     /** ACTIVE 필터용 — ACTIVE 인 것만 인덱싱되므로 항상 ACTIVE */
     @Field(type = FieldType.Keyword)
     private String contentStatus;

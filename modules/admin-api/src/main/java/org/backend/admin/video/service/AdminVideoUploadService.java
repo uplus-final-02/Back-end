@@ -18,6 +18,7 @@ import org.backend.admin.exception.UploadNotCompletedException;
 import org.backend.admin.kafka.outbox.VideoTranscodeOutboxJdbcRepository;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmRequest;
 import org.backend.admin.video.dto.AdminVideoUploadConfirmResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,6 +32,9 @@ public class AdminVideoUploadService {
     private final ObjectStorageService objectStorageService;
     private final ObjectMapper objectMapper;
     private final VideoTranscodeOutboxJdbcRepository outboxRepository;
+
+    @Value("${app.kafka.topics.video-transcode-admin}")
+    private String adminTopic;
 
     /**
      * 업로드 확정 처리.
@@ -81,9 +85,10 @@ public class AdminVideoUploadService {
                 vf.getId(),
                 vf.getOriginalUrl()
         );
+
         try {
             String payload = objectMapper.writeValueAsString(event);
-            outboxRepository.save(event.eventId(), vf.getId(), payload);
+            outboxRepository.save(event.eventId(), "ADMIN", vf.getId(), adminTopic, payload);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("이벤트 직렬화 실패: " + event.eventId(), e);
         }
