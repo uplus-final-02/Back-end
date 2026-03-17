@@ -1,7 +1,9 @@
 package org.backend.userapi.user.controller;
 
 import core.security.principal.JwtPrincipal;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.user.dto.response.UserWatchHistoryGroupResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
 import org.backend.userapi.user.dto.response.WatchStatisticsResponse;
 import org.backend.userapi.user.service.WatchHistoryService;
@@ -20,50 +22,59 @@ import org.backend.userapi.common.dto.ApiResponse;
 @RequiredArgsConstructor
 public class WatchHistoryController {
 
-  private final WatchHistoryService watchHistoryService;
+    private final WatchHistoryService watchHistoryService;
 
-  @GetMapping
-  public ApiResponse<WatchHistoryListResponse> getMyWatchHistory(
-      @RequestParam(name = "cursor", required = false) Long cursor,
-      @RequestParam(name = "size", defaultValue = "20") int size,
-      @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-  ) {
-    // 토큰에서 유저 ID 추출
-    Long userId = jwtPrincipal.getUserId();
+    @GetMapping
+    public ApiResponse<WatchHistoryListResponse> getMyWatchHistory(
+            @RequestParam(name = "cursor", required = false) Long cursor,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        // 토큰에서 유저 ID 추출
+        Long userId = jwtPrincipal.getUserId();
 
-    // 페이징 설정
-    PageRequest pageRequest = PageRequest.of(0, size);
+        // 페이징 설정
+        PageRequest pageRequest = PageRequest.of(0, size);
 
-    // 서비스 호출
-    WatchHistoryListResponse response = watchHistoryService.getWatchHistories(userId, cursor, pageRequest);
+        // 서비스 호출
+        WatchHistoryListResponse response = watchHistoryService.getWatchHistories(userId, cursor, pageRequest);
 
-    // 결과 반환
-    return ApiResponse.success(response);
-  }
+        // 결과 반환
+        return ApiResponse.success(response);
+    }
 
-  @DeleteMapping("/{historyId}")
-  public ApiResponse<Void> deleteWatchHistory(
-      @PathVariable("historyId") Long historyId,
-      @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-  ) {
-    Long userId = jwtPrincipal.getUserId();
+    @GetMapping("/user-content")
+    public ApiResponse<List<UserWatchHistoryGroupResponse>> getMyUserContentWatchHistory(
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        Long userId = jwtPrincipal.getUserId();
+        List<UserWatchHistoryGroupResponse> response = watchHistoryService.getUserWatchHistories(userId);
+        return ApiResponse.success(response);
+    }
 
-    // 삭제 로직 실행
-    watchHistoryService.deleteWatchHistory(userId, historyId);
+    @DeleteMapping("/{historyId}")
+    public ApiResponse<Void> deleteWatchHistory(
+            @PathVariable("historyId") Long historyId,
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        Long userId = jwtPrincipal.getUserId();
 
-    // 성공 메시지와 함께 null 데이터 반환
-    return ApiResponse.success(null);
-  }
+        // 삭제 로직 실행
+        watchHistoryService.deleteWatchHistory(userId, historyId);
 
-  @GetMapping("/statistics")
-  public ApiResponse<WatchStatisticsResponse> getWatchStatistics(
-      @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-  ) {
-    Long userId = jwtPrincipal.getUserId();
+        // 성공 메시지와 함께 null 데이터 반환
+        return ApiResponse.success(null);
+    }
 
-    // 서비스에서 통계 데이터 생성
-    WatchStatisticsResponse response = watchHistoryService.getWatchStatistics(userId);
+    @GetMapping("/statistics")
+    public ApiResponse<WatchStatisticsResponse> getWatchStatistics(
+            @AuthenticationPrincipal JwtPrincipal jwtPrincipal
+    ) {
+        Long userId = jwtPrincipal.getUserId();
 
-    return ApiResponse.success(response);
-  }
+        // 서비스에서 통계 데이터 생성
+        WatchStatisticsResponse response = watchHistoryService.getWatchStatistics(userId);
+
+        return ApiResponse.success(response);
+    }
 }
