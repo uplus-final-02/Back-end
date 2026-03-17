@@ -11,6 +11,7 @@ import org.backend.userapi.content.dto.EpisodesResponse;
 import org.backend.userapi.content.dto.TrendingResponse;
 import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.content.service.TrendingContentService;
+import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
 import org.backend.userapi.user.service.BookmarkService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,10 +35,10 @@ public class ContentController {
 
     // 1. 시청 중인 콘텐츠
     @GetMapping("/home/watching-list")
-    public ApiResponse<List<DefaultContentResponse>> getWatchingContentList(
+    public ApiResponse<WatchHistoryListResponse> getWatchingContentList(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
-        List<DefaultContentResponse> response = contentService.getWatchingContents(jwtPrincipal.getUserId());
+        WatchHistoryListResponse response = contentService.getWatchingContents(jwtPrincipal.getUserId());
         return ApiResponse.success(response);
     }
 
