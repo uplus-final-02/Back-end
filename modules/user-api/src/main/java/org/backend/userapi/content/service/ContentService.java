@@ -4,11 +4,13 @@ import common.entity.Tag;
 import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
 import common.enums.ContentType;
+import common.enums.HistoryStatus;
 import content.entity.Content;
 import content.entity.Video;
 import content.entity.VideoFile;
 import content.entity.WatchHistory;
 import content.repository.ContentRepository;
+import content.repository.ContentTagRepository;
 import content.repository.VideoRepository;
 import content.repository.WatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,8 @@ import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.content.dto.ContentDetailResponse;
 import org.backend.userapi.content.dto.EpisodeResponse;
 import org.backend.userapi.content.dto.EpisodesResponse;
+import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
+import org.backend.userapi.user.dto.response.WatchHistoryResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -40,49 +44,87 @@ public class ContentService {
     private final WatchHistoryRepository watchHistoryRepository;
     private final UserRepository userRepository;
     private final VideoRepository videoRepository;
+    private final ContentTagRepository contentTagRepository;
 
-    public List<DefaultContentResponse> getWatchingContents(Long userId) {
-        // 1. 최근 3개월 이내 기록 조회 (Content까지 한 번에 조인되어 옴)
+    public WatchHistoryListResponse getWatchingContents(Long userId) {
+        // 1. 최근 3개월 이내 기록 중 ACTIVE 콘텐츠만, contentId당 가장 최신의 기록 1개씩 총 5개 조회
         LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
 
-        // 최근 3개월 시청이력 중, (중복 제거를 고려해) 넉넉하게 50개 조회
-        List<WatchHistory> histories = watchHistoryRepository.findRecentWatchHistories(
+        List<WatchHistory> histories = watchHistoryRepository.findRecentActiveWatchHistories(
                 userId,
                 threeMonthsAgo,
-                PageRequest.of(0, 50)
+                ContentStatus.ACTIVE,
+                PageRequest.of(0, 5)
         );
 
-        // 2. contentId 기준으로 중복 제거 (LinkedHashMap으로 순서 보장: 최신순)
-        // (같은 작품의 1화, 2화를 봤다면 가장 최근인 2화만 남김)
-        Map<Long, WatchHistory> distinctHistoryMap = new LinkedHashMap<>();
-        for (WatchHistory wh : histories) {
-
-            // 삭제된 콘텐츠 시청기록 조회에서 제외
-            Content content = wh.getVideo().getContent();
-            if (content.getStatus() != ContentStatus.ACTIVE) {
-                continue;
-            }
-
-//            Long contentId = wh.getVideo().getContent().getId();
-            Long contentId = content.getId();
-
-            // 맵에 없으면 추가 (이미 있으면 더 최신 기록이 들어간 것이므로 패스)
-            distinctHistoryMap.putIfAbsent(contentId, wh);
-
-            if (distinctHistoryMap.size() == 5) break; // 5개 채워지면 중단
+        if (histories.isEmpty()) {
+            return WatchHistoryListResponse.builder()
+                    .watchHistory(Collections.emptyList())
+                    .hasNext(false)
+                    .nextCursor(null)
+                    .build();
         }
 
-        if (distinctHistoryMap.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // 3. Content 추출
-        List<Content> contents = distinctHistoryMap.values().stream()
-                .map(wh -> wh.getVideo().getContent())
+        List<Long> contentIds = histories.stream()
+                .map(WatchHistory::getContentId)
+                .distinct()
                 .collect(Collectors.toList());
 
-        // 4. 변환 로직 호출
-        return convertToDefaultContentResponses(contents);
+        // 복수 태그 매핑 (N+1 방지)
+        Map<Long, List<String>> tagMap = new HashMap<>();
+        if (!contentIds.isEmpty()) {
+            List<Object[]> tagResults = contentTagRepository.findTagNamesByContentIds(contentIds);
+            for (Object[] result : tagResults) {
+                Long cId = (Long) result[0]; // content.id
+                String tagName = (String) result[1]; // t.name
+
+                tagMap.computeIfAbsent(cId, k -> new ArrayList<>()).add(tagName);
+            }
+        }
+
+        List<WatchHistoryResponse> dtoList = histories.stream().map(history -> {
+            // 영상 길이
+            int duration = 0;
+            if (history.getVideo().getVideoFile() != null) {
+                duration = history.getVideo().getVideoFile().getDurationSec();
+            }
+
+            // 카테고리
+            List<String> tagNames = tagMap.getOrDefault(history.getContentId(), new ArrayList<>());
+            String category = tagNames.isEmpty() ? null : String.join(", ", tagNames);
+
+            // 시청 진행률(%)
+            int lastPosition = history.getLastPositionSec() != null ? history.getLastPositionSec() : 0;
+            int progressPercent = 0;
+            if (duration > 0) {
+                progressPercent = (int) (((double) lastPosition / duration) * 100);
+                if (progressPercent > 100) progressPercent = 100;
+            }
+
+            return WatchHistoryResponse.builder()
+                    .historyId(history.getId())
+                    .contentId(history.getContentId())
+                    .episodeId(history.getVideo().getId())
+                    .title(history.getVideo().getContent().getTitle())
+                    .episodeTitle(history.getVideo().getTitle())
+                    .episodeNumber(history.getVideo().getEpisodeNo())
+                    .thumbnailUrl(history.getVideo().getContent().getThumbnailUrl())
+                    .contentType(history.getVideo().getContent().getType().name())
+                    .category(category)
+                    .lastPosition(history.getStatus() == HistoryStatus.STARTED ? null : lastPosition)
+                    .duration(duration)
+                    .progressPercent(progressPercent)
+                    .status(history.getStatus().name())
+                    .watchedAt(history.getLastWatchedAt())
+                    .deletedAt(history.getDeletedAt())
+                    .build();
+        }).collect(Collectors.toList());
+
+        return WatchHistoryListResponse.builder()
+                .watchHistory(dtoList)
+                .hasNext(false) // home의 watching-list는 페이징 처리를 하지 않고 최대 5개만 가져오므로 false
+                .nextCursor(null)
+                .build();
     }
 
     public List<DefaultContentResponse> getDefaultContents(String uploaderType, String tag, ContentAccessLevel accessLevel, ContentType contentType, Pageable pageable) {
@@ -209,7 +251,7 @@ public class ContentService {
                     "콘텐츠를 찾을 수 없습니다. contentId=" + contentId
             );
         }
-        
+
 
 //        if (content.getType() != ContentType.SERIES) {
 //            throw new IllegalArgumentException(
