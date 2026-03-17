@@ -21,7 +21,6 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.UserWatchHistoryGroupResponse;
 import org.backend.userapi.user.dto.response.GenreStatisticsResponse;
-import org.backend.userapi.user.dto.response.UserWatchHistoryListResponse;
 import org.backend.userapi.user.dto.response.UserWatchHistoryResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
@@ -122,12 +121,11 @@ public class WatchHistoryService {
                 .build();
     }
 
-    public UserWatchHistoryListResponse getUserWatchHistories(Long userId) {
+    public List<UserWatchHistoryGroupResponse> getUserWatchHistories(Long userId) {
         LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
 
         List<UserWatchHistory> histories = userWatchHistoryRepository.findUserWatchHistoriesByUserIdAndSince(userId, threeMonthsAgo);
 
-        // 1. 전체 시청 기록을 최신순 정렬 후 parent_content_id를 기준으로 그룹화 (LinkedHashMap을 통해 그룹 자체의 최신순 순서도 보장)
         Map<Long, List<UserWatchHistory>> groupedMap = histories.stream()
                 .sorted((a, b) -> b.getLastWatchedAt().compareTo(a.getLastWatchedAt()))
                 .collect(groupingBy(
@@ -136,14 +134,10 @@ public class WatchHistoryService {
                         Collectors.toList()
                 ));
 
-        // 2. 그룹별 데이터를 프론트엔드 맞춤형 DTO(플레이리스트 형태)로 매핑
-        List<UserWatchHistoryGroupResponse> groupedHistories = groupedMap.entrySet().stream()
+        return groupedMap.entrySet().stream()
                 .map(entry -> {
                     Long parentId = entry.getKey();
                     List<UserWatchHistory> historyList = entry.getValue();
-
-                    // 그룹 내 첫 번째 요소에서 부모 콘텐츠 메타데이터 추출
-                    var parentContent = historyList.get(0).getUserContent().getParentContent();
 
                     List<UserWatchHistoryResponse> historyResponses = historyList.stream()
                             .map(history -> UserWatchHistoryResponse.builder()
@@ -152,7 +146,7 @@ public class WatchHistoryService {
                                     .parentContentId(parentId)
                                     .title(history.getUserContent().getTitle())
                                     .description(history.getUserContent().getDescription())
-                                    .thumbnailUrl(history.getUserContent().getThumbnailUrl())
+                                    .thumbnailUrl(history.getUserContent().getParentContent().getThumbnailUrl())
                                     .contentStatus(history.getUserContent().getContentStatus().name())
                                     .lastWatchedAt(history.getLastWatchedAt())
                                     .deletedAt(history.getDeletedAt())
@@ -161,16 +155,10 @@ public class WatchHistoryService {
 
                     return UserWatchHistoryGroupResponse.builder()
                             .parentContentId(parentId)
-                            .parentTitle(parentContent.getTitle())
-                            .parentThumbnailUrl(parentContent.getThumbnailUrl())
-                            .histories(historyResponses)
+                            .watchHistories(historyResponses)
                             .build();
                 })
                 .collect(Collectors.toList());
-
-        return UserWatchHistoryListResponse.builder()
-                .watchHistories(groupedHistories)
-                .build();
     }
 
     @Transactional

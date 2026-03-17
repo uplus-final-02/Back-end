@@ -22,7 +22,7 @@ public interface UserWatchHistoryRepository extends JpaRepository<UserWatchHisto
             "JOIN FETCH uwh.userContent uc " +
             "JOIN FETCH uc.parentContent pc " +
             "WHERE uwh.userId = :userId " +
-            "AND uwh.lastWatchedAt >= :since" +
+            "AND uwh.lastWatchedAt >= :since " +
             "ORDER BY uwh.lastWatchedAt DESC")
     List<UserWatchHistory> findUserWatchHistoriesByUserIdAndSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 

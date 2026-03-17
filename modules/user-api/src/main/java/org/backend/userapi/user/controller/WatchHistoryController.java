@@ -1,8 +1,9 @@
 package org.backend.userapi.user.controller;
 
 import core.security.principal.JwtPrincipal;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.backend.userapi.user.dto.response.UserWatchHistoryListResponse;
+import org.backend.userapi.user.dto.response.UserWatchHistoryGroupResponse;
 import org.backend.userapi.user.dto.response.WatchHistoryListResponse;
 import org.backend.userapi.user.dto.response.WatchStatisticsResponse;
 import org.backend.userapi.user.service.WatchHistoryService;
@@ -43,11 +44,11 @@ public class WatchHistoryController {
     }
 
     @GetMapping("/user-content")
-    public ApiResponse<UserWatchHistoryListResponse> getMyUserContentWatchHistory(
+    public ApiResponse<List<UserWatchHistoryGroupResponse>> getMyUserContentWatchHistory(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         Long userId = jwtPrincipal.getUserId();
-        UserWatchHistoryListResponse response = watchHistoryService.getUserWatchHistories(userId);
+        List<UserWatchHistoryGroupResponse> response = watchHistoryService.getUserWatchHistories(userId);
         return ApiResponse.success(response);
     }
 
