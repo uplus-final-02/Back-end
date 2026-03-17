@@ -10,7 +10,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.time.LocalDateTime;
 
 
 public interface UserContentRepository extends JpaRepository<UserContent, Long> {
@@ -53,27 +52,19 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
     List<UserContent> findAllWithParentTagsByIds(@Param("ids") List<Long> ids);
 
     /**
-     * 실시간 동기화 스케줄러용: updatedAt 이후 변경된 UserContent 조회.
+     * DB Fallback 추천용 Step 1: ACTIVE 콘텐츠 인기순 ID 조회.
      *
-     * <p>ContentRealtimeSyncScheduler와 동일한 워터마크 기반 동기화에 사용한다.
-     *
-     * @param updatedAt 워터마크 기준 시각
-     */
-    List<UserContent> findByUpdatedAtAfter(LocalDateTime updatedAt);
-
-    /**
-     * DB Fallback 추천용: ACTIVE 콘텐츠 인기순 조회.
-     *
-     * <p>ES 다운 시 조회수 + 북마크 기준 상위 콘텐츠를 반환한다.
+     * <p>컬렉션 JOIN 없이 ID만 조회하여 Pageable LIMIT이 정확하게 적용된다.
+     * Step 2에서 {@link #findAllWithParentTagsByIds}로 FETCH JOIN 조회한다.
      *
      * @param pageable 조회 크기 (보통 50)
      */
     @Query("""
-            SELECT uc FROM UserContent uc
+            SELECT uc.id FROM UserContent uc
             WHERE uc.contentStatus = 'ACTIVE'
             ORDER BY uc.totalViewCount DESC, uc.bookmarkCount DESC
             """)
-    List<UserContent> findTopActiveByPopularity(Pageable pageable);
+    List<Long> findTopActiveIdsByPopularity(Pageable pageable);
     
  // 크리에이터 탭: 특정 관리자 콘텐츠에 매핑된 ACTIVE 유저 콘텐츠 조회
     @Query("""

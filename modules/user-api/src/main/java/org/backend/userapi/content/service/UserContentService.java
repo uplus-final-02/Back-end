@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.backend.userapi.content.dto.UserContentDeleteResponse;
+import org.backend.userapi.content.dto.UserContentPlayResponse;
 import org.backend.userapi.content.dto.UserContentUpdateRequest;
 import org.backend.userapi.content.dto.UserContentUpdateResponse;
 import org.backend.userapi.content.dto.UserThumbnailUploadResponse;
@@ -18,6 +19,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import common.enums.ContentStatus;
+import common.enums.TranscodeStatus;
 import common.enums.VideoStatus;
 import content.entity.UserContent;
 import content.entity.UserVideoFile;
@@ -25,6 +27,7 @@ import content.repository.UserContentRepository;
 import content.repository.UserVideoFileRepository;
 import core.security.principal.JwtPrincipal;
 import core.storage.ObjectStorageService;
+import core.storage.service.HlsUrlProvider;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -34,6 +37,7 @@ public class UserContentService {
     private final UserContentRepository userContentRepository;
     private final UserVideoFileRepository userVideoFileRepository;
     private final ObjectStorageService objectStorageService;
+    private final HlsUrlProvider hlsUrlProvider;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
 
 
@@ -192,6 +196,51 @@ public class UserContentService {
             case ".webp" -> "image/webp";
             default -> throw new IllegalArgumentException("지원하지 않는 썸네일 형식입니다.");
         };
+    }
+
+    @Transactional(readOnly = true)
+    public UserContentPlayResponse play(JwtPrincipal principal, Long userContentId) {
+        requireLogin(principal);
+
+        UserContent uc = userContentRepository.findById(userContentId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "USER_CONTENT_NOT_FOUND: " + userContentId));
+
+        if (uc.getContentStatus() != ContentStatus.ACTIVE) {
+            throw new IllegalStateException("CONTENT_NOT_AVAILABLE");
+        }
+
+        UserVideoFile uvf = userVideoFileRepository.findByContent_Id(userContentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "USER_VIDEO_FILE_NOT_FOUND: contentId=" + userContentId));
+
+        validatePlayable(uvf);
+
+        String hlsUrl = hlsUrlProvider.getHlsUrl(uvf.getId());
+
+        return new UserContentPlayResponse(
+                uc.getId(),
+                uc.getTitle(),
+                uc.getThumbnailUrl(),
+                hlsUrl,
+                uvf.getDurationSec()
+        );
+    }
+
+    /**
+     * 실제 재생 가능한 상태인지 검증.
+     * PUBLIC + DONE + hlsUrl 세 조건이 모두 충족되어야 HLS URL을 발급한다.
+     */
+    private void validatePlayable(UserVideoFile uvf) {
+        if (uvf.getVideoStatus() != VideoStatus.PUBLIC) {
+            throw new IllegalStateException("VIDEO_NOT_PUBLIC");
+        }
+        if (uvf.getTranscodeStatus() != TranscodeStatus.DONE) {
+            throw new IllegalStateException("VIDEO_NOT_READY: transcodeStatus=" + uvf.getTranscodeStatus());
+        }
+        if (uvf.getHlsUrl() == null || uvf.getHlsUrl().isBlank()) {
+            throw new IllegalStateException("HLS_URL_NOT_READY");
+        }
     }
 
     private void requireLogin(JwtPrincipal principal) {
