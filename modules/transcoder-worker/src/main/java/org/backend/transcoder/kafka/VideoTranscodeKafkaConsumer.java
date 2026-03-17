@@ -1,3 +1,4 @@
+// modules/transcoder-worker/src/main/java/org/backend/transcoder/kafka/VideoTranscodeKafkaConsumer.java
 package org.backend.transcoder.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -5,7 +6,9 @@ import core.events.video.VideoTranscodeRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.transcoder.service.VideoTranscodeService;
+import org.backend.transcoder.support.WorkerId;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -16,31 +19,31 @@ public class VideoTranscodeKafkaConsumer {
     private final ObjectMapper objectMapper;
     private final VideoTranscodeService videoTranscodeService;
 
-    /**
-     * Kafka 메시지 수신 후 트랜스코딩 서비스로 위임.
-     *
-     * <p>[예외 처리 전략]
-     * <ul>
-     *   <li>JSON 파싱 실패 → {@link IllegalArgumentException} 변환
-     *       → {@link KafkaConsumerConfig}에서 non-retryable로 등록 → DLQ 즉시 이동
-     *   <li>트랜스코딩 실패 → 예외 그대로 전파
-     *       → {@link KafkaConsumerConfig} {@code DefaultErrorHandler}가 ExponentialBackOff로 재시도
-     *       → 재시도 소진 시 DLQ 이동
-     * </ul>
-     */
     @KafkaListener(
             topics = "${app.kafka.topics.video-transcode}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onMessage(String message) {
+    public void onMessage(ConsumerRecord<String, String> record) {
+        final String workerId = WorkerId.get();
+
         VideoTranscodeRequestedEvent event;
         try {
-            event = objectMapper.readValue(message, VideoTranscodeRequestedEvent.class);
+            event = objectMapper.readValue(record.value(), VideoTranscodeRequestedEvent.class);
         } catch (Exception e) {
-            log.error("[TRANSCODE][INVALID_MESSAGE] 메시지 형식 오류 — DLQ 이동: message={}", message, e);
+            log.error("[TRANSCODE][INVALID_MESSAGE][{}] topic={}, partition={}, offset={}, key={}, payload={}",
+                    workerId, record.topic(), record.partition(), record.offset(), record.key(), record.value(), e);
             throw new IllegalArgumentException("INVALID_MESSAGE_FORMAT", e);
         }
 
+        log.info("[KAFKA][RECV][{}] topic={}, partition={}, offset={}, key={}, eventId={}, requestType={}, videoFileId={}, originalKey={}",
+                workerId,
+                record.topic(), record.partition(), record.offset(), record.key(),
+                event.eventId(), event.requestType(), event.videoFileId(), event.originalKey()
+        );
+
         videoTranscodeService.transcode(event);
+
+        log.info("[KAFKA][ACK][{}] topic={}, partition={}, offset={}, eventId={}",
+                workerId, record.topic(), record.partition(), record.offset(), event.eventId());
     }
 }

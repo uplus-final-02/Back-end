@@ -75,4 +75,60 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE UserContent uc SET uc.totalViewCount = uc.totalViewCount + :delta WHERE uc.id = :id")
     void incrementViewCount(@Param("id") Long id, @Param("delta") Long delta);
+
+    /**
+     * DB Fallback 추천용 Step 1: ACTIVE 콘텐츠 인기순 ID 조회.
+     *
+     * <p>컬렉션 JOIN 없이 ID만 조회하여 Pageable LIMIT이 정확하게 적용된다.
+     * Step 2에서 {@link #findAllWithParentTagsByIds}로 FETCH JOIN 조회한다.
+     *
+     * @param pageable 조회 크기 (보통 50)
+     */
+    @Query("""
+            SELECT uc.id FROM UserContent uc
+            WHERE uc.contentStatus = 'ACTIVE'
+            ORDER BY uc.totalViewCount DESC, uc.bookmarkCount DESC
+            """)
+    List<Long> findTopActiveIdsByPopularity(Pageable pageable);
+
+    // 크리에이터 탭: 특정 관리자 콘텐츠에 매핑된 ACTIVE 유저 콘텐츠 조회
+    @Query("""
+        SELECT uc FROM UserContent uc
+        JOIN FETCH uc.parentContent pc
+        WHERE uc.parentContent.id = :parentContentId
+          AND uc.contentStatus = 'ACTIVE'
+        ORDER BY uc.createdAt DESC
+        """)
+    List<UserContent> findActiveByParentContentId(
+        @Param("parentContentId") Long parentContentId,
+        Pageable pageable);
+
+    // 실시간 동기화용 — updatedAt + id 복합 커서
+    @Query("""
+        SELECT uc FROM UserContent uc
+        WHERE (uc.updatedAt > :watermark)
+           OR (uc.updatedAt = :watermark AND uc.id > :lastId)
+        ORDER BY uc.updatedAt ASC, uc.id ASC
+        """)
+    List<UserContent> findUpdatedAfterCursor(
+        @Param("watermark") LocalDateTime watermark,
+        @Param("lastId") Long lastId,
+        Pageable pageable);
+
+    @Query("""
+            SELECT uc FROM UserContent uc
+            JOIN FETCH uc.parentContent pc
+            WHERE uc.contentStatus = 'ACTIVE' 
+            ORDER BY uc.createdAt DESC
+            """)
+    List<UserContent> findAllActiveContents(Pageable pageable);
+
+    // 특정 유저의 영상 목록 Fallback (N+1 방지)
+    @Query("SELECT uc FROM UserContent uc JOIN FETCH uc.parentContent pc WHERE uc.uploaderId = :uploaderId AND uc.contentStatus = 'ACTIVE' ORDER BY uc.createdAt DESC")
+    List<UserContent> findActiveByUploaderId(@Param("uploaderId") Long uploaderId, Pageable pageable);
+
+    // 키워드 검색 Fallback (N+1 방지)
+    @Query("SELECT uc FROM UserContent uc JOIN FETCH uc.parentContent pc WHERE uc.contentStatus = 'ACTIVE' AND uc.title LIKE %:keyword% ORDER BY uc.createdAt DESC")
+    List<UserContent> findActiveByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
 }

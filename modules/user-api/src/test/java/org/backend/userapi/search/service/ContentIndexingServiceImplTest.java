@@ -46,25 +46,15 @@ import user.repository.UserPreferredTagRepository;
 @ExtendWith(MockitoExtension.class)
 class ContentIndexingServiceImplTest {
 
-    @Mock
-    private ContentRepository contentRepository;
-
-    @Mock
-    private ContentSearchRepository contentSearchRepository;
-
-    @Mock
-    private ElasticsearchOperations elasticsearchOperations;
-
-    @Mock
-    private TagVectorService tagVectorService;
-
-    @Mock
-    private UserPreferredTagRepository userPreferredTagRepository;
+    @Mock private ContentRepository contentRepository;
+    @Mock private ContentSearchRepository contentSearchRepository;
+    @Mock private ElasticsearchOperations elasticsearchOperations;
+    @Mock private TagVectorService tagVectorService;
+    @Mock private UserPreferredTagRepository userPreferredTagRepository;
 
     @InjectMocks
     private ContentIndexingServiceImpl contentIndexingService;
 
-    // 💡 [수정] ArgumentCaptor 제네릭 에러를 원천 차단하기 위해 필드로 선언
     @Captor
     private ArgumentCaptor<List<ContentDocument>> documentListCaptor;
 
@@ -81,7 +71,6 @@ class ContentIndexingServiceImplTest {
         contentIndexingService.indexAllContents();
 
         // Then
-        // 💡 [수정] 필드에 선언된 captor 사용
         verify(contentSearchRepository).saveAll(documentListCaptor.capture());
         List<ContentDocument> saved = documentListCaptor.getValue();
 
@@ -104,13 +93,10 @@ class ContentIndexingServiceImplTest {
     @Test
     @DisplayName("검색어와 필터가 모두 공백이면 빈 페이지를 반환한다")
     void search_withAllBlank_returnsEmptyPage() {
-        // Given
-    	Pageable pageable = PageRequest.of(0, 20);
+        Pageable pageable = PageRequest.of(0, 20);
 
-        // When
-    	Page<ContentDocument> result = contentIndexingService.search("   ", null, null, null, null, pageable);
-    	
-        // Then
+        Page<ContentDocument> result = contentIndexingService.search("   ", null, null, null, null, pageable);
+        
         assertThat(result).isEmpty();
         verifyNoInteractions(elasticsearchOperations);
     }

@@ -164,7 +164,10 @@ public class UserContentIndexingServiceImpl implements UserContentIndexingServic
                 .tags(tagNames)
                 .contentStatus(uc.getContentStatus().name())
                 .accessLevel(uc.getAccessLevel().name())
-                .thumbnailUrl(uc.getParentContent().getThumbnailUrl())  // UserContent에 thumbnailUrl 없음
+                .uploaderId(uc.getUploaderId())
+                .thumbnailUrl(uc.getThumbnailUrl() != null
+                        ? uc.getThumbnailUrl()
+                        : uc.getParentContent().getThumbnailUrl())
                 .totalViewCount(uc.getTotalViewCount())
                 .bookmarkCount(uc.getBookmarkCount())
                 .createdAt(uc.getCreatedAt())
