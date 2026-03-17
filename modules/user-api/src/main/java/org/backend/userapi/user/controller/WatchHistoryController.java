@@ -44,13 +44,10 @@ public class WatchHistoryController {
 
     @GetMapping("/user-content")
     public ApiResponse<UserWatchHistoryListResponse> getMyUserContentWatchHistory(
-            @RequestParam(name = "cursor", required = false) Long cursor,
-            @RequestParam(name = "size", defaultValue = "20") int size,
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         Long userId = jwtPrincipal.getUserId();
-        PageRequest pageRequest = PageRequest.of(0, size);
-        UserWatchHistoryListResponse response = watchHistoryService.getUserWatchHistories(userId, cursor, pageRequest);
+        UserWatchHistoryListResponse response = watchHistoryService.getUserWatchHistories(userId);
         return ApiResponse.success(response);
     }
 

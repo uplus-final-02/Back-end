@@ -1,7 +1,6 @@
 package org.backend.userapi.user.dto.response;
 
 import java.util.List;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,6 +10,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserWatchHistoryListResponse {
-  private List<UserWatchHistoryGroupResponse> watchHistories;
+public class UserWatchHistoryGroupResponse {
+    private Long parentContentId;
+    private String parentTitle;
+    private String parentThumbnailUrl;
+    private List<UserWatchHistoryResponse> histories;
 }

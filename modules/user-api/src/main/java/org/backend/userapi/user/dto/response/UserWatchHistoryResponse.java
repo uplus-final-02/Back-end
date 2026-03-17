@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class UserWatchHistoryResponse {
   private Long historyId;
   private Long userContentId;
+  private Long parentContentId;
   private String title;
   private String description;
   private String thumbnailUrl;
