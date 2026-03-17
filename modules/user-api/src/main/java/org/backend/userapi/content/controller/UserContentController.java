@@ -118,7 +118,7 @@ public class UserContentController {
         VideoPlayDto result = userContentService.getPlayInfo(userContentId, jwtPrincipal);
 
         // URL에 "cloudfront.net"이 있을 때만 쿠키 생성
-        if (result.getUrl() != null && result.getUrl().contains("cloudfront.net") && result.getUrl().contains("/hls/")) {
+        if (result.getUrl() != null && result.getUrl().contains("cloudfront.net") && result.getUrl().contains("/hls-user/")) {
             try {
                 // ⚠️ 주의: 유저 콘텐츠의 S3/CloudFront URL 경로 구조에 맞게 수정 필요!
                 // 예: https://domain/hls-user/123/master.m3u8 일 경우 parsing 로직
