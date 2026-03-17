@@ -106,4 +106,12 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
             ORDER BY uc.createdAt DESC
             """)
         List<UserContent> findAllActiveContents(Pageable pageable);
+    
+ // 특정 유저의 영상 목록 Fallback (N+1 방지)
+    @Query("SELECT uc FROM UserContent uc JOIN FETCH uc.parentContent pc WHERE uc.uploaderId = :uploaderId AND uc.contentStatus = 'ACTIVE' ORDER BY uc.createdAt DESC")
+    List<UserContent> findActiveByUploaderId(@Param("uploaderId") Long uploaderId, Pageable pageable);
+
+    // 키워드 검색 Fallback (N+1 방지)
+    @Query("SELECT uc FROM UserContent uc JOIN FETCH uc.parentContent pc WHERE uc.contentStatus = 'ACTIVE' AND uc.title LIKE %:keyword% ORDER BY uc.createdAt DESC")
+    List<UserContent> findActiveByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }

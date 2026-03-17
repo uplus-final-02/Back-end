@@ -41,15 +41,18 @@ public class UserContentSearchService {
 
     /**
      * 크리에이터 페이지: 특정 유저가 올린 영상 목록.
-     * ES 우선 조회, ES 다운 시 빈 결과.
+     * ES 우선 조회, ES 다운 시 DB Fallback.
      */
     public List<UserRecommendedContentResponse> searchByUploaderId(
             Long uploaderId, Pageable pageable) {
         try {
             return searchByUploaderFromEs(uploaderId, pageable);
         } catch (DataAccessException e) {
-            log.warn("[크리에이터 페이지 ES DOWN] uploaderId={} → 빈 결과", uploaderId);
-            return List.of();
+            log.warn("[크리에이터 페이지 ES DOWN] uploaderId={} → DB Fallback", uploaderId);
+            // 🌟 수정: 빈 결과 대신 DB에서 조회 (Fallback)
+            return userContentRepository.findActiveByUploaderId(uploaderId, pageable).stream()
+                    .map(this::mapToResponse)
+                    .toList();
         }
     }
 
@@ -60,7 +63,7 @@ public class UserContentSearchService {
 
         NativeQuery query = NativeQuery.builder()
                 .withQuery(q -> q.bool(b -> {
-                    // 🌟 동적 쿼리: parentContentId가 있을 때만 필터 추가
+                    // 동적 쿼리: parentContentId가 있을 때만 필터 추가
                     if (parentContentId != null) {
                         b.filter(f -> f.term(t -> t
                                 .field("parentContentId").value(parentContentId)));
@@ -116,30 +119,16 @@ public class UserContentSearchService {
 
         List<UserContent> contents;
         
-        // 🌟 DB도 동적 분기 처리
         if (parentContentId != null) {
             // 영화 상세 탭용 (특정 영화 관련 영상만)
             contents = userContentRepository.findActiveByParentContentId(parentContentId, pageable);
         } else {
-            // 메인 피드용 (전체 유저 영상) 👈 여기서 방금 만든 쿼리를 호출!
+            // 메인 피드용 (전체 유저 영상)
             contents = userContentRepository.findAllActiveContents(pageable);
         }
 
         return contents.stream()
-                .map(uc -> new UserRecommendedContentResponse(
-                        uc.getId(),
-                        uc.getParentContent().getId(),
-                        uc.getTitle(),
-                        uc.getThumbnailUrl() != null
-                                ? uc.getThumbnailUrl()
-                                : uc.getParentContent().getThumbnailUrl(),
-                        uc.getAccessLevel().name(),
-                        uc.getTotalViewCount(),
-                        uc.getBookmarkCount(),
-                        uc.getParentContent().getContentTags().stream()
-                                .map(ct -> ct.getTag().getName())
-                                .toList()
-                ))
+                .map(this::mapToResponse) // 🌟 수정: 매핑 로직 공통화
                 .toList();
     }
     
@@ -178,8 +167,29 @@ public class UserContentSearchService {
                     .toList();
 
         } catch (DataAccessException e) {
-            log.warn("[크리에이터 검색 ES DOWN] keyword={} → 빈 결과", keyword);
-            return List.of();
+            log.warn("[크리에이터 검색 ES DOWN] keyword={} → DB Fallback", keyword);
+            // 🌟 수정: 빈 결과 대신 DB에서 조회 (Fallback)
+            return userContentRepository.findActiveByKeyword(keyword, pageable).stream()
+                    .map(this::mapToResponse)
+                    .toList();
         }
+    }
+
+    // 🌟 추가: UserContent -> UserRecommendedContentResponse 변환 공통 헬퍼 메서드
+    private UserRecommendedContentResponse mapToResponse(UserContent uc) {
+        return new UserRecommendedContentResponse(
+                uc.getId(),
+                uc.getParentContent().getId(),
+                uc.getTitle(),
+                uc.getThumbnailUrl() != null 
+                        ? uc.getThumbnailUrl() 
+                        : uc.getParentContent().getThumbnailUrl(),
+                uc.getAccessLevel().name(),
+                uc.getTotalViewCount(),
+                uc.getBookmarkCount(),
+                uc.getParentContent().getContentTags().stream()
+                        .map(ct -> ct.getTag().getName())
+                        .toList()
+        );
     }
 }
