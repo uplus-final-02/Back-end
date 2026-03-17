@@ -2,6 +2,7 @@ package org.backend.userapi.recommendation.service;
 
 import content.entity.UserContent;
 import content.repository.UserContentRepository;
+import content.repository.UserWatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.recommendation.dto.UserFeedResponse;
@@ -34,8 +35,8 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>ES 인덱스: {@code user_contents_v1} (관리자: {@code contents_v1})</li>
  *   <li>ACTIVE 필터 필드: {@code contentStatus} (관리자: {@code status})</li>
- *   <li>시청 이력 패널티: 미적용 (UserContent WatchHistory 미구현)</li>
- *   <li>DB Fallback: {@link UserContentRepository}</li>
+ *   <li>시청 이력 패널티: 단순 감점 적용 ({@code UserWatchHistory} — status 미분류)</li>
+ *   <li>DB Fallback: {@link UserContentRepository} (2-step ID → FETCH JOIN)</li>
  * </ul>
  *
  * <pre>
@@ -60,6 +61,7 @@ public class UserRecommendationService {
     private final ElasticsearchOperations elasticsearchOperations;
     private final UserContentRepository userContentRepository;
     private final UserContentSearchRepository userContentSearchRepository;
+    private final UserWatchHistoryRepository userWatchHistoryRepository;
 
     // ── Stage 1 후보 크기 ─────────────────────────────────────────
     private static final int MIN_CANDIDATE_SIZE = 30;
@@ -83,6 +85,12 @@ public class UserRecommendationService {
 
     // ── 0-벡터 방어 ──────────────────────────────────────────────
     private static final float ZERO_VECTOR_EPS = 1e-6f;
+
+    // ── 시청 이력 ─────────────────────────────────────────────────
+    /** 시청 패널티: UserWatchHistory는 status 미분류 → 단순 감점 */
+    private static final double PENALTY_WATCHED = -0.30;
+    /** 최근 N개월 시청 이력만 패널티 적용 */
+    private static final int WATCH_MONTHS = 3;
 
     // ── 내부 집계용 임시 레코드 ───────────────────────────────────
     private record RawCandidate(
@@ -139,10 +147,15 @@ public class UserRecommendationService {
                 return new UserRecommendationResponse(List.of(), false);
             }
 
-            // 6. Stage 2: 2-pass 내부 랭킹
-            List<UserRecommendedContentResponse> ranked = rank(candidates);
+            // 6. 최근 시청 이력 조회 (패널티용)
+            LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Set<Long> watchedIds = new HashSet<>(
+                    userWatchHistoryRepository.findRecentWatchedContentIds(userId, since));
 
-            // 7. 2-tier 응답
+            // 7. Stage 2: 2-pass 내부 랭킹
+            List<UserRecommendedContentResponse> ranked = rank(candidates, watchedIds);
+
+            // 8. 2-tier 응답
             if (extended) {
                 log.info("[유저콘텐츠 추천] userId={} extended → {}개 반환", userId, ranked.size());
                 return new UserRecommendationResponse(ranked, false);
@@ -202,8 +215,13 @@ public class UserRecommendationService {
                 return new UserFeedResponse(List.of(), null, false);
             }
 
+            // 최근 시청 이력 조회 (패널티용)
+            LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Set<Long> watchedIds = new HashSet<>(
+                    userWatchHistoryRepository.findRecentWatchedContentIds(userId, since));
+
             // 상위 size개 랭킹
-            List<UserRecommendedContentResponse> items = rankTopN(candidates, size);
+            List<UserRecommendedContentResponse> items = rankTopN(candidates, size, watchedIds);
 
             Long nextSeedId = items.isEmpty() ? null : items.get(items.size() - 1).userContentId();
             // 반환한 batch가 요청 size를 꽉 채웠으면 다음 페이지가 있다고 판단
@@ -215,8 +233,8 @@ public class UserRecommendationService {
             return new UserFeedResponse(items, nextSeedId, hasMore);
 
         } catch (DataAccessException e) {
-            log.warn("[유저콘텐츠 피드 ES DOWN] userId={}: {}", userId, e.getMessage());
-            return new UserFeedResponse(List.of(), null, false);
+            log.warn("[유저콘텐츠 피드 ES DOWN] userId={} → DB 인기순 Fallback: {}", userId, e.getMessage());
+            return fallbackFeedFromDb(userId, size);
         }
     }
 
@@ -291,7 +309,8 @@ public class UserRecommendationService {
      * 후보에서 상위 N개 랭킹 (인기도 + 신선도).
      */
     private List<UserRecommendedContentResponse> rankTopN(
-            List<SearchHit<UserContentDocument>> candidates, int size) {
+            List<SearchHit<UserContentDocument>> candidates, int size,
+            Set<Long> watchedIds) {
 
         List<RawCandidate> rawList = candidates.stream()
                 .map(this::toRawCandidate)
@@ -305,7 +324,7 @@ public class UserRecommendationService {
         final double maxPop = maxPopularity;
         return rawList.stream()
                 .sorted(Comparator.comparingDouble(
-                        (RawCandidate c) -> computeFinalScore(c, maxPop)
+                        (RawCandidate c) -> computeFinalScore(c, maxPop, watchedIds)
                 ).reversed())
                 .limit(size)
                 .map(c -> UserRecommendedContentResponse.from(c.doc()))
@@ -358,7 +377,8 @@ public class UserRecommendationService {
     // =========================================================
 
     private List<UserRecommendedContentResponse> rank(
-            List<SearchHit<UserContentDocument>> candidates) {
+            List<SearchHit<UserContentDocument>> candidates,
+            Set<Long> watchedIds) {
 
         // Pass 1: raw 후보 + max 인기도 추출
         List<RawCandidate> rawList = candidates.stream()
@@ -375,18 +395,27 @@ public class UserRecommendationService {
         // Pass 2: 최종 점수 계산 → 정렬 → RESULT_SIZE 슬라이스
         return rawList.stream()
                 .sorted(Comparator.comparingDouble(
-                        (RawCandidate c) -> computeFinalScore(c, maxPop)
+                        (RawCandidate c) -> computeFinalScore(c, maxPop, watchedIds)
                 ).reversed())
                 .limit(RESULT_SIZE)
                 .map(c -> UserRecommendedContentResponse.from(c.doc()))
                 .toList();
     }
 
-    private double computeFinalScore(RawCandidate c, double maxPopularity) {
+    /**
+     * 최종 점수 계산.
+     * UserWatchHistory는 status 미분류이므로 시청 여부만으로 단순 감점(-0.30) 적용.
+     */
+    private double computeFinalScore(RawCandidate c, double maxPopularity, Set<Long> watchedIds) {
         double popularityScore = c.popularityRaw() / maxPopularity;
-        return W_SIMILARITY * c.similarity()
-             + W_POPULARITY * popularityScore
-             + W_FRESHNESS  * c.freshnessScore();
+        double score = W_SIMILARITY * c.similarity()
+                     + W_POPULARITY * popularityScore
+                     + W_FRESHNESS  * c.freshnessScore();
+
+        if (watchedIds.contains(c.doc().getUserContentId())) {
+            score += PENALTY_WATCHED;
+        }
+        return score;
     }
 
     private RawCandidate toRawCandidate(SearchHit<UserContentDocument> hit) {
@@ -419,7 +448,11 @@ public class UserRecommendationService {
             return new UserRecommendationResponse(List.of(), false);
         }
 
-        List<UserRecommendedContentResponse> ranked = rankFallback(candidates);
+        LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+        Set<Long> watchedIds = new HashSet<>(
+                userWatchHistoryRepository.findRecentWatchedContentIds(userId, since));
+
+        List<UserRecommendedContentResponse> ranked = rankFallback(candidates, watchedIds);
 
         if (extended) {
             return new UserRecommendationResponse(ranked, false);
@@ -446,7 +479,8 @@ public class UserRecommendationService {
     }
 
     private List<UserRecommendedContentResponse> rankFallback(
-            List<SearchHit<UserContentDocument>> candidates) {
+            List<SearchHit<UserContentDocument>> candidates,
+            Set<Long> watchedIds) {
 
         List<RawCandidate> rawList = candidates.stream()
                 .map(this::toRawCandidate)
@@ -461,8 +495,12 @@ public class UserRecommendationService {
         return rawList.stream()
                 .sorted(Comparator.comparingDouble((RawCandidate c) -> {
                     double popScore = c.popularityRaw() / maxPop;
-                    return W_POPULARITY_FALLBACK * popScore
-                         + W_FRESHNESS_FALLBACK  * c.freshnessScore();
+                    double score = W_POPULARITY_FALLBACK * popScore
+                                 + W_FRESHNESS_FALLBACK  * c.freshnessScore();
+                    if (watchedIds.contains(c.doc().getUserContentId())) {
+                        score += PENALTY_WATCHED;
+                    }
+                    return score;
                 }).reversed())
                 .limit(RESULT_SIZE)
                 .map(c -> UserRecommendedContentResponse.from(c.doc()))
@@ -508,18 +546,36 @@ public class UserRecommendationService {
 
     private UserRecommendationResponse recommendFromDb(Long userId, boolean extended) {
         try {
-            List<UserContent> contents = userContentRepository.findTopActiveByPopularity(
-                    PageRequest.of(0, RESULT_SIZE)
-            );
+            // Step 1: 인기순 ID 조회 (컬렉션 JOIN 없이 Pageable 정확 적용)
+            // hasMore 판단을 위해 RESULT_SIZE + 1 개 요청 → JOIN 누락과 무관하게 "더 있는지"를 ID 단계에서 확정
+            List<Long> rawIds = userContentRepository.findTopActiveIdsByPopularity(
+                    PageRequest.of(0, RESULT_SIZE + 1));
+            boolean hasMore = !extended && rawIds.size() > INITIAL_SIZE;
+            List<Long> ids = rawIds.stream().limit(RESULT_SIZE).toList();
+
+            // Step 2: FETCH JOIN으로 N+1 없이 일괄 조회
+            List<UserContent> contents = userContentRepository.findAllWithParentTagsByIds(ids);
+
+            // Step 1 인기순 순서 복원 (findAllWithParentTagsByIds 는 id ASC 정렬이므로)
+            Map<Long, Integer> popularityOrder = new HashMap<>();
+            for (int i = 0; i < ids.size(); i++) popularityOrder.put(ids.get(i), i);
+
+            // 시청 패널티용 watchedIds 조회
+            LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Set<Long> watchedIds = new HashSet<>(
+                    userWatchHistoryRepository.findRecentWatchedContentIds(userId, since));
 
             int limit = extended ? RESULT_SIZE : INITIAL_SIZE;
             List<UserRecommendedContentResponse> items = contents.stream()
+                    // 미시청 먼저(인기순), 시청 이력 있는 것 뒤로(인기순)
+                    .sorted(Comparator
+                            .comparingInt((UserContent uc) -> watchedIds.contains(uc.getId()) ? 1 : 0)
+                            .thenComparingInt(uc -> popularityOrder.getOrDefault(uc.getId(), Integer.MAX_VALUE)))
                     .limit(limit)
                     .map(this::toResponseFromUserContent)
                     .toList();
 
-            boolean hasMore = !extended && contents.size() > INITIAL_SIZE;
-            log.info("[유저콘텐츠 추천-DB Fallback] userId={} → {}개 반환", userId, items.size());
+            log.info("[유저콘텐츠 추천-DB Fallback] userId={} → {}개 반환 (watched={}개 뒤로)", userId, items.size(), watchedIds.size());
             return new UserRecommendationResponse(items, hasMore);
 
         } catch (Exception dbEx) {
@@ -528,15 +584,61 @@ public class UserRecommendationService {
         }
     }
 
+    /**
+     * feed() ES 장애 시 DB 인기순 Fallback.
+     * watchedIds 조회 후 시청한 콘텐츠를 뒤로 밀어 패널티를 동일하게 적용.
+     */
+    private UserFeedResponse fallbackFeedFromDb(Long userId, int size) {
+        try {
+            // hasMore 판단을 위해 size + 1 개 요청 → JOIN 누락과 무관하게 "더 있는지"를 ID 단계에서 확정
+            List<Long> rawIds = userContentRepository.findTopActiveIdsByPopularity(
+                    PageRequest.of(0, size + 1));
+            boolean hasMore = rawIds.size() > size;
+            List<Long> ids = rawIds.stream().limit(size).toList();
+
+            List<UserContent> contents = userContentRepository.findAllWithParentTagsByIds(ids);
+
+            // Step 1 인기순 순서 복원
+            Map<Long, Integer> popularityOrder = new HashMap<>();
+            for (int i = 0; i < ids.size(); i++) popularityOrder.put(ids.get(i), i);
+
+            // 시청 패널티: 미시청(인기순) → 시청(인기순) 순으로 정렬
+            LocalDateTime since = LocalDateTime.now().minusMonths(WATCH_MONTHS);
+            Set<Long> watchedIds = new HashSet<>(
+                    userWatchHistoryRepository.findRecentWatchedContentIds(userId, since));
+
+            List<UserRecommendedContentResponse> items = contents.stream()
+                    .sorted(Comparator
+                            .comparingInt((UserContent uc) -> watchedIds.contains(uc.getId()) ? 1 : 0)
+                            .thenComparingInt(uc -> popularityOrder.getOrDefault(uc.getId(), Integer.MAX_VALUE)))
+                    .map(this::toResponseFromUserContent)
+                    .toList();
+
+            Long nextSeedId = items.isEmpty() ? null : items.get(items.size() - 1).userContentId();
+            log.info("[유저콘텐츠 피드-DB Fallback] userId={} {}개 반환 (watched={}개 뒤로)", userId, items.size(), watchedIds.size());
+            return new UserFeedResponse(items, nextSeedId, hasMore);
+
+        } catch (Exception e) {
+            log.error("[유저콘텐츠 피드 ES+DB DOWN] DB Fallback도 실패 → 빈 결과: {}", e.getMessage());
+            return new UserFeedResponse(List.of(), null, false);
+        }
+    }
+
     private UserRecommendedContentResponse toResponseFromUserContent(UserContent uc) {
         List<String> tagNames = uc.getParentContent().getContentTags().stream()
                 .map(ct -> ct.getTag().getName())
                 .collect(Collectors.toList());
+
+        // 유저가 직접 올린 썸네일 우선, 없으면 부모 콘텐츠 썸네일로 폴백
+        String thumbnailUrl = (uc.getThumbnailUrl() != null && !uc.getThumbnailUrl().isBlank())
+                ? uc.getThumbnailUrl()
+                : uc.getParentContent().getThumbnailUrl();
+
         return new UserRecommendedContentResponse(
                 uc.getId(),
                 uc.getParentContent().getId(),
                 uc.getTitle(),
-                uc.getParentContent().getThumbnailUrl(),
+                thumbnailUrl,
                 uc.getAccessLevel().name(),
                 uc.getTotalViewCount(),
                 uc.getBookmarkCount(),

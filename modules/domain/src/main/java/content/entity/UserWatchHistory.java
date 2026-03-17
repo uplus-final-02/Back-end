@@ -68,4 +68,8 @@ public class UserWatchHistory extends BaseTimeEntity {
         this.lastWatchedAt = lastWatchedAt;
     }
 
+    public void updateLastWatchedAt(LocalDateTime lastWatchedAt) {
+        this.lastWatchedAt = lastWatchedAt;
+    }
+
 }
