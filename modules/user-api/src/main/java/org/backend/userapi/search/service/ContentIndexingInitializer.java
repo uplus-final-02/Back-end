@@ -23,6 +23,6 @@ public class ContentIndexingInitializer implements ApplicationRunner {
             return;
         }
         contentIndexingService.indexAllContents();
-        log.info("Initial content indexing completed. indexedCount={}", contentIndexingService.countIndexedContents());
+        log.info("Initial content indexing triggered (running in background).");
     }
 }
