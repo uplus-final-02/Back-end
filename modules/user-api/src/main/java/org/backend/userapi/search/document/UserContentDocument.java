@@ -60,9 +60,6 @@ public class UserContentDocument {
 
     @Field(type = FieldType.Keyword)
     private String accessLevel;
-    
-    @Field(type = FieldType.Long)
-    private Long uploaderId;
 
     @Field(type = FieldType.Keyword, index = false)
     private String thumbnailUrl;
