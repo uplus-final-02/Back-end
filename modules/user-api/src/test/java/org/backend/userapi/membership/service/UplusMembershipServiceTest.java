@@ -7,12 +7,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import user.entity.User;
 import user.entity.UserUplusVerified;
+import user.repository.SubscriptionsRepository;
 import user.repository.TelecomMemberRepository;
 import user.repository.UserRepository;
 import user.repository.UserUplusVerifiedRepository;
@@ -29,24 +31,17 @@ class UplusMembershipServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private UserUplusVerifiedRepository userUplusVerifiedRepository;
     @Mock private TelecomMemberRepository telecomMemberRepository;
+    @Mock private SubscriptionsRepository subscriptionsRepository;
 
+    @InjectMocks
     private UplusMembershipService service;
-
-    @BeforeEach
-    void setUp() {
-        service = new UplusMembershipService(
-                userRepository,
-                userUplusVerifiedRepository,
-                telecomMemberRepository
-        );
-    }
 
     @Test
     @DisplayName("최초 인증 성공 - createVerified + save 호출")
     void verify_firstTime_success() {
         // given
         Long userId = 1L;
-        String phoneNumber = "01012345678";
+        String phoneNumber = "01011112222";
 
         UplusVerificationRequest request = mock(UplusVerificationRequest.class);
         when(request.getPhoneNumber()).thenReturn(phoneNumber);
@@ -57,8 +52,6 @@ class UplusMembershipServiceTest {
         when(telecomMemberRepository.existsByPhoneNumberAndStatus(phoneNumber, "ACTIVE"))
                 .thenReturn(true);
 
-        when(userUplusVerifiedRepository.findById(userId))
-                .thenReturn(Optional.empty());
 
         UserUplusVerified created = mock(UserUplusVerified.class);
         LocalDateTime verifiedAt = LocalDateTime.of(2026, 2, 26, 3, 30, 0);
