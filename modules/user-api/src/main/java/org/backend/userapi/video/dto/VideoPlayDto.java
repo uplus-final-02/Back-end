@@ -1,6 +1,7 @@
 package org.backend.userapi.video.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import common.entity.Tag;
 import common.enums.ContentStatus;
 import common.enums.VideoStatus;
@@ -38,7 +39,8 @@ public class VideoPlayDto {
     private String url;
 
     // [4] 이어보기 상태 (개인화 데이터)
-    private boolean IsBookmarked;
+    @JsonProperty("isBookmarked")
+    private boolean isBookmarked;
     private PlaybackState playbackState;
 
     // [5] 시리즈 연동 정보
