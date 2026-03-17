@@ -2,7 +2,7 @@ name: Deploy Transcoder Worker
 
 on:
   push:
-    branches: [ develop, 'deploy/#263-worker' ]
+    branches: [ develop ]
     paths:
       - 'modules/transcoder-worker/**'
       - 'modules/core/**'
