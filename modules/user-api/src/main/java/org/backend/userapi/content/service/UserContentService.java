@@ -236,7 +236,7 @@ public class UserContentService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public VideoPlayDto getPlayInfo(Long userContentId, JwtPrincipal jwtPrincipal) {
 
         // 1. 유저 콘텐츠 기본 정보 조회
@@ -249,6 +249,15 @@ public class UserContentService {
         // (단, 비공개 처리되거나 삭제된 상태인지 검증하는 로직 정도만 추가)
         if (userContent.getContentStatus() == ContentStatus.DELETED) {
             throw new IllegalStateException("삭제된 콘텐츠입니다.");
+        }
+        if (userContent.getContentStatus() != ContentStatus.ACTIVE) {
+            throw new IllegalStateException("서비스 불가능한 콘텐츠입니다.");
+        }
+        if (userVideoFile.getVideoStatus() != VideoStatus.PUBLIC) {
+            throw new IllegalStateException("비공개 비디오입니다.");
+        }
+        if (userVideoFile.getTranscodeStatus() != TranscodeStatus.DONE) {
+            throw new IllegalStateException("아직 처리 중인 비디오입니다.");
         }
 
         Long userId = jwtPrincipal.getUserId();
@@ -276,6 +285,20 @@ public class UserContentService {
                                                                              .startPositionSec(0L)
                                                                              .lastUpdated(null)
                                                                              .build();
+
+        // 유저콘텐츠 시청기록 저장
+        Optional<UserWatchHistory> history = userWatchHistoryRepository.findByUserIdAndContentId(userId, userContentId);
+        if (history.isPresent()) {
+            history.get().updateLastWatchedAt(LocalDateTime.now());
+        } else {
+            UserWatchHistory newHistory = UserWatchHistory.builder()
+                                                          .userId(userId)
+                                                          .userContent(userContent)
+                                                          .lastWatchedAt(LocalDateTime.now())
+                                                          .build();
+
+            userWatchHistoryRepository.save(newHistory);
+        }
 
         // 4. 업로더 정보 조회
         String uploaderNickname = userRepository.findById(userContent.getUploaderId())

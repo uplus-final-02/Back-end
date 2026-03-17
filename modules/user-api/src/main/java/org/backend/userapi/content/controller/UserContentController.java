@@ -80,17 +80,17 @@ public class UserContentController {
      *
      * POST /api/user/contents/{userContentId}/watch
      */
-    @PostMapping("/{userContentId}/watch")
-    public ApiResponse<Void> recordWatch(
-            @AuthenticationPrincipal JwtPrincipal principal,
-            @PathVariable Long userContentId
-    ) {
-        if (principal == null || principal.getUserId() == null) {
-            throw new IllegalArgumentException("LOGIN_REQUIRED");
-        }
-        userWatchHistoryService.upsertWatchHistory(principal.getUserId(), userContentId);
-        return ApiResponse.ok("시청 기록 저장 성공", null);
-    }
+//    @PostMapping("/{userContentId}/watch")
+//    public ApiResponse<Void> recordWatch(
+//            @AuthenticationPrincipal JwtPrincipal principal,
+//            @PathVariable Long userContentId
+//    ) {
+//        if (principal == null || principal.getUserId() == null) {
+//            throw new IllegalArgumentException("LOGIN_REQUIRED");
+//        }
+//        userWatchHistoryService.upsertWatchHistory(principal.getUserId(), userContentId);
+//        return ApiResponse.ok("시청 기록 저장 성공", null);
+//    }
 
     @PostMapping("/{userContentId}/views")
     public ApiResponse<Void> increaseUserContentView(
@@ -108,6 +108,7 @@ public class UserContentController {
 
     /**
      * 🌟 유저 콘텐츠 재생 API (HLS URL 및 CloudFront 서명 쿠키 발급)
+     *  시청이력 저장 로직도 포함됨
      */
     @GetMapping("/{userContentId}/play")
     public ApiResponse<VideoPlayDto> playUserContent(
