@@ -113,12 +113,14 @@ public class VideoService {
 
         // 3. 사용자 이어보기(History) 정보 연동 (없을 경우 insert)
         Optional<WatchHistory> history = watchHistoryRepository.findByUserIdAndVideoId(userId, videoId);
+        long startPositionSec = 0;
 
         if (history.isPresent()) {
-            VideoPlayDto.PlaybackState playbackState = VideoPlayDto.PlaybackState.builder()
-                    .startPositionSec(history.map(WatchHistory::getLastPositionSec).orElse(0).longValue())
-                    .lastUpdated(history.map(h -> h.getUpdatedAt().toString()).orElse(null))
-                    .build();
+            if (history.get().getStatus() != HistoryStatus.COMPLETED) {
+                startPositionSec = history.get().getLastPositionSec();
+            } else {
+                startPositionSec = 0; // COMPLETED 일 경우 처음부터 재생
+            }
         } else { // 시청 이력이 없을 경우 insert
             WatchHistory newHistory = WatchHistory.builder()
                     .userId(userId)
@@ -130,7 +132,7 @@ public class VideoService {
         }
 
         VideoPlayDto.PlaybackState playbackState = VideoPlayDto.PlaybackState.builder()
-                .startPositionSec(history.map(WatchHistory::getLastPositionSec).orElse(0).longValue())
+                .startPositionSec(startPositionSec)
                 .lastUpdated(history.map(h -> h.getUpdatedAt().toString()).orElse(null))
                 .build();
 
