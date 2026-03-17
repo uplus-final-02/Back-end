@@ -68,6 +68,7 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
  // 크리에이터 탭: 특정 관리자 콘텐츠에 매핑된 ACTIVE 유저 콘텐츠 조회
     @Query("""
         SELECT uc FROM UserContent uc
+        JOIN FETCH uc.parentContent pc
         WHERE uc.parentContent.id = :parentContentId
           AND uc.contentStatus = 'ACTIVE'
         ORDER BY uc.createdAt DESC
@@ -88,6 +89,11 @@ public interface UserContentRepository extends JpaRepository<UserContent, Long> 
             @Param("lastId") Long lastId,
             Pageable pageable);
     
-    @Query("SELECT u FROM UserContent u WHERE u.contentStatus = 'ACTIVE' ORDER BY u.createdAt DESC")
-    List<UserContent> findAllActiveContents(Pageable pageable);
+    @Query("""
+            SELECT uc FROM UserContent uc
+            JOIN FETCH uc.parentContent pc
+            WHERE uc.contentStatus = 'ACTIVE' 
+            ORDER BY uc.createdAt DESC
+            """)
+        List<UserContent> findAllActiveContents(Pageable pageable);
 }
