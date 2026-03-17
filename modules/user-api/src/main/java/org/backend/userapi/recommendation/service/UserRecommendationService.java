@@ -547,8 +547,12 @@ public class UserRecommendationService {
     private UserRecommendationResponse recommendFromDb(Long userId, boolean extended) {
         try {
             // Step 1: 인기순 ID 조회 (컬렉션 JOIN 없이 Pageable 정확 적용)
-            List<Long> ids = userContentRepository.findTopActiveIdsByPopularity(
-                    PageRequest.of(0, RESULT_SIZE));
+            // hasMore 판단을 위해 RESULT_SIZE + 1 개 요청 → JOIN 누락과 무관하게 "더 있는지"를 ID 단계에서 확정
+            List<Long> rawIds = userContentRepository.findTopActiveIdsByPopularity(
+                    PageRequest.of(0, RESULT_SIZE + 1));
+            boolean hasMore = !extended && rawIds.size() > INITIAL_SIZE;
+            List<Long> ids = rawIds.stream().limit(RESULT_SIZE).toList();
+
             // Step 2: FETCH JOIN으로 N+1 없이 일괄 조회
             List<UserContent> contents = userContentRepository.findAllWithParentTagsByIds(ids);
 
@@ -571,7 +575,6 @@ public class UserRecommendationService {
                     .map(this::toResponseFromUserContent)
                     .toList();
 
-            boolean hasMore = !extended && contents.size() > INITIAL_SIZE;
             log.info("[유저콘텐츠 추천-DB Fallback] userId={} → {}개 반환 (watched={}개 뒤로)", userId, items.size(), watchedIds.size());
             return new UserRecommendationResponse(items, hasMore);
 
@@ -587,8 +590,12 @@ public class UserRecommendationService {
      */
     private UserFeedResponse fallbackFeedFromDb(Long userId, int size) {
         try {
-            List<Long> ids = userContentRepository.findTopActiveIdsByPopularity(
-                    PageRequest.of(0, size));
+            // hasMore 판단을 위해 size + 1 개 요청 → JOIN 누락과 무관하게 "더 있는지"를 ID 단계에서 확정
+            List<Long> rawIds = userContentRepository.findTopActiveIdsByPopularity(
+                    PageRequest.of(0, size + 1));
+            boolean hasMore = rawIds.size() > size;
+            List<Long> ids = rawIds.stream().limit(size).toList();
+
             List<UserContent> contents = userContentRepository.findAllWithParentTagsByIds(ids);
 
             // Step 1 인기순 순서 복원
@@ -609,7 +616,7 @@ public class UserRecommendationService {
 
             Long nextSeedId = items.isEmpty() ? null : items.get(items.size() - 1).userContentId();
             log.info("[유저콘텐츠 피드-DB Fallback] userId={} {}개 반환 (watched={}개 뒤로)", userId, items.size(), watchedIds.size());
-            return new UserFeedResponse(items, nextSeedId, items.size() == size);
+            return new UserFeedResponse(items, nextSeedId, hasMore);
 
         } catch (Exception e) {
             log.error("[유저콘텐츠 피드 ES+DB DOWN] DB Fallback도 실패 → 빈 결과: {}", e.getMessage());
@@ -621,11 +628,17 @@ public class UserRecommendationService {
         List<String> tagNames = uc.getParentContent().getContentTags().stream()
                 .map(ct -> ct.getTag().getName())
                 .collect(Collectors.toList());
+
+        // 유저가 직접 올린 썸네일 우선, 없으면 부모 콘텐츠 썸네일로 폴백
+        String thumbnailUrl = (uc.getThumbnailUrl() != null && !uc.getThumbnailUrl().isBlank())
+                ? uc.getThumbnailUrl()
+                : uc.getParentContent().getThumbnailUrl();
+
         return new UserRecommendedContentResponse(
                 uc.getId(),
                 uc.getParentContent().getId(),
                 uc.getTitle(),
-                uc.getParentContent().getThumbnailUrl(),
+                thumbnailUrl,
                 uc.getAccessLevel().name(),
                 uc.getTotalViewCount(),
                 uc.getBookmarkCount(),
