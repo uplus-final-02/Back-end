@@ -18,4 +18,9 @@ public class CloudFrontHlsUrlProvider implements HlsUrlProvider {
         // S3(MinIO) 내의 객체 키 경로: hls/{videoFileId}/master.m3u8
         return "https://" + domainName + "/hls/" + videoFileId + "/master.m3u8";
     }
+
+    @Override
+    public String getHlsUserUrl(Long userVideoFileId) {
+        return "https://" + domainName + "/hls-user/" + userVideoFileId + "/master.m3u8";
+    }
 }

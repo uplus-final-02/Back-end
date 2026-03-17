@@ -64,4 +64,6 @@ public interface UserWatchHistoryRepository extends JpaRepository<UserWatchHisto
             @Param("since") LocalDateTime since
     );
 
+    @Query("SELECT uwh FROM UserWatchHistory uwh WHERE uwh.userId = :userId AND uwh.userContent.id = :contentId")
+    Optional<UserWatchHistory> findByUserIdAndContentId(@Param("userId") Long userId, @Param("contentId") Long contentId);
 }

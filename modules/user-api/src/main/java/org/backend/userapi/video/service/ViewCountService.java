@@ -1,6 +1,7 @@
 package org.backend.userapi.video.service;
 
 import content.repository.ContentRepository;
+import content.repository.UserContentRepository;
 import content.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,13 +18,16 @@ public class ViewCountService {
     private final StringRedisTemplate redisTemplate;
     private final VideoRepository videoRepository;
     private final ContentRepository contentRepository;
+    private final UserContentRepository userContentRepository;
 
     // 누적 조회수 키 (Flush 배치가 읽을 대상)
     private static final String CONTENT_VIEW_KEY_PREFIX = "content:view:";
     private static final String VIDEO_VIEW_KEY_PREFIX   = "video:view:";
+    private static final String USER_CONTENT_VIEW_KEY_PREFIX = "usercontent:view:";
 
     // 중복 방지 쿨타임 키
     private static final String VIEW_HISTORY_KEY_PREFIX = "view:history:";
+    private static final String USER_CONTENT_VIEW_HISTORY_KEY_PREFIX = "usercontent:history:"; // 🌟 추가됨
 
     /**
      * 영상 조회수 증가 처리.
@@ -97,6 +101,65 @@ public class ViewCountService {
         } catch (RedisConnectionFailureException e) {
             // 삭제 실패해도 TTL이 만료되면 자동 초기화 → 무시
             log.warn("[Redis DOWN] 쿨타임 초기화 실패 (TTL 자동 만료 예정): videoId={}, userId={}", videoId, userId);
+        }
+    }
+
+
+    /**
+     * 🌟 [신규] 유저 콘텐츠 조회수 증가 처리.
+     * videoId가 없으므로 userContentId를 기준으로 단일 처리.
+     */
+    public void incrementUserContentViewCount(Long userContentId, Long userId, Integer durationSec) {
+        // 기존 콘텐츠와 히스토리 키가 충돌하지 않도록 전용 Prefix 사용
+        String historyKey = USER_CONTENT_VIEW_HISTORY_KEY_PREFIX + userContentId + ":" + userId;
+        Duration dynamicTtl = Duration.ofSeconds(durationSec + 5);
+
+        boolean redisAvailable = true;
+        boolean isFirstView    = false;
+
+        try {
+            Boolean result = redisTemplate.opsForValue().setIfAbsent(historyKey, "1", dynamicTtl);
+            isFirstView = Boolean.TRUE.equals(result);
+        } catch (RedisConnectionFailureException e) {
+            log.warn("[Redis DOWN] 유저 콘텐츠 dedup 확인 불가 → DB Fallback 진입: userContentId={}", userContentId);
+            redisAvailable = false;
+            isFirstView    = true;
+        }
+
+        if (!isFirstView) {
+            log.trace("유저 콘텐츠 조회수 쿨타임 적용 중 (중복 방어): userContentId={}, userId={}", userContentId, userId);
+            return;
+        }
+
+        if (redisAvailable) {
+            try {
+                redisTemplate.opsForValue().increment(USER_CONTENT_VIEW_KEY_PREFIX + userContentId);
+                log.debug("유저 콘텐츠 조회수 증가 (Redis): userContentId={}, userId={}", userContentId, userId);
+            } catch (RedisConnectionFailureException e) {
+                log.warn("[Redis DOWN] 유저 콘텐츠 increment 실패 - 조회수 1회 누락 허용: userContentId={}", userContentId);
+            }
+            return;
+        }
+
+        try {
+            // DB Fallback 처리
+            userContentRepository.incrementViewCount(userContentId, 1L);
+            log.debug("유저 콘텐츠 조회수 증가 (DB Fallback): userContentId={}", userContentId);
+        } catch (Exception dbEx) {
+            log.error("[Fallback 실패] 유저 콘텐츠 DB 직접 조회수 반영 실패: userContentId={}", userContentId, dbEx);
+        }
+    }
+
+    /**
+     * 🌟 [신규] 유저 콘텐츠 시청 완료 시 쿨타임 초기화.
+     */
+    public void resetUserContentViewCoolTime(Long userContentId, Long userId) {
+        String historyKey = USER_CONTENT_VIEW_HISTORY_KEY_PREFIX + userContentId + ":" + userId;
+        try {
+            redisTemplate.delete(historyKey);
+            log.debug("유저 콘텐츠 조회수 중복 방지 쿨타임 초기화(COMPLETED): userContentId={}, userId={}", userContentId, userId);
+        } catch (RedisConnectionFailureException e) {
+            log.warn("[Redis DOWN] 유저 콘텐츠 쿨타임 초기화 실패: userContentId={}, userId={}", userContentId, userId);
         }
     }
 }
