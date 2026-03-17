@@ -2,7 +2,7 @@ name: Deploy Data Node (SSM)
 
 on:
   push:
-    branches: [ develop, 'feat/#218-cdn' ]
+    branches: [ develop, 'deploy/#263-worker' ]
     paths:
       - 'modules/domain/**'
       - 'docker-compose.data.yml'
@@ -42,6 +42,15 @@ jobs:
               'echo \"${{ secrets.ENV_FILE }}\" > .env',
           
               'sudo docker compose -f docker-compose.data.yml up -d --build',
+              
+              'sleep 20',
+              
+              'sudo docker exec -i kafka bash -lc \"/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic video.transcode.user.requested --partitions 3 --replication-factor 1\"',
+              'sudo docker exec -i kafka bash -lc \"/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --alter --topic video.transcode.user.requested --partitions 3\"',
+          
+              'sudo docker exec -i kafka bash -lc \"/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic video.transcode.admin.requested --partitions 1 --replication-factor 1\"',
+              'sudo docker exec -i kafka bash -lc \"/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --alter --topic video.transcode.admin.requested --partitions 1\"',
+          
               'sudo docker image prune -f',
           
               'rm project.tar.gz'
