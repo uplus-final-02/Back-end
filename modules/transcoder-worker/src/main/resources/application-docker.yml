@@ -12,19 +12,24 @@ spring:
 
   kafka:
     bootstrap-servers: kafka:9092
-    producer:                            # DLT 발행용 (DeadLetterPublishingRecoverer)
+    producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
-      group-id: transcoder-worker
+      group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID:transcoder-worker}
       auto-offset-reset: earliest
+      max-poll-records: 1
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        max.poll.interval.ms: 7200000
 
 app:
   kafka:
     topics:
-      video-transcode: video.transcode.requested
+      video-transcode: ${VIDEO_TRANSCODE_TOPIC:video.transcode.user.requested}
+  transcode:
+    max-concurrent-ffmpeg: ${TRANSCODE_MAX_CONCURRENT_FFMPEG:2}
 
   storage:
     s3:

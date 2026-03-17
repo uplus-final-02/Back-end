@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.dev.transcoder-worker
-    container_name: transcoder-worker
+    #container_name: transcoder-worker
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker

@@ -1,4 +1,4 @@
-package org.backend.admin.kafka.outbox;
+package org.backend.userapi.kafka.outbox;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,25 +13,35 @@ public class VideoTranscodeOutboxJdbcRepository {
     private final JdbcTemplate jdbcTemplate;
 
     private static final String INSERT_SQL =
-            "INSERT INTO video_transcode_outbox (event_id, target_type, target_id, topic, payload, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, NOW(3))";
+            "INSERT INTO video_transcode_outbox " +
+                    "(event_id, target_type, target_id, topic, payload, video_file_id, created_at) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, NOW(3))";
 
-    private static final String SELECT_SQL =
+    private static final String SELECT_BY_TOPIC_SQL =
             "SELECT id, event_id, target_type, target_id, topic, payload " +
                     "FROM video_transcode_outbox " +
+                    "WHERE topic = ? " +
                     "ORDER BY created_at ASC " +
                     "LIMIT ?";
 
     private static final String DELETE_SQL =
             "DELETE FROM video_transcode_outbox WHERE id = ?";
 
-    public void save(String eventId, String targetType, long targetId, String topic, String payload) {
-        jdbcTemplate.update(INSERT_SQL, eventId, targetType, targetId, topic, payload);
+    public void saveUser(String eventId, long userVideoFileId, String topic, String payload) {
+        jdbcTemplate.update(
+                INSERT_SQL,
+                eventId,
+                "USER",
+                userVideoFileId,
+                topic,
+                payload,
+                0L
+        );
     }
 
-    public List<OutboxRow> findOldest(int limit) {
+    public List<OutboxRow> findOldestByTopic(String topic, int limit) {
         return jdbcTemplate.query(
-                SELECT_SQL,
+                SELECT_BY_TOPIC_SQL,
                 (rs, rowNum) -> new OutboxRow(
                         rs.getLong("id"),
                         rs.getString("event_id"),
@@ -40,7 +50,7 @@ public class VideoTranscodeOutboxJdbcRepository {
                         rs.getString("topic"),
                         rs.getString("payload")
                 ),
-                limit
+                topic, limit
         );
     }
 

@@ -2,7 +2,7 @@ name: Deploy Data Node (SSM)
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, 'feat/#218-cdn' ]
     paths:
       - 'modules/domain/**'
       - 'docker-compose.data.yml'
