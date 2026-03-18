@@ -1,5 +1,7 @@
 package org.backend.admin.content.service;
 
+import common.enums.TranscodeStatus;
+import content.repository.VideoFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,12 +45,13 @@ public class AdminContentService {
 	private final ContentTagRepository contentTagRepository;
     private final VideoRepository videoRepository;
     private final ObjectStorageService objectStorageService;
-    
-    
+    private final VideoFileRepository videoFileRepository;
+
+
     // 콘텐츠 목록 조회
 	@Transactional(readOnly = true)
     public Page<AdminContentListResponse> getContents(Pageable pageable,String sort, ContentStatus status) {
-		
+
 		Sort sortOption = "OLDEST".equalsIgnoreCase(sort)
 	            ? Sort.by(Sort.Direction.ASC, "createdAt")
 	            : Sort.by(Sort.Direction.DESC, "createdAt");
@@ -58,14 +61,14 @@ public class AdminContentService {
 	            pageable.getPageSize(),
 	            sortOption
 	    );
-	    
+
 		Page<Content> page = (status == null)
 	            ? contentRepository.findAll(sortedPageable)
 	            : contentRepository.findByStatus(status, sortedPageable);
 
         List<AdminContentListResponse> content = page.getContent().stream()
                 .map(c -> new AdminContentListResponse(
-                        c.getId(),           
+                        c.getId(),
                         c.getTitle(),
                         c.getType(),
                         c.getUploaderId(),
@@ -75,23 +78,59 @@ public class AdminContentService {
 
         return new PageImpl<>(content, pageable, page.getTotalElements());
     }
-    
+
 	// 콘텐츠 메타데이터 업데이트
     @Transactional
     public AdminContentUpdateResponse updateMetadata(Long contentId, AdminContentUpdateRequest req) {
     	log.info("[MARKER] updateMetadata v=20260305-1432");
     	Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId));
-    	
+
     	content.updateMetadata(
                 req.title(),
                 req.description(),
                 req.thumbnailUrl(),
                 req.accessLevel(),
-                req.status()
+                null
         );
-    	
-    	List<Long> tagIds = req.tagIds();
+
+        if (req.status() != null) {
+            if (req.status() == ContentStatus.ACTIVE) {
+                content.requestPublish();
+
+                if (content.getType() == ContentType.SINGLE) {
+                    boolean anyDone = videoFileRepository
+                            .existsByVideo_Content_IdAndTranscodeStatus(contentId, TranscodeStatus.DONE);
+
+                    if (anyDone) content.activate();
+                    else content.hide();
+
+                } else {
+                    boolean anyPublicDone = videoRepository
+                            .existsByContent_IdAndStatusAndVideoFile_TranscodeStatus(
+                                    contentId,
+                                    common.enums.VideoStatus.PUBLIC,
+                                    TranscodeStatus.DONE
+                            );
+
+                    if (anyPublicDone) content.activate();
+                    else content.hide();
+                }
+
+            } else if (req.status() == ContentStatus.HIDDEN) {
+                content.cancelPublishRequest();
+                content.hide();
+
+                if (content.getType() == ContentType.SERIES) {
+                    List<Video> episodes = videoRepository.findAllByContent_Id(contentId);
+                    for (Video v : episodes) {
+                        v.updateStatus(common.enums.VideoStatus.PRIVATE);
+                    }
+                }
+            }
+        }
+
+        List<Long> tagIds = req.tagIds();
     	if (tagIds != null) {
             List<Long> uniqueTagIds = tagIds.stream().distinct().toList();
             if (uniqueTagIds.isEmpty()) {
@@ -109,7 +148,7 @@ public class AdminContentService {
             Set<Long> target = new java.util.HashSet<>(uniqueTagIds);
 
             // 기존 매핑 제거
-            current.removeIf(ct -> !target.contains(ct.getTag().getId())); 
+            current.removeIf(ct -> !target.contains(ct.getTag().getId()));
 
             // 기존에 없던 것만 add
             Map<Long, Tag> tagMap = tags.stream().collect(java.util.stream.Collectors.toMap(Tag::getId, t -> t));
@@ -119,7 +158,7 @@ public class AdminContentService {
                 }
             }
         }
-        
+
         AdminContentUpdateRequest.EpisodeUpdate ep = req.episode();
         if (ep != null) {
 
@@ -134,21 +173,25 @@ public class AdminContentService {
             if (!parentId.equals(contentId)) {
                 throw new IllegalArgumentException("해당 콘텐츠에 속한 에피소드가 아닙니다. contentId=" + contentId + ", videoId=" + ep.videoId());
             }
-            
+
             String newTitle = (ep.title() != null) ? ep.title() : video.getTitle();
             String newDesc  = (ep.description() != null) ? ep.description() : video.getDescription();
-            
+
             log.info("video before title={}, desc={}", video.getTitle(), video.getDescription());
             video.updateInfo(newTitle, newDesc);
             log.info("video after  title={}, desc={}", video.getTitle(), video.getDescription());
+
+            if (ep.videoStatus() != null) {
+                video.updateStatus(ep.videoStatus());
+            }
         }
-        
+
         Content saved = contentRepository.save(content);
 
         return new AdminContentUpdateResponse(saved.getId(), saved.getStatus(), saved.getAccessLevel());
     }
-        
-       
+
+
     // 콘텐츠 상세 조회
     public AdminContentDetailResponse getContentDetail(Long contentId) {
 
@@ -190,7 +233,7 @@ public class AdminContentService {
                 episodes
         );
     }
-    
+
     // 콘텐츠 삭제
     @Transactional
     public AdminContentDeleteResponse deleteContent(Long contentId) {
@@ -201,13 +244,13 @@ public class AdminContentService {
     	    return AdminContentDeleteResponse.from(content);
     	}
     	content.delete();
-    	
+
     	return AdminContentDeleteResponse.from(content);
-    	
-    	
-    	
+
+
+
     }
-    	
+
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
 
     public AdminThumbnailUploadResponse uploadThumbnail(Long contentId, Long videoId, MultipartFile file) {
@@ -227,7 +270,7 @@ public class AdminContentService {
     	System.out.println("originalFilename = " + file.getOriginalFilename());
         System.out.println("contentType = " + file.getContentType());
         System.out.println("size = " + file.getSize());
-        
+
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("업로드할 썸네일 파일이 비어 있습니다.");
         }

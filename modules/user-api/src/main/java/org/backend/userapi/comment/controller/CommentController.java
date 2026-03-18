@@ -1,6 +1,9 @@
 package org.backend.userapi.comment.controller;
 
 import core.security.principal.JwtPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.comment.dto.CommentCreateRequestDto;
 import org.backend.userapi.comment.dto.CommentResponseDto;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "댓글 API", description = "에피소드 댓글 조회, 작성, 수정, 삭제")
 @RestController
 @RequestMapping("/api/videos/{videoId}/comments")
 @RequiredArgsConstructor
@@ -27,6 +31,7 @@ public class CommentController {
 
   private final CommentService commentService;
 
+  @Operation(summary = "댓글 목록 조회")
   @GetMapping
   public ApiResponse<Page<CommentResponseDto>> getComments(
       @PathVariable("videoId") Long videoId,
@@ -39,6 +44,7 @@ public class CommentController {
     return ApiResponse.success(response);
   }
 
+  @Operation(summary = "댓글 작성")
   @PostMapping
   public ApiResponse<String> createComment(
       @PathVariable("videoId") Long videoId,
@@ -50,6 +56,7 @@ public class CommentController {
     return ApiResponse.success("댓글이 등록되었습니다.");
   }
 
+  @Operation(summary = "댓글 수정")
   @PatchMapping("/{commentId}")
   public ApiResponse<CommentResponseDto> updateComment(
       @PathVariable("videoId") Long videoId,
@@ -63,6 +70,7 @@ public class CommentController {
     return ApiResponse.success(response);
   }
 
+  @Operation(summary = "댓글 삭제")
   @DeleteMapping("/{commentId}")
   public ApiResponse<String> deleteComment(
       @PathVariable("videoId") Long videoId,
