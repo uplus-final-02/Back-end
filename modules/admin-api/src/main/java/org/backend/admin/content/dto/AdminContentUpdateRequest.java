@@ -4,19 +4,21 @@ import java.util.List;
 
 import common.enums.ContentAccessLevel;
 import common.enums.ContentStatus;
+import common.enums.VideoStatus;
 
 public record AdminContentUpdateRequest(
         String title,
         String description,
         String thumbnailUrl,
-        List<Long> tagIds, 
+        List<Long> tagIds,
         ContentAccessLevel accessLevel,
         ContentStatus status,
-        EpisodeUpdate episode 
+        EpisodeUpdate episode
 ) {
     public record EpisodeUpdate(
-            Long videoId,         
+            Long videoId,
             String title,
-            String description
+            String description,
+            VideoStatus videoStatus
     ) {}
 }
