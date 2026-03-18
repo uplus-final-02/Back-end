@@ -1,6 +1,9 @@
 package org.backend.userapi.recommendation.controller;
 
 import core.security.principal.JwtPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.recommendation.dto.UserFeedResponse;
@@ -18,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Tag(name = "유저 콘텐츠 추천·피드 API", description = "숏폼 개인화 추천 및 YouTube Shorts 방식 무한스크롤 피드")
 @RestController
 @RequestMapping("/api/user-contents")
 @RequiredArgsConstructor
@@ -40,10 +44,11 @@ public class UserRecommendationController {
      *
      * Header: Authorization: Bearer {accessToken}
      */
+    @Operation(summary = "유저 콘텐츠 개인화 추천", description = "부모 콘텐츠 태그를 상속한 벡터로 kNN 추천합니다. extended=false: 상위 15개 / true: 상위 50개")
     @GetMapping("/recommended")
     public ResponseEntity<ApiResponse<UserRecommendationResponse>> getRecommended(
-            @AuthenticationPrincipal JwtPrincipal principal,
-            @RequestParam(defaultValue = "false") boolean extended) {
+            @Parameter(hidden = true) @AuthenticationPrincipal JwtPrincipal principal,
+            @Parameter(description = "true면 상위 50개 반환 ('더 보기' 용도)") @RequestParam(defaultValue = "false") boolean extended) {
 
         UserRecommendationResponse result =
                 userRecommendationService.recommend(principal.getUserId(), extended);
@@ -68,12 +73,13 @@ public class UserRecommendationController {
      * @param size       한 번에 반환할 개수 (기본 10, 최대 30)
      * @param excludeIds 이미 본 콘텐츠 ID 콤마 구분 문자열 (예: "1,2,3")
      */
+    @Operation(summary = "숏폼 피드 (Shorts 방식)", description = "마지막으로 본 콘텐츠의 tagVector로 다음 콘텐츠를 kNN 조회합니다. 응답의 nextSeedId를 다음 요청 seedId로 사용하세요.")
     @GetMapping("/feed")
     public ResponseEntity<ApiResponse<UserFeedResponse>> getFeed(
-            @AuthenticationPrincipal JwtPrincipal principal,
-            @RequestParam(required = false) Long seedId,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String excludeIds) {
+            @Parameter(hidden = true) @AuthenticationPrincipal JwtPrincipal principal,
+            @Parameter(description = "마지막으로 본 userContentId (첫 진입 시 생략)") @RequestParam(required = false) Long seedId,
+            @Parameter(description = "한 번에 받을 개수 (기본 10, 최대 30)") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "이미 받은 콘텐츠 ID 목록 (콤마 구분, 예: 1,2,3)") @RequestParam(required = false) String excludeIds) {
 
         // size 상한 30으로 제한
         int clampedSize = Math.min(size, 30);

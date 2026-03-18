@@ -1,5 +1,7 @@
 package org.backend.userapi.payment.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 import org.backend.userapi.common.dto.ApiResponse;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import core.security.principal.JwtPrincipal;
 import jakarta.validation.Valid;
 
+@Tag(name = "결제 API", description = "구독 결제. Idempotency-Key 헤더(UUID) 필수 — 중복 결제 방지용")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/payments")
@@ -21,6 +24,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
+    @Operation(summary = "구독 결제", description = "요금제를 선택하여 구독 결제를 진행합니다. 'Idempotency-Key' 헤더에 클라이언트 생성 UUID를 전달해야 합니다.")
     @PostMapping("/subscribe")
     public ApiResponse<SubscribeResponse> subscribe(
         @AuthenticationPrincipal JwtPrincipal principal,

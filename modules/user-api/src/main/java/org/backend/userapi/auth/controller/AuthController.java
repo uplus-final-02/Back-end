@@ -1,5 +1,7 @@
 package org.backend.userapi.auth.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.auth.dto.*;
@@ -14,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "인증 API", description = "이메일·소셜 회원가입, 로그인, 토큰 재발급, 로그아웃")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -32,6 +35,7 @@ public class AuthController {
      * STEP 1-A: 인증코드 발송
      * POST /api/auth/signup/email/send-code
      */
+    @Operation(summary = "[Step 1-A] 이메일 인증 코드 발송", description = "입력한 이메일로 6자리 인증 코드를 발송합니다. 코드 유효 시간은 5분입니다.")
     @PostMapping("/signup/email/send-code")
     public ResponseEntity<ApiResponse<Void>> sendEmailCode(
             @Valid @RequestBody EmailSendCodeRequest request) {
@@ -44,6 +48,7 @@ public class AuthController {
      * STEP 1-B: 인증코드 검증 → Setup Token 발급
      * POST /api/auth/signup/email/verify-code
      */
+    @Operation(summary = "[Step 1-B] 이메일 인증 코드 검증", description = "발송된 코드를 검증하고 회원가입 진행용 Setup Token을 발급합니다. (유효시간 10분)")
     @PostMapping("/signup/email/verify-code")
     public ResponseEntity<ApiResponse<SetupTokenResponse>> verifyEmailCode(
             @Valid @RequestBody EmailVerifyCodeRequest request) {
@@ -62,6 +67,7 @@ public class AuthController {
      * - 기존 유저: JWT 반환 (isNewUser=false)
      * - 신규 유저: Setup Token 반환 (isNewUser=true) → 닉네임/태그 단계로 이동
      */
+    @Operation(summary = "Google 소셜 로그인", description = "Google OAuth 인가 코드로 로그인합니다. 신규 유저는 Setup Token을 반환하고 닉네임 설정 단계로 이동합니다.")
     @PostMapping("/login/google")
     public ResponseEntity<ApiResponse<SocialLoginResponse>> loginWithGoogle(
             @Valid @RequestBody SocialLoginRequest request) {
@@ -75,6 +81,7 @@ public class AuthController {
      * Kakao 소셜 로그인
      * POST /api/auth/login/kakao
      */
+    @Operation(summary = "Kakao 소셜 로그인", description = "Kakao OAuth 인가 코드로 로그인합니다. 신규 유저는 Setup Token을 반환하고 닉네임 설정 단계로 이동합니다.")
     @PostMapping("/login/kakao")
     public ResponseEntity<ApiResponse<SocialLoginResponse>> loginWithKakao(
             @Valid @RequestBody SocialLoginRequest request) {
@@ -88,6 +95,7 @@ public class AuthController {
      * Naver 소셜 로그인 (state 파라미터 필수)
      * POST /api/auth/login/naver
      */
+    @Operation(summary = "Naver 소셜 로그인", description = "Naver OAuth 인가 코드로 로그인합니다. state 파라미터가 필수입니다. 신규 유저는 Setup Token 반환.")
     @PostMapping("/login/naver")
     public ResponseEntity<ApiResponse<SocialLoginResponse>> loginWithNaver(
             @Valid @RequestBody SocialLoginRequest request) {
@@ -107,6 +115,7 @@ public class AuthController {
      * POST /api/auth/signup/profile/nickname
      * Header: Authorization: Bearer {setupToken}
      */
+    @Operation(summary = "[Step 2] 닉네임 설정", description = "중복 검사 후 닉네임을 설정하고 갱신된 Setup Token을 반환합니다. Header에 'Authorization: Bearer {setupToken}' 필요.")
     @PostMapping("/signup/profile/nickname")
     public ResponseEntity<ApiResponse<SetupTokenResponse>> setNickname(
             @RequestHeader("Authorization") String authorizationHeader,
@@ -122,6 +131,7 @@ public class AuthController {
      * POST /api/auth/signup/profile/tags
      * Header: Authorization: Bearer {setupToken}
      */
+    @Operation(summary = "[Step 3] 선호 태그 선택 → 회원가입 완료", description = "선호 태그(3~5개)를 선택하면 계정이 생성되고 JWT(accessToken + refreshToken)를 반환합니다. Header에 'Authorization: Bearer {setupToken}' 필요.")
     @PostMapping("/signup/profile/tags")
     public ResponseEntity<ApiResponse<LoginResponse>> completeTags(
             @RequestHeader("Authorization") String authorizationHeader,
@@ -138,6 +148,7 @@ public class AuthController {
     //  이메일 로그인 / 토큰 재발급 / 로그아웃 (기존 유지)
     // ══════════════════════════════════════════════════════════════
 
+    @Operation(summary = "이메일 로그인", description = "이메일과 비밀번호로 로그인합니다. 5회 실패 시 계정이 잠깁니다.")
     @PostMapping("/login/email")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request) {
@@ -146,6 +157,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(summary = "토큰 재발급", description = "Refresh Token으로 새 Access Token + Refresh Token을 발급합니다. (Rotation 방식 — 기존 Refresh Token 무효화)")
     @PostMapping("/reissue")
     public ResponseEntity<ApiResponse<LoginResponse>> reissue(
             @Valid @RequestBody ReissueRequest request) {
@@ -154,6 +166,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @Operation(summary = "로그아웃", description = "현재 Refresh Token을 무효화합니다.")
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout() {
         authService.logout();

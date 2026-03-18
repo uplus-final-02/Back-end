@@ -3,6 +3,9 @@ package org.backend.userapi.content.controller;
 import common.enums.ContentAccessLevel;
 import common.enums.ContentType;
 import core.security.principal.JwtPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.content.dto.ContentDetailResponse;
@@ -24,6 +27,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+@Tag(name = "정식 콘텐츠 API", description = "시리즈·영화 목록 조회, 상세 조회, 에피소드 목록, 트렌딩, 홈화면 데이터")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/contents")
@@ -33,7 +37,7 @@ public class ContentController {
     private final BookmarkService bookmarkService;
     private final TrendingContentService trendingContentService;
 
-    // 1. 시청 중인 콘텐츠
+    @Operation(summary = "홈 - 시청 중인 콘텐츠", description = "현재 로그인 유저가 시청 중인 콘텐츠 목록을 반환합니다.")
     @GetMapping("/home/watching-list")
     public ApiResponse<WatchHistoryListResponse> getWatchingContentList(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
@@ -42,7 +46,7 @@ public class ContentController {
         return ApiResponse.success(response);
     }
 
-    // 2. 기본 콘텐츠 목록 (제공자별 - uploaderType, 태그별 - tag)
+    @Operation(summary = "홈 - 기본 콘텐츠 목록", description = "제공자(uploaderType), 태그, 접근 등급, 콘텐츠 타입으로 필터링한 콘텐츠 목록을 반환합니다.")
     @GetMapping("/home/default-list")
     public ApiResponse<List<DefaultContentResponse>> getDefaultContentList(
             @RequestParam(required = false, defaultValue = "ADMIN") String uploaderType,
@@ -57,7 +61,7 @@ public class ContentController {
         return ApiResponse.success(response);
     }
 
-    // 3. 최근 찜 목록
+    @Operation(summary = "홈 - 최근 찜 목록", description = "현재 로그인 유저의 최근 찜(북마크) 콘텐츠 목록을 반환합니다.")
     @GetMapping("/home/bookmark-list")
     public ApiResponse<List<DefaultContentResponse>> getBookmarkList(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
@@ -66,18 +70,19 @@ public class ContentController {
         return ApiResponse.success(bookmarkService.getRecentBookmarkList(jwtPrincipal.getUserId()));
     }
 
-    // 4. 콘텐츠 상세 조회
+    @Operation(summary = "콘텐츠 상세 조회", description = "contentId로 시리즈 또는 영화의 상세 정보를 조회합니다.")
     @GetMapping("/{contentId}")
-    public ResponseEntity<ContentDetailResponse> getContentDetail(@PathVariable Long contentId) {
+    public ResponseEntity<ContentDetailResponse> getContentDetail(@Parameter(description = "콘텐츠 ID") @PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentDetail(contentId));
     }
 
-    // 5. 에피소드 조회
+    @Operation(summary = "에피소드 목록 조회", description = "시리즈의 전체 에피소드 목록을 조회합니다.")
     @GetMapping("/{contentId}/episodes-list")
-    public ResponseEntity<EpisodesResponse> getContentEpisodeList(@PathVariable Long contentId) {
+    public ResponseEntity<EpisodesResponse> getContentEpisodeList(@Parameter(description = "시리즈 콘텐츠 ID") @PathVariable Long contentId) {
         return ResponseEntity.ok(contentService.getContentEpisodes(contentId));
     }
 
+    @Operation(summary = "홈 - 트렌딩 콘텐츠", description = "조회수·북마크 기반으로 계산된 인기 콘텐츠 순위를 반환합니다.")
     @GetMapping("/home/trending")
     public ApiResponse<List<TrendingResponse>> getTrendingContents(
             @RequestParam(defaultValue = "10") int limit
