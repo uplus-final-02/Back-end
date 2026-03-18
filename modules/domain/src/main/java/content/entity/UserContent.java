@@ -56,6 +56,9 @@ public class UserContent extends BaseTimeEntity {
     @Column(name = "access_level", nullable = false, length = 30)
     private ContentAccessLevel accessLevel;
 
+    @Column(name = "publish_requested", nullable = false)
+    private boolean publishRequested;
+
     @Builder
     public UserContent(
             Content parentContent,
@@ -102,6 +105,38 @@ public class UserContent extends BaseTimeEntity {
     public void updateThumbnailUrl(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
     }
-    
-    
+
+    public boolean isPublishRequested() { return publishRequested; }
+
+    public void requestPublish() {
+        this.publishRequested = true;
+
+        if (this.contentStatus == ContentStatus.DELETED) {
+            throw new IllegalStateException("DELETED_CONTENT_CANNOT_PUBLISH");
+        }
+        // 요청만 받고 실제 상태는 기본적으로 HIDDEN 유지
+        if (this.contentStatus != ContentStatus.ACTIVE) {
+            this.contentStatus = ContentStatus.HIDDEN;
+        }
+    }
+
+    public void cancelPublishRequest() {
+        this.publishRequested = false;
+
+        if (this.contentStatus == ContentStatus.ACTIVE) {
+            this.contentStatus = ContentStatus.HIDDEN;
+        }
+    }
+
+    public void activate() {
+        if (this.contentStatus != ContentStatus.DELETED) {
+            this.contentStatus = ContentStatus.ACTIVE;
+        }
+    }
+
+    public void hide() {
+        if (this.contentStatus != ContentStatus.DELETED) {
+            this.contentStatus = ContentStatus.HIDDEN;
+        }
+    }
 }

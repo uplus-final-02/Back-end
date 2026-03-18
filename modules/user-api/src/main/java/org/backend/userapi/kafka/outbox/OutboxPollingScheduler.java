@@ -17,7 +17,7 @@ public class OutboxPollingScheduler {
     private final VideoTranscodeOutboxJdbcRepository outboxRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
-    @Value("${app.kafka.topics.video-transcode-user}")
+    @Value("${app.kafka.topics.video-transcode-user-requested}")
     private String topic;
 
     private static final int BATCH_SIZE = 100;

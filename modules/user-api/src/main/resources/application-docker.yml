@@ -50,5 +50,7 @@ app:
 
   kafka:
     topics:
-      video-transcode-admin: ${VIDEO_TRANSCODE_ADMIN_TOPIC:video.transcode.admin.requested}
-      video-transcode-user: ${VIDEO_TRANSCODE_USER_TOPIC:video.transcode.user.requested}
+      video-transcode-user-requested: ${VIDEO_TRANSCODE_USER_TOPIC:video.transcode.user.requested}
+      video-transcode-user-result: ${VIDEO_TRANSCODE_USER_RESULT_TOPIC:video.transcode.user.result}
+    consumer:
+      user-result-group: ${USER_TRANSCODE_RESULT_GROUP:user-transcode-result}

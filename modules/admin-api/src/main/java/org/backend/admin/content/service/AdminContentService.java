@@ -1,5 +1,7 @@
 package org.backend.admin.content.service;
 
+import common.enums.TranscodeStatus;
+import content.repository.VideoFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,6 +45,7 @@ public class AdminContentService {
 	private final ContentTagRepository contentTagRepository;
     private final VideoRepository videoRepository;
     private final ObjectStorageService objectStorageService;
+    private final VideoFileRepository videoFileRepository;
     
     
     // 콘텐츠 목록 조회
@@ -88,10 +91,28 @@ public class AdminContentService {
                 req.description(),
                 req.thumbnailUrl(),
                 req.accessLevel(),
-                req.status()
+                null
         );
-    	
-    	List<Long> tagIds = req.tagIds();
+
+        if (req.status() != null) {
+            if (req.status() == ContentStatus.ACTIVE) {
+                content.requestPublish();
+
+                boolean anyDone = videoFileRepository
+                        .existsByVideo_Content_IdAndTranscodeStatus(contentId, TranscodeStatus.DONE);
+
+                if (anyDone) {
+                    content.activate();
+                }
+
+            } else if (req.status() == ContentStatus.HIDDEN) {
+                content.cancelPublishRequest();
+                content.hide();
+            }
+        }
+
+
+        List<Long> tagIds = req.tagIds();
     	if (tagIds != null) {
             List<Long> uniqueTagIds = tagIds.stream().distinct().toList();
             if (uniqueTagIds.isEmpty()) {
