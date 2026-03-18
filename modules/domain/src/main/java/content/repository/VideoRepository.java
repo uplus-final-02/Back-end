@@ -1,5 +1,7 @@
 package content.repository;
 
+import common.enums.TranscodeStatus;
+import common.enums.VideoStatus;
 import content.entity.Video;
 import content.entity.WatchHistory;
 
@@ -52,4 +54,12 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
        String getTitle();
        String getDescription();
    }
+
+    List<Video> findAllByContent_Id(Long contentId);
+
+    boolean existsByContent_IdAndStatusAndVideoFile_TranscodeStatus(
+            Long contentId,
+            VideoStatus status,
+            TranscodeStatus transcodeStatus
+    );
 }
