@@ -60,17 +60,6 @@ public class UserContentController {
                 userContentService.delete(principal, userContentId));
     }
 
-    @PostMapping(value = "/{userContentId}/thumbnail",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<UserThumbnailUploadResponse> uploadThumbnail(
-            @AuthenticationPrincipal JwtPrincipal principal,
-            @PathVariable Long userContentId,
-            @RequestPart("file") MultipartFile file
-    ) {
-        return ApiResponse.ok("썸네일 업로드 성공",
-                userContentService.uploadThumbnail(principal, userContentId, file));
-    }
-
     /**
      * 유저 업로드 콘텐츠 시청 기록 저장.
      *

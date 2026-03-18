@@ -1,7 +1,10 @@
 package org.backend.transcoder.service;
 
+import common.enums.ContentStatus;
 import common.enums.TranscodeStatus;
+import content.entity.Content;
 import content.entity.VideoFile;
+import content.repository.ContentRepository;
 import content.repository.VideoFileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class VideoFileStatusService {
 
     private final VideoFileRepository videoFileRepository;
+    private final ContentRepository contentRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markProcessing(Long videoFileId) {
@@ -33,6 +37,20 @@ public class VideoFileStatusService {
         vf.updateHlsKey(hlsMasterKey);
         vf.updateDurationSec(durationSec);
         vf.updateTranscodeStatus(TranscodeStatus.DONE);
+
+        Long contentId = vf.getVideo().getContent().getId();
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new IllegalStateException("CONTENT_NOT_FOUND: " + contentId));
+
+        if (!content.isPublishRequested()) {
+            return;
+        }
+
+        boolean anyDone = videoFileRepository.existsByVideo_Content_IdAndTranscodeStatus(contentId, TranscodeStatus.DONE);
+
+        if (anyDone && content.getStatus() != ContentStatus.ACTIVE) {
+            content.activate();
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

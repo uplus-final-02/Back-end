@@ -34,7 +34,7 @@ public class UserUploadConfirmService {
     private final VideoTranscodeOutboxJdbcRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.kafka.topics.video-transcode-user}")
+    @Value("${app.kafka.topics.video-transcode-user-requested}")
     private String userTopic;
 
     @Transactional
