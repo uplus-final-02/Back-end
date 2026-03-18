@@ -2,6 +2,15 @@
 
 > 정식 콘텐츠 스트리밍과 유저 숏폼 클립을 함께 제공하는 멀티 콘텐츠 OTT 서비스
 
+[![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-4-brightgreen?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![MySQL](https://img.shields.io/badge/MySQL-8.4-blue?logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/Redis-7-red?logo=redis&logoColor=white)](https://redis.io/)
+[![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8-005571?logo=elasticsearch&logoColor=white)](https://www.elastic.co/)
+[![Kafka](https://img.shields.io/badge/Kafka-3.7-231F20?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+
 **기간**: 2025.02.04 ~ 2025.03.19
 ---
 
@@ -40,7 +49,44 @@
 
 ## 시스템 구성
 
-![img.png](img.png)
+```mermaid
+flowchart LR
+    C["Client<br/>Web / App"]
+    AC["Admin Client<br/>Backoffice"]
+
+    U["user-api<br/>Auth / Search / Recommendation / Playback / User Content"]
+    A["admin-api<br/>Admin Upload / Content Management / Operations"]
+    T["transcoder-worker<br/>Async Video Processing"]
+
+    DB["MySQL<br/>Persistent Storage"]
+    R["Redis<br/>Cache / OTP / Rate Limit / View Buffer"]
+    ES["Elasticsearch<br/>Search / Vector Recommendation"]
+    K["Kafka<br/>Transcode Event Queue"]
+    OS["MinIO / AWS S3<br/>Original + HLS Storage"]
+    CF["CloudFront<br/>Signed HLS Delivery"]
+    F["FFmpeg<br/>MP4 → HLS"]
+
+    C --> U
+    AC --> A
+
+    U --> DB
+    U --> R
+    U --> ES
+    U --> K
+    U --> OS
+    U --> CF
+
+    A --> DB
+    A --> R
+    A --> K
+    A --> OS
+
+    K --> T
+    T --> F
+    F --> OS
+    OS --> CF
+
+```
 
 | 모듈                    | 역할 및 책임|주요기능|
 |-----------------------|-------------------------------|------|
