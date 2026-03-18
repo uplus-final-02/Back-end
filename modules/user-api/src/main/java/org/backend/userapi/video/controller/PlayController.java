@@ -2,6 +2,9 @@ package org.backend.userapi.video.controller;
 
 import core.security.principal.JwtPrincipal;
 import core.storage.service.CloudFrontCookieService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.common.dto.ApiResponse;
@@ -14,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import software.amazon.awssdk.services.cloudfront.cookie.CookiesForCustomPolicy;
 
+@Tag(name = "정식 콘텐츠 재생 API", description = "에피소드(Video) HLS URL 발급, CloudFront 서명 쿠키, 조회수 증가")
 @RestController
 @RequestMapping("/api/contents")
 @RequiredArgsConstructor
@@ -23,9 +27,10 @@ public class PlayController {
     private final ViewCountService viewCountService;
     private final CloudFrontCookieService cloudFrontCookieService; // 🌟 이거 꼭 추가!
 
+    @Operation(summary = "에피소드 재생 URL 발급", description = "videoId로 HLS URL과 CloudFront 서명 쿠키를 발급합니다. 구독 여부에 따른 접근 제어가 적용됩니다.")
     @GetMapping("/{videoId}/play")
     public ApiResponse<VideoPlayDto> playVideo(
-        @PathVariable Long videoId,
+        @Parameter(description = "에피소드(Video) ID") @PathVariable Long videoId,
         @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) throws Exception {
 
@@ -54,9 +59,10 @@ public class PlayController {
         return new ApiResponse<>(200, result.getStatusDescription(), result);
     }
 
+    @Operation(summary = "에피소드 조회수 증가", description = "에피소드 재생 시 호출합니다. Redis 버퍼에 기록 후 배치 처리됩니다.")
     @PostMapping("/{videoId}/views")
     public ApiResponse<Void> increaseViewCount(
-            @PathVariable Long videoId,
+            @Parameter(description = "에피소드(Video) ID") @PathVariable Long videoId,
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
     ) {
         VideoSimpleMetaData metaData = videoService.getContentIdByVideoId(videoId);

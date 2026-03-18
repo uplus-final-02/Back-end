@@ -11,7 +11,12 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @OpenAPIDefinition(
-    info = @Info(title = "API 문서", version = "v1"),
+    info = @Info(
+        title = "U+ OTT 플랫폼 API",
+        version = "v1",
+        description = "Base URL: https://ureca-utopia.duckdns.org\n\n" +
+            "대부분의 API는 Bearer 토큰 인증이 필요합니다. 우측 상단 Authorize 버튼에서 accessToken을 입력하세요."
+    ),
     security = @SecurityRequirement(name = "bearerAuth")
 )
 public class SwaggerConfig {

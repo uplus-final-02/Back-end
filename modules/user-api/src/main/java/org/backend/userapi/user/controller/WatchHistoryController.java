@@ -1,6 +1,9 @@
 package org.backend.userapi.user.controller;
 
 import core.security.principal.JwtPrincipal;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.backend.userapi.user.dto.response.UserWatchHistoryGroupResponse;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.backend.userapi.common.dto.ApiResponse;
 
+@Tag(name = "마이페이지 시청 이력 API", description = "내 시청 이력 조회(커서 페이징), 숏폼 시청 이력 조회, 이력 삭제, 시청 통계")
 @RestController
 @RequestMapping("/api/users/me/watch-history")
 @RequiredArgsConstructor
@@ -24,6 +28,7 @@ public class WatchHistoryController {
 
     private final WatchHistoryService watchHistoryService;
 
+    @Operation(summary = "정식 콘텐츠 시청 이력 조회", description = "커서 기반 페이징으로 내 시청 이력을 반환합니다. 첫 요청 시 cursor 생략.")
     @GetMapping
     public ApiResponse<WatchHistoryListResponse> getMyWatchHistory(
             @RequestParam(name = "cursor", required = false) Long cursor,
@@ -43,6 +48,7 @@ public class WatchHistoryController {
         return ApiResponse.success(response);
     }
 
+    @Operation(summary = "숏폼 시청 이력 조회", description = "유저가 시청한 숏폼 콘텐츠 이력을 부모 콘텐츠 기준으로 그룹화하여 반환합니다.")
     @GetMapping("/user-content")
     public ApiResponse<List<UserWatchHistoryGroupResponse>> getMyUserContentWatchHistory(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
@@ -52,6 +58,7 @@ public class WatchHistoryController {
         return ApiResponse.success(response);
     }
 
+    @Operation(summary = "시청 이력 삭제")
     @DeleteMapping("/{historyId}")
     public ApiResponse<Void> deleteWatchHistory(
             @PathVariable("historyId") Long historyId,
@@ -66,6 +73,7 @@ public class WatchHistoryController {
         return ApiResponse.success(null);
     }
 
+    @Operation(summary = "시청 통계 조회", description = "총 시청 시간, 완료한 콘텐츠 수 등 시청 통계를 반환합니다.")
     @GetMapping("/statistics")
     public ApiResponse<WatchStatisticsResponse> getWatchStatistics(
             @AuthenticationPrincipal JwtPrincipal jwtPrincipal
