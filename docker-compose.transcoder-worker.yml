@@ -22,6 +22,7 @@ services:
 
       - VIDEO_TRANSCODE_TOPIC=video.transcode.user.requested
       - SPRING_KAFKA_CONSUMER_GROUP_ID=transcoder-worker-user
+      - VIDEO_TRANSCODE_USER_RESULT_TOPIC=-video:transcode:user:result
 
     restart: always # 작업 중 뻗어도 도커가 다시 살려내도록 설정
 
@@ -46,5 +47,7 @@ services:
 
       - VIDEO_TRANSCODE_TOPIC=video.transcode.admin.requested
       - SPRING_KAFKA_CONSUMER_GROUP_ID=transcoder-worker-admin
+      - VIDEO_TRANSCODE_USER_RESULT_TOPIC=-video:transcode:user:result
+
 
     restart: always # 작업 중 뻗어도 도커가 다시 살려내도록 설정
