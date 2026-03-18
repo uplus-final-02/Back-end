@@ -8,6 +8,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Set;
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.backend.userapi.content.dto.UserContentDeleteResponse;
 import org.backend.userapi.content.dto.UserContentPlayResponse;
 import org.backend.userapi.content.dto.UserContentUpdateRequest;
@@ -56,11 +58,21 @@ public class UserContentService {
     private final UserVideoFileRepository userVideoFileRepository;
     private final ObjectStorageService objectStorageService;
     private final HlsUrlProvider hlsUrlProvider;
+    private final ObjectMapper objectMapper;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".png", ".jpg", ".jpeg", ".webp");
 
     @Transactional
     public UserContentUpdateResponse updateMetadata(JwtPrincipal principal, Long userContentId, UserContentUpdateRequest req) {
         requireLogin(principal);
+
+        if (req == null) throw new IllegalArgumentException("REQUEST_BODY_REQUIRED");
+        if (!StringUtils.hasText(req.title())) throw new IllegalArgumentException("TITLE_REQUIRED");
+        if (req.description() == null) throw new IllegalArgumentException("DESCRIPTION_REQUIRED");
+        if (!StringUtils.hasText(req.thumbnailUrl())) throw new IllegalArgumentException("THUMBNAIL_URL_REQUIRED");
+        if (req.contentStatus() == null) throw new IllegalArgumentException("CONTENT_STATUS_REQUIRED");
+        if (req.contentStatus() == ContentStatus.DELETED) {
+            throw new IllegalArgumentException("INVALID_CONTENT_STATUS: use DELETE API");
+        }
 
         UserContent uc = userContentRepository.findById(userContentId)
                 .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND: " + userContentId));
@@ -68,47 +80,38 @@ public class UserContentService {
         if (!uc.getUploaderId().equals(principal.getUserId())) {
             throw new IllegalArgumentException("FORBIDDEN: not owner");
         }
-
         if (uc.getContentStatus() == ContentStatus.DELETED) {
             throw new IllegalStateException("USER_CONTENT_ALREADY_DELETED");
         }
 
-        if (req != null) {
-            if (StringUtils.hasText(req.title())) {
-                uc.updateTitle(req.title());
-            }
-            if (req.description() != null) {
-                uc.updateDescription(req.description());
-            }
-
-            if (req.contentStatus() != null) {
-                if (req.contentStatus() == ContentStatus.DELETED) {
-                    throw new IllegalArgumentException("INVALID_CONTENT_STATUS: use DELETE API");
-                }
-                uc.updateContentStatus(req.contentStatus());
-            }
-        }
+        uc.updateTitle(req.title());
+        uc.updateDescription(toMysqlJson(req.description()));
+        uc.updateThumbnailUrl(req.thumbnailUrl());
 
         UserVideoFile uvf = userVideoFileRepository.findByContent_Id(uc.getId())
                 .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND: contentId=" + uc.getId()));
 
-        if (req != null && req.videoStatus() != null) {
-            if (req.videoStatus() == VideoStatus.PUBLIC && uvf.getTranscodeStatus() != common.enums.TranscodeStatus.DONE) {
-                throw new IllegalStateException("VIDEO_NOT_READY: transcodeStatus=" + uvf.getTranscodeStatus());
-            }
-            uvf.updateVideoStatus(req.videoStatus());
+        if (req.contentStatus() == ContentStatus.HIDDEN) {
+            uc.cancelPublishRequest();
+            uc.hide();
+            uvf.updateVideoStatus(VideoStatus.PRIVATE);
 
-            if (req.videoStatus() == VideoStatus.PUBLIC) {
-                uc.updateContentStatus(ContentStatus.ACTIVE);
-            } else if (req.videoStatus() == VideoStatus.PRIVATE) {
-                uc.updateContentStatus(ContentStatus.HIDDEN);
+        } else if (req.contentStatus() == ContentStatus.ACTIVE) {
+            uc.requestPublish();
+
+            if (uvf.getTranscodeStatus() == TranscodeStatus.DONE) {
+                uc.activate();
+                uvf.updateVideoStatus(VideoStatus.PUBLIC);
+            } else {
+                uc.hide();
+                uvf.updateVideoStatus(VideoStatus.PRIVATE);
             }
         }
 
         return new UserContentUpdateResponse(
                 uc.getId(),
                 uc.getContentStatus(),
-                uvf.getVideoStatus()
+                uc.getThumbnailUrl()
         );
     }
 
@@ -178,6 +181,32 @@ public class UserContentService {
             if (tempFile != null) {
                 try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
             }
+        }
+    }
+
+    private String toMysqlJson(String raw) {
+        if (raw == null) return null;
+
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) return null;
+
+        boolean looksJson =
+                (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+                        (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+                        (trimmed.startsWith("\"") && trimmed.endsWith("\""));
+
+        if (looksJson) {
+            try {
+                JsonNode ignored = objectMapper.readTree(trimmed);
+                return trimmed;
+            } catch (Exception ignore) {
+            }
+        }
+
+        try {
+            return objectMapper.writeValueAsString(trimmed);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("DESCRIPTION_JSON_ENCODE_FAILED", e);
         }
     }
 
