@@ -11,7 +11,29 @@
 [![Kafka](https://img.shields.io/badge/Kafka-3.7-231F20?logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-**기간**: 2025.02.04 ~ 2025.03.19
+**기간**: 2025.02.04 ~ 2025.03.19 (6주) &nbsp;|&nbsp; **팀 규모**: 백엔드 6명
+
+---
+
+## 프로젝트 소개
+
+### 기획 배경
+
+LG U+ 모바일TV의 영화 리뷰 유튜브 플레이리스트에 주목했다. 유저가 직접 올리는 영화·드라마 관련 숏폼 콘텐츠를 OTT 플랫폼 내부에 끌어들이면, 사용자가 관련 영상을 보고 바로 본 콘텐츠를 시청하는 자연스러운 흐름을 만들 수 있다는 아이디어에서 출발했다.
+
+여기에 현대 사용자의 숏폼 소비 트렌드를 결합해, **"플랫폼이 제공하는 오리지널 콘텐츠 + 사용자가 업로드하는 크리에이터 숏폼"** 을 하나의 서비스에서 제공하는 투트랙 전략을 설계했다. 소비자가 곧 창작자가 되는 선순환 구조를 통해 콘텐츠 생태계를 자생적으로 성장시키는 것이 목표다.
+
+> 전형적인 OTT를 만들면 차별성이 없다는 피드백 이후, 유튜브 Shorts 방식의 숏폼과 넷플릭스 방식의 OTT를 융합한 구조로 방향을 전환했다.
+
+### 협업 방식
+
+| 도구 | 용도 |
+|------|------|
+| **Jira** | 스프린트 이슈 관리 및 일정 추적 |
+| **GitHub** | PR 기반 코드 리뷰 + Swagger 기반 API 명세 공유 |
+| **Slack / Notion** | 실시간 소통 및 회의록·설계 문서화 |
+| **데일리 스크럼** | 매일 진행 상황 공유 → 전체 타임라인 안정적 유지 |
+
 ---
 
 ## 팀 구성
@@ -132,6 +154,259 @@ flowchart LR
 
 ---
 
+## 구현 기능 상세
+
+<details>
+<summary><b>회원 / 인증</b></summary>
+
+<br>
+
+**이메일 회원가입 — 4단계 멀티스텝**
+
+| 단계 | 엔드포인트 | 설명 |
+|------|-----------|------|
+| 1A | `POST /api/auth/signup/email/send-code` | 이메일 인증 코드 발송 (Gmail SMTP, Redis 5분 TTL) |
+| 1B | `POST /api/auth/signup/email/verify-code` | 코드 검증 → Setup Token 발급 |
+| 2 | `POST /api/auth/signup/profile/nickname` | 닉네임 중복 검사 → Setup Token 갱신 |
+| 3 | `POST /api/auth/signup/profile/tags` | 선호 태그 선택 (3~5개) → 계정 생성 + JWT 발급 |
+
+Setup Token: 서버 세션 없이 회원가입 중간 상태를 JWT 클레임에 누적하는 Stateless 설계
+
+**소셜 로그인 (OAuth 2.0)**
+- 지원: Google / Kakao / Naver
+- 신규 유저 → Setup Token 반환 후 닉네임 단계부터 이어서 진행
+- 기존 유저 → 즉시 JWT 발급
+- 동일 이메일로 다른 제공자 가입 시 충돌 감지
+
+**JWT 토큰 전략**
+
+| 토큰 | 유효기간 | 용도 |
+|------|---------|------|
+| Access Token | 30분 | API 인증 |
+| Refresh Token | 14일 | 무중단 갱신 (Rotation) |
+| Setup Token | 10분 | 회원가입 멀티스텝 상태 전달 |
+
+**보안**
+- 로그인 5회 실패 시 Redis 기반 계정 15분 잠금
+- Refresh Token Rotation: 재발급 시 기존 토큰 무효화
+- Redis SETNX로 동시 재발급 레이스 컨디션 방지
+- Soft Delete 탈퇴: `deletedAt` + `WITHDRAW_PENDING` 상태 관리
+
+</details>
+
+<details>
+<summary><b>콘텐츠</b></summary>
+
+<br>
+
+**정식 콘텐츠 (시리즈·영화)**
+- `GET /api/contents/{contentId}` — 콘텐츠 상세 조회 (메타데이터, 태그)
+- `GET /api/contents/{contentId}/episodes-list` — 시리즈 에피소드 목록
+- `GET /api/contents/home/default-list` — 홈 콘텐츠 목록 (타입·태그·접근등급 필터)
+- `GET /api/contents/home/watching-list` — 시청 중인 콘텐츠 목록
+- `GET /api/contents/home/bookmark-list` — 북마크 콘텐츠 목록
+
+접근 등급: `FREE` (무료) / `PREMIUM` (구독자 전용)
+콘텐츠 타입: `SERIES` (다회차) / `MOVIE` (단편)
+
+**유저 업로드 숏폼**
+- `POST /api/user/uploads/draft` — 업로드 초안 생성 (부모 콘텐츠 지정)
+- `POST /api/user/uploads/presign` — S3 Presigned PUT URL 발급 (직접 업로드)
+- `POST /api/user/uploads/confirm` — 업로드 완료 확인 → Kafka 트랜스코딩 이벤트 발행
+- `PUT /api/user/contents/{id}/metadata` — 제목·설명 수정
+- `DELETE /api/user/contents/{id}` — 삭제
+- `POST /api/user/contents/{id}/thumbnail` — 커스텀 썸네일 업로드
+
+**영상 트랜스코딩 파이프라인**
+```
+업로드 완료 → Kafka 이벤트 발행
+    ↓
+transcoder-worker: S3 다운로드 → FFmpeg HLS 변환 (6가지 화질, 6초 세그먼트)
+    ↓
+S3 업로드 → DB 상태 DONE 갱신 → CloudFront 서명 URL 제공
+```
+- Kafka 멱등성: 동일 이벤트 중복 처리 방지
+- DLQ: JSON 파싱 실패(비재시도) vs 일시 장애(지수 백오프 재시도) 분리
+- SSE: `GET /api/user/contents/{id}/publish/subscribe` — 트랜스코딩 실시간 진행 상태 스트림
+
+</details>
+
+<details>
+<summary><b>재생 / 시청 경험</b></summary>
+
+<br>
+
+**HLS 스트리밍**
+- `GET /api/contents/{videoId}/play` — 정식 콘텐츠 HLS URL + CloudFront 서명 쿠키 발급
+- `GET /api/user/contents/{id}/play` — 유저 숏폼 HLS URL 발급
+  - `VideoStatus.PUBLIC` + `TranscodeStatus.DONE` + `hlsUrl != null` 3중 검증
+  - ABR(적응형 비트레이트): 네트워크 환경에 따라 6가지 화질 자동 전환
+
+**조회수 — Redis 버퍼링**
+- `POST /api/contents/{videoId}/views` — Redis Sorted Set에 버퍼링 (콘텐츠 길이 기반 쿨다운)
+- `POST /api/user/contents/{id}/views` — 20초 쿨다운 고정
+- `ViewCountFlushScheduler`: 주기적 DB 일괄 반영 (ShedLock으로 중복 실행 방지)
+
+**시청 이력 & 이어보기**
+- `POST /api/histories/savepoint/{videoId}` — 재생 위치 저장
+
+| 상태 | 기준 |
+|------|------|
+| `STARTED` | 0~60초 |
+| `WATCHING` | 60초~90% |
+| `COMPLETED` | 90% 이상 |
+
+**시청 이력 테이블 분리**
+
+| 테이블 | 대상 | 비고 |
+|--------|------|------|
+| `watch_histories` | 정식 콘텐츠 | 상태 + lastPositionSec (이어보기) |
+| `user_watch_histories` | 유저 숏폼 | lastWatchedAt (숏폼은 이어보기 불필요) |
+
+</details>
+
+<details>
+<summary><b>검색</b></summary>
+
+<br>
+
+**전문 검색**
+- `GET /api/search?keyword=&category=&genre=&tag=&sort=RELATED`
+  - Elasticsearch Nori 한국어 형태소 분석
+  - 초성 검색: `titleChosung` 인덱싱 — "ㅎㄱ"으로 "헬스 기구" 조회
+  - 정렬: `RELATED`(관련도) / `LATEST`(최신) / `POPULAR`(인기)
+  - 결과 없을 때 대체 콘텐츠 Fallback
+  - "혹시 이것을 검색하셨나요?" 오타 교정 제안
+
+**자동완성**
+- `GET /api/search/suggestions?keyword=` — Prefix 쿼리 + Redis 24시간 캐싱
+
+**유저 콘텐츠 검색**
+- `GET /api/search/creator?parentContentId=` — 특정 원작 기반 숏폼 목록
+- `GET /api/search/creator/user?uploaderId=` — 특정 크리에이터 업로드 목록
+- `GET /api/search/creator/search?keyword=` — 숏폼 제목 키워드 검색
+
+**실시간 ES 동기화**
+- 30초 주기 스케줄러 → DB 변경사항 ES 반영 (커서 기반 청크 인덱싱)
+- 실패 이벤트 DLQ 격리 + 재시도 스케줄러
+
+</details>
+
+<details>
+<summary><b>추천</b></summary>
+
+<br>
+
+**정식 콘텐츠 — 2-Stage HNSW kNN**
+- `GET /api/contents/recommended?extended=false`
+
+```
+Stage 1 (ES kNN): 유저 선호 태그 → 100차원 벡터 → HNSW 코사인 유사도로 후보 추출
+Stage 2 (내부 랭킹): 태그유사도(60%) + 인기도(25%) + 신선도(15%) + 시청 패널티
+```
+
+시청 패널티: STARTED(-0.70) / WATCHING(-0.30) / COMPLETED(-0.15)
+
+Fallback: 0-벡터 → ES 인기순 → DB 인기순 → 빈 리스트
+
+**유저 숏폼 피드 — YouTube Shorts 방식**
+- `GET /api/user-contents/feed?seedId=&size=10&excludeIds=`
+  - seedId: 마지막 시청 클립의 tagVector를 다음 쿼리 벡터로 재사용
+  - excludeIds: ES `must_not terms`로 서버 사이드 중복 제거
+  - nextSeedId 커서로 무한 스크롤
+
+**태그 벡터 구조**
+- 100차원 고정 패딩 (미사용 차원 0.0f)
+- 태그 추가 시 ES 재인덱싱 불필요
+- 유저 콘텐츠는 `parentContent.contentTags` 벡터 상속
+
+</details>
+
+<details>
+<summary><b>마이페이지</b></summary>
+
+<br>
+
+**시청 이력**
+- `GET /api/users/me/watch-history?cursor=&size=20` — 커서 기반 페이지네이션
+- `GET /api/users/me/watch-history/user-content` — 숏폼 시청 이력 (부모 콘텐츠별 그룹)
+- `DELETE /api/users/me/watch-history/{historyId}` — 이력 삭제
+- `GET /api/users/me/watch-history/statistics` — 총 시청 시간, 완료 콘텐츠 수 통계
+
+**북마크**
+- `POST /api/histories/bookmarks/{contentId}` — 북마크 추가
+- `DELETE /api/users/me/bookmarks/{contentId}` — 북마크 제거
+- `GET /api/users/me/bookmarks?cursor=&size=10` — 북마크 목록 (커서 기반)
+- `GET /api/users/me/bookmarks/playlist` — 북마크 플레이리스트 (연속 재생, 이어보기 연동)
+
+**프로필 / 계정**
+- `GET /api/profile/mypage` — 프로필 조회 (이름, 선호 태그, 구독 상태, 프로필 이미지)
+- `GET /api/profile/image/presigned-url` — 프로필 이미지 S3 업로드 URL 발급
+- `PATCH /api/profile/image` — 프로필 이미지 변경
+- `PUT /api/users/me/preferred-tags` — 선호 태그 변경
+- `PATCH /api/users/nickname` — 닉네임 변경
+- `DELETE /api/users/me` — 회원 탈퇴 (Soft Delete)
+
+</details>
+
+<details>
+<summary><b>댓글</b></summary>
+
+<br>
+
+- `GET /api/videos/{videoId}/comments?page=0&size=20` — 댓글 목록 (페이지네이션)
+- `POST /api/videos/{videoId}/comments` — 댓글 작성
+- `PATCH /api/videos/{videoId}/comments/{commentId}` — 댓글 수정
+- `DELETE /api/videos/{videoId}/comments/{commentId}` — 댓글 삭제 (본인만)
+
+</details>
+
+<details>
+<summary><b>구독 / 결제 / 멤버십</b></summary>
+
+<br>
+
+**구독 플랜**
+
+| 플랜 | 조건 | 시청 범위 |
+|------|------|---------|
+| FREE | 기본 | 유저 숏폼만 |
+| BASIC | 구독 결제 | U+ 오리지널 제외 전체 |
+| UPLUS | U+ 멤버십 인증 | U+ 오리지널 포함 전체 |
+
+**결제**
+- `POST /api/payments/subscribe` — 구독 결제 (헤더: `Idempotency-Key` 필수)
+- Redis 멱등성 키로 동시 중복 결제 방지
+
+**구독 관리**
+- `GET /api/subscriptions/me` — 구독 상태 조회 (ACTIVE / EXPIRED / CANCELED)
+- `POST /api/membership/cancel` — 구독 해지 (만료일까지 사용 가능)
+
+**U+ 멤버십**
+- `POST /api/membership/uplus/verify` — 전화번호 기반 U+ 인증 → JWT `uplus` 플래그 갱신
+
+</details>
+
+<details>
+<summary><b>인기차트 / 통계</b></summary>
+
+<br>
+
+**실시간 인기차트**
+- `GET /api/contents/home/trending?limit=10`
+- `TrendingChartScheduler`: 시간 단위 조회수 + 북마크 기반 인기 점수 재계산 (ShedLock)
+
+**콘텐츠 메트릭 스냅샷**
+- `ContentMetricSnapshotScheduler`: 시간 단위 지표 스냅샷 → 관리자 대시보드 타임라인 분석용
+
+**태그 홈 통계**
+- 실시간 JOIN 집계 → 배치 기반 사전 집계 (`tag_home_stats`) + UPSERT 구조
+- 동일 기준 시점 집계로 통계 일관성 확보
+
+</details>
+
+---
+
 ## 로컬 실행
 
 ```bash
@@ -163,18 +438,140 @@ cp .env.example .env
 
 **멀티스텝 회원가입 — Setup Token**
 
-- **문제**: 4단계 회원가입 중간 상태를 저장할 방법이 필요. 임시 DB 테이블 방식은 중도 이탈 유저 데이터가 쌓이고 서버 수평 확장 시 세션 공유 문제 발생
-- **해결**: JWT 클레임에 단계별 상태를 누적하는 Setup Token 도입. 서버는 아무것도 저장하지 않고 마지막 단계에서 한 번에 계정 생성 → Stateless 수평 확장 가능
+**문제상황**
+
+이메일 인증 → 닉네임 입력 → 태그 선택 → 계정 생성, 4단계 회원가입에서 단계 간 상태를 어딘가에 저장해야 했다. 첫 구현으로 임시 테이블(`signup_sessions`)을 사용했지만 두 가지 문제가 있었다.
+
+1. 중도 이탈 시 미완료 레코드가 DB에 계속 누적 → 정기 배치 정리 필요
+2. 서버를 수평 확장하면 다른 인스턴스가 임시 상태를 조회할 수 없음 (스티키 세션 또는 세션 공유 인프라 필요)
+
+**해결과정**
+
+서버에 아무것도 저장하지 않는 Stateless 방식을 선택했다. JWT 클레임에 단계별 상태를 누적하는 **Setup Token** 방식이다.
+
+```
+1단계 (이메일 인증 완료)
+  → { "step": "EMAIL_VERIFIED", "email": "user@example.com" } 클레임 담아 Setup Token 발급 (TTL 10분)
+
+2단계 (닉네임 제출)
+  → Setup Token 검증 후 { ..., "step": "NICKNAME_SET", "nickname": "홍길동" } 로 클레임 추가하여 재발급
+
+3단계 (태그 선택)
+  → Setup Token에 담긴 이메일 + 닉네임 + 태그를 한 번에 읽어 최종 계정 생성 + JWT 발급
+```
+
+각 단계에서 Setup Token의 `step` 클레임을 검증해 단계 건너뜀이나 순서 역전을 차단했다.
+
+**결과**
+
+서버 어디에도 중간 상태를 저장하지 않아 인스턴스를 몇 대로 늘려도 세션 공유 문제가 없다. 중도 이탈 레코드도 DB에 남지 않으며, TTL 만료 시 토큰이 자연 소멸된다.
+
+---
 
 **Refresh Token 동시성 — Redis SETNX 분산 락**
 
-- **문제**: 동일 Refresh Token으로 요청 2개가 동시에 들어오면 둘 다 유효로 판단해 토큰 2개 발급 — 보안 취약점
-- **해결**: DB 조회 전 Redis SETNX로 선착순 1개 요청만 통과, 나머지 즉시 반환 → 레이스 컨디션 원천 차단
+**문제상황**
 
-**FETCH JOIN + Pageable N+1 — 2-step 쿼리**
+Refresh Token Rotation 구현 중 재발급 흐름을 분석하다 레이스 컨디션 가능성을 발견했다.
 
-- **문제**: 컬렉션 JOIN + Pageable 조합 시 JPA가 DB LIMIT 대신 인메모리 LIMIT 적용 → 대용량에서 OOM 위험
-- **해결**: 1단계에서 ID만 조회(DB LIMIT 정확 적용) → 2단계에서 해당 ID만 FETCH JOIN
+```
+1. DB에서 Refresh Token 조회
+2. 토큰 유효성 검증
+3. 기존 토큰 무효화 + 새 Access / Refresh Token 발급
+```
+
+동시에 요청 2개가 들어오면 둘 다 1번에서 동일한 유효 토큰을 읽고 둘 다 3번으로 내려가 토큰 2개를 발급할 수 있다. 이 경우 "기존 토큰 폐기"라는 Rotation의 보안 의미가 깨지고, 단일 Refresh Token으로 복수 세션이 유지되는 취약점이 생긴다.
+
+**해결과정**
+
+DB 조회 전에 Redis SETNX로 선착순 1개 요청만 처리하도록 분산 락을 걸었다.
+
+```
+acquireReissueLock(userId)   // SETNX login:reissue:{userId} TTL 5초
+  → 락 획득 실패 → 즉시 409 반환
+  → 락 획득 성공 → DB 조회 → 검증 → 토큰 발급
+  → finally: releaseReissueLock(userId)
+```
+
+Redis 장애 시에는 SETNX를 건너뛰고 락 없이 통과(Fail-Safe)하여, Rate Limiting 기능만 일시 비활성화되고 재발급 자체는 허용한다.
+
+**결과**
+
+동시에 복수의 재발급 요청이 들어와도 선착순 1개만 처리된다. 기존 토큰 무효화와 새 토큰 발급이 사실상 원자적으로 동작해 Rotation 보안 의미가 유지된다.
+
+**로그인 Rate Limiting — 고정 윈도우 설계**
+
+- **배경**: 로그인 실패 카운터 TTL을 매 실패마다 갱신하면 공격자가 계속 재시도해 잠금이 영원히 미뤄지는 문제
+- **해결**: 첫 번째 실패 시에만 TTL 15분 설정, 이후 갱신 없음 → 15분 고정 윈도우 내 5회 초과 시 잠금 + 카운터 리셋. Redis 장애 시 Rate Limiting 기능만 비활성화, 로그인 자체는 허용 (Fail-Safe)
+
+**로그인 동시 요청 방지 — Processing Lock**
+
+- **배경**: 동일 이메일로 로그인 요청이 동시에 여러 개 들어오면 DB 조회가 중복 실행되고 세션 발급이 꼬일 수 있음
+- **해결**: 로그인 처리 시작 시 `login:processing:{email}` SETNX 락 획득 (TTL 5초), 처리 완료 후 해제. 이미 처리 중이면 409 반환
+
+**ES Fallback 체인 — 계층적 장애 대응**
+
+**문제상황**
+
+추천 API가 Elasticsearch에 의존하는 구조였는데, ES에 장애가 발생하면 API가 500 에러를 반환하고 프론트엔드의 홈 화면 전체가 빈 화면이 됐다. OTT 서비스에서 홈 화면이 비어버리는 건 치명적인 UX 문제다. ES 단일 장애가 서비스 전체 다운으로 이어지는 구조 자체를 바꿔야 했다.
+
+**해결과정**
+
+ES 예외를 밖으로 전파하지 않고 다음 단계로 흡수하는 **4단계 Fallback 체인**을 설계했다.
+
+```
+1단계: ES kNN (유저 선호 태그 기반 벡터 추천)
+  ↓ ElasticsearchException 발생 시
+2단계: ES 인기순 (벡터 없이 popularity 정렬)
+  ↓ 이것도 실패 시
+3단계: DB 인기순 (view_count DESC)
+  ↓ DB까지 실패 시
+4단계: 빈 리스트 반환 (홈 화면 구조는 유지, 500 없음)
+```
+
+각 단계를 try-catch로 감싸 예외가 밖으로 전파되지 않도록 했다.
+
+동시에 기능별로 Fail 전략을 다르게 가져갔다.
+
+| 기능 | Redis 장애 시 전략 | 이유 |
+|------|-----------------|------|
+| 로그인 Rate Limiting | Fail-Safe (잠금 해제, 로그인 허용) | 로그인 불가보다 Rate Limiting 일시 비활성화가 덜 치명적 |
+| 결제 멱등성 키 | Fail-Closed (결제 거부) | 중복 결제 위험이 훨씬 치명적 |
+| 추천 | Fallback 체인 | 빈 화면 방지 최우선 |
+
+**결과**
+
+ES 전체 장애 상황에서도 홈 화면에 DB 인기순 콘텐츠가 표시되고 500이 내려가지 않는다. 각 인프라 장애가 독립적으로 처리되어 단일 장애점이 전체 서비스로 전파되지 않는다.
+
+---
+
+**100차원 고정 패딩 태그 벡터 설계**
+
+**문제상황**
+
+태그 기반 ES kNN 추천을 구현하려면 태그를 벡터로 표현해야 한다. 처음엔 현재 태그 수 N에 맞춰 N차원 벡터를 쓰는 방식을 고려했다. 그런데 Elasticsearch의 `dense_vector` 필드는 **인덱스 생성 시 차원(dims)이 고정**된다. 태그가 하나라도 추가되면 N+1차원이 필요해지고, 이 경우 전체 인덱스를 삭제하고 재생성해야 한다. 수만 건의 콘텐츠가 쌓인 인덱스를 재생성하는 동안 추천 기능 전체가 중단된다.
+
+**해결과정**
+
+"태그가 아무리 늘어도 절대 넘지 않을 상한선"을 100으로 정하고 차원을 고정했다.
+
+```java
+// 태그 ID → 인덱스 위치로 직접 매핑
+float[] vector = new float[100];
+for (Tag tag : content.getContentTags()) {
+    int idx = tag.getId().intValue() - 1; // 1-based → 0-based
+    if (idx < 100) vector[idx] = 1.0f;
+}
+// 나머지 차원은 0.0f 패딩 (Java 기본값)
+```
+
+- 현재 태그가 30개라면 인덱스 [0..29]에 값이 들어가고 [30..99]는 0.0f 패딩
+- 새 태그 추가 → 해당 인덱스 위치에 값만 채우면 되고 인덱스 재생성 불필요
+- 유저 숏폼 콘텐츠는 자체 태그가 없어 `parentContent`의 tag_vector를 그대로 상속 → 숏폼 피드 추천에 동일한 kNN 로직 재사용
+
+**결과**
+
+서비스 운영 중 태그가 추가되어도 ES 재인덱싱 없이 기존 인덱스 문서에 신규 차원 값만 업데이트하면 된다. 유저 콘텐츠까지 동일한 벡터 구조를 공유해 정식 콘텐츠·숏폼 피드 모두 동일한 kNN 추천 파이프라인으로 처리된다.
 
 </details>
 
@@ -524,6 +921,36 @@ Elasticsearch의 기본 스코어링(BM25/TF-IDF) 특성상,
 > 작성 예정
 
 </details>
+
+---
+
+## 성과 & 회고
+
+### 구현 성과
+
+| 항목 | 내용 |
+|------|------|
+| **콘텐츠 규모** | 16,000건+ 콘텐츠 / 17,000건+ 영상 더미 데이터 기반 전 기능 검증 |
+| **추천 가용성** | ES 장애 시 4단계 Fallback 체인으로 추천 API 500 에러 없이 서비스 유지 |
+| **보안** | 로그인 5회 연속 실패 → 15분 자동 계정 잠금 / Refresh Token Rotation으로 탈취 토큰 즉시 무효화 |
+| **동시성 제어** | Redis SETNX 분산 락으로 토큰 재발급 레이스 컨디션 차단 |
+| **스트리밍 품질** | FFmpeg 기반 6가지 화질 ABR HLS로 네트워크 환경에 따른 자동 화질 전환 |
+| **검색 품질** | Nori 형태소 분석 + 초성 검색 + 오타 교정 제안 3가지 방식 통합 |
+| **조회수 처리** | Redis Sorted Set 버퍼링 + ShedLock 배치 플러시로 DB 직접 쓰기 부하 감소 |
+
+### 잘한 점
+
+- **일정 준수**: 애자일 방법론 기반 데일리 스크럼으로 6주 일정을 안정적으로 소화했다. 매일 진행 상황을 공유해 블로커를 조기에 발견하고 우선순위를 조정할 수 있었다.
+- **원활한 소통**: Jira·Slack·Notion 조합으로 백엔드 팀원 간 정보 단절 없이 병렬 개발이 가능했다.
+
+### 아쉬운 점
+
+- **프론트엔드 인원 부족**: 백엔드 대비 프론트엔드 인원이 적어 API 대응 속도에 불균형이 생겼다. 일부 기능은 Swagger로만 검증하고 실제 UI 연동이 늦어지는 경우가 있었다.
+- **영상 리소스**: 프로젝트 도메인에 맞는 실제 스트리밍 가능한 영상 리소스 확보가 어려워, 일부 기능은 더미 URL로 대체했다.
+
+### 배운 점
+
+서비스의 확장성을 처음부터 고려한 설계(Stateless 인증, Fallback 체인, 100차원 고정 벡터)가 개발 중반 이후의 수정 비용을 크게 줄인다는 것을 직접 경험했다. 기능 구현과 동시에 장애 상황을 시나리오로 그려두는 습관이 안정적인 서비스 운영의 기반이 된다.
 
 ---
 
