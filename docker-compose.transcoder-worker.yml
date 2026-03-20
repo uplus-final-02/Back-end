@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  transcoder-worker-user:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev.transcoder-worker
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - TZ=Asia/Seoul
+        
+      # --- DB 연결 추가 ---
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${DATA_NODE_IP}:3307/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
+
+      # --- Kafka & Redis 연결 ---
+      - SPRING_DATA_REDIS_HOST=${DATA_NODE_IP}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=${DATA_NODE_IP}:9094
+
+      - VIDEO_TRANSCODE_TOPIC=video.transcode.user.requested
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=transcoder-worker-user
+      - VIDEO_TRANSCODE_RESULT_TOPIC=video.transcode.user.result
+
+    restart: always # 작업 중 뻗어도 도커가 다시 살려내도록 설정
+
+  transcoder-worker-admin:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev.transcoder-worker
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - TZ=Asia/Seoul
+
+      # --- DB 연결 추가 ---
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${DATA_NODE_IP}:3307/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
+
+      # --- Kafka & Redis 연결 ---
+      - SPRING_DATA_REDIS_HOST=${DATA_NODE_IP}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=${DATA_NODE_IP}:9094
+
+      - VIDEO_TRANSCODE_TOPIC=video.transcode.admin.requested
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=transcoder-worker-admin
+      - VIDEO_TRANSCODE_RESULT_TOPIC=video.transcode.admin.result
+      - TRANSCODE_MAX_CONCURRENT_FFMPEG=-2
+
+
+    restart: always # 작업 중 뻗어도 도커가 다시 살려내도록 설정

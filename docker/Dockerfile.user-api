@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /workspace
+
+# Gradle wrapper / 설정 먼저 복사(캐시 최적화)
+COPY gradlew .
+COPY gradle gradle
+COPY settings.gradle .
+COPY build.gradle .
+COPY modules modules
+
+RUN chmod +x gradlew
+
+# user-api 모듈만 bootJar 생성 (프로젝트에 따라 경로는 조정 필요)
+RUN ./gradlew :modules:user-api:bootJar -x test
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+
+# 생성된 jar 복사 (bootJar 결과물 이름은 프로젝트 설정에 따라 달라질 수 있어 와일드카드 사용)
+COPY --from=build /workspace/modules/user-api/build/libs/*.jar app.jar
+
+ENV TZ=Asia/Seoul
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","/app/app.jar"]

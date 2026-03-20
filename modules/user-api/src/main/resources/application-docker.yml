@@ -1,0 +1,56 @@
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=utf8
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 3000
+      keepalive-time: 30000
+      max-lifetime: 1800000
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+
+  mail:
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+
+  elasticsearch:
+    uris: http://elasticsearch:9200
+    username: ${ES_USERNAME:elastic}
+    password: ${ELASTIC_PASSWORD:}
+
+app:
+  search:
+    initial-index-on-startup: ${SEARCH_INITIAL_INDEX_ON_STARTUP:true}
+    realtime-sync:
+      enabled: ${SEARCH_REALTIME_SYNC_ENABLED:true}
+      interval-ms: ${SEARCH_REALTIME_SYNC_INTERVAL_MS:30000}
+
+  storage:
+    s3:
+      provider: ${S3_PROVIDER:minio}
+      endpoint: ${S3_ENDPOINT:http://minio:9000}
+      public-base-url: ${S3_PUBLIC_BASE_URL:http://host.docker.internal:9000}
+      access-key: ${S3_ACCESS_KEY:minioadmin}
+      secret-key: ${S3_SECRET_KEY:minioadmin123}
+      bucket: ${S3_BUCKET:app-bucket}
+
+  kafka:
+    topics:
+      video-transcode-user-requested: ${VIDEO_TRANSCODE_USER_TOPIC:video.transcode.user.requested}
+      video-transcode-user-result: ${VIDEO_TRANSCODE_USER_RESULT_TOPIC:video.transcode.user.result}
+    consumer:
+      user-result-group: ${USER_TRANSCODE_RESULT_GROUP:user-transcode-result}

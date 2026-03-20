@@ -1,0 +1,96 @@
+{
+  "max_ngram_diff": 20,
+  "analysis": {
+    "tokenizer": {
+      "nori_custom_tokenizer": {
+        "type": "nori_tokenizer",
+        "decompound_mode": "mixed",
+        "user_dictionary_rules": [
+          "아바타", "조로리", "로카", "따이나", "노루다", "아벨", "김창수",
+          "디노소어", "어드벤쳐", "언더커버", "라이노", "버디즈", "해커스", "히어로",
+          "나랏말싸미", "제9분국", "남색생사연", "양자탄비", "극장판",
+          
+          "월레스", "그로밋", "리안츄", "귀즈도", "크리스티나", "에디슨", "나르시스",
+          "임파서블", "에일리언", "인베이젼", "네메시스", "생츄어리", "착신아리", "웜뱃",
+          "하얀방", "아랫집", "도시중독자들"
+        ]
+      },
+      "edge_ngram_tokenizer": {
+        "type": "edge_ngram",
+        "min_gram": 1,
+        "max_gram": 20,
+        "token_chars": ["letter", "digit"]
+      }
+    },
+    
+    "filter": {
+     "ott_posfilter": {
+        "type": "nori_part_of_speech",
+        "stoptags": [
+          "EP", "EF", "EC", "ETN", "ETM", 
+          "IC", 
+          "JKS", "JKC", "JKG", "JKO", "JKB", "JKV", "JKQ", "JX", "JC", 
+          "MM", "SP", "SSC", "SSO", "SC", "SE", 
+          "XPN", "XSA", "XSN", "XSV", 
+          "UNKNOWN"
+        ]
+      },
+      "ott_synonym_filter": {
+        "type": "synonym",
+        "synonyms": [
+          "드라마, 시리즈, 연속극",
+          "영화, 무비, 필름",
+          "애니, 애니메이션, 만화영화",
+          "공포, 호러, 무서운",
+          "로맨스, 멜로, 로맨틱"
+        ],
+        "lenient": true
+      },
+      "ott_search_synonym_filter": {
+        "type": "synonym_graph",
+        "synonyms": [
+          "드라마, 시리즈, 연속극",
+          "영화, 무비, 필름",
+          "애니, 애니메이션, 만화영화",
+          "공포, 호러, 무서운",
+          "로맨스, 멜로, 로맨틱",
+          "계곡, 캠핑, 피서, 여름휴가, 물놀이",
+          "밤, 새벽, 심야, 잠 안올 때"
+        ],
+        "lenient": true
+      }
+    },
+    "analyzer": {
+      "nori_analyzer": {
+        "type": "custom",
+        "tokenizer": "nori_custom_tokenizer",
+        "filter": [
+          "lowercase",
+          "nori_readingform",
+          "ott_posfilter",
+          "ott_synonym_filter"
+        ]
+      },
+      "nori_search_analyzer": {
+        "type": "custom",
+        "tokenizer": "nori_custom_tokenizer",
+        "filter": [
+          "lowercase",
+          "nori_readingform",
+          "ott_posfilter",
+          "ott_search_synonym_filter"
+        ]
+      },
+      "autocomplete_analyzer": {
+        "type": "custom",
+        "tokenizer": "edge_ngram_tokenizer",
+        "filter": ["lowercase"]
+      },
+      "lowercase_analyzer": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": ["lowercase"]
+      }
+    }
+  }
+}
