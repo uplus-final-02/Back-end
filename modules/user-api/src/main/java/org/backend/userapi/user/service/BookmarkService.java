@@ -53,7 +53,7 @@ public class BookmarkService {
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."));
 
         if (content.getStatus() != ContentStatus.ACTIVE) {
-            throw new IllegalArgumentException("콘텐츠를 찾을 수 없습니다.");
+            throw new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."); 
         }
 
         bookmarkRepository.save(Bookmark.builder()
