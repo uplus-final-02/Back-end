@@ -358,6 +358,7 @@ public class VideoTranscodeService {
         ProcessBuilder pb = new ProcessBuilder(
                 "ffprobe",
                 "-v", "error",
+                "-loglevel", "quiet",     // 경고문 싹 무시하고 얌전히 결과만 내놓도록 강제
                 "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 inputMp4.toAbsolutePath().toString()
