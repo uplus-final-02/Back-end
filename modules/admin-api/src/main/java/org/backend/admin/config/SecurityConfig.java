@@ -4,6 +4,7 @@ import core.security.handler.JwtAccessDeniedHandler;
 import core.security.handler.JwtAuthenticationEntryPoint;
 import core.security.jwt.JwtAuthenticationFilter;
 import core.security.jwt.JwtTokenProvider;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -52,6 +53,7 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             .authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers(HttpMethod.POST, "/admin/login", "/admin/login/", "/api/admin/login").permitAll()
                 .requestMatchers("/admin/hls/**", "/api/admin/hls/**").permitAll() 
                 .requestMatchers("/admin/storage/**", "/api/admin/storage/**").permitAll() 
