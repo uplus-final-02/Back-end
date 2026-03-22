@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.file.*;
 import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 
 @Slf4j
@@ -266,6 +267,8 @@ public class VideoTranscodeService {
         Files.createDirectories(hlsDir.resolve("v4"));
         Files.createDirectories(hlsDir.resolve("v5"));
 
+        boolean hasAudio = hasAudioStream(inputMp4);
+
         String segPattern = hlsDir.resolve("v%v").resolve("seg_%05d.ts").toString();
         String variantPlaylist = hlsDir.resolve("v%v").resolve("prog_index.m3u8").toString();
 
@@ -291,21 +294,42 @@ public class VideoTranscodeService {
                         "[v144]scale=w=256:h=144:force_original_aspect_ratio=decrease:flags=lanczos," +
                         "pad=256:144:(ow-iw)/2:(oh-ih)/2,format=yuv420p[v144o]";
 
-        ProcessBuilder pb = new ProcessBuilder(
-                "ffmpeg",
-                "-y",
-                "-analyzeduration", "100M",
-                "-probesize", "100M",
-                "-i", inputMp4.toAbsolutePath().toString(),
-                "-filter_complex", filter,
+        List<String> cmd = new java.util.ArrayList<>();
+        cmd.add("ffmpeg");
+        cmd.add("-y");
+        cmd.add("-analyzeduration"); cmd.add("100M");
+        cmd.add("-probesize");       cmd.add("100M");
 
-                "-map", "[v1080o]", "-map", "0:a:0?",
-                "-map", "[v720o]",  "-map", "0:a:0?",
-                "-map", "[v480o]",  "-map", "0:a:0?",
-                "-map", "[v360o]",  "-map", "0:a:0?",
-                "-map", "[v240o]",  "-map", "0:a:0?",
-                "-map", "[v144o]",  "-map", "0:a:0?",
+        cmd.add("-i"); cmd.add(inputMp4.toAbsolutePath().toString());
 
+        if (!hasAudio) {
+            cmd.add("-f"); cmd.add("lavfi");
+            cmd.add("-i"); cmd.add("anullsrc=channel_layout=stereo:sample_rate=48000");
+        }
+
+        cmd.add("-filter_complex"); cmd.add(filter);
+
+        cmd.addAll(List.of(
+                "-map", "[v1080o]",
+                "-map", "[v720o]",
+                "-map", "[v480o]",
+                "-map", "[v360o]",
+                "-map", "[v240o]",
+                "-map", "[v144o]"
+        ));
+
+        String audioInput = hasAudio ? "0:a:0" : "1:a:0";
+
+        cmd.addAll(List.of(
+                "-map", audioInput,
+                "-map", audioInput,
+                "-map", audioInput,
+                "-map", audioInput,
+                "-map", audioInput,
+                "-map", audioInput
+        ));
+
+        cmd.addAll(List.of(
                 "-c:v", "libx264",
                 "-preset", "veryfast",
                 "-profile:v", "high",
@@ -332,6 +356,8 @@ public class VideoTranscodeService {
                 "-keyint_min", "48",
                 "-sc_threshold", "0",
 
+                "-shortest",
+
                 "-f", "hls",
                 "-hls_time", "4",
                 "-hls_playlist_type", "vod",
@@ -343,9 +369,13 @@ public class VideoTranscodeService {
                 "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4 v:5,a:5",
 
                 variantPlaylist
-        );
+        ));
 
+        log.info("[FFMPEG][CMD] hasAudio={} cmd={}", hasAudio, String.join(" ", cmd));
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
+
         Process p = pb.start();
         String out = new String(p.getInputStream().readAllBytes());
         int code = p.waitFor();
@@ -354,11 +384,31 @@ public class VideoTranscodeService {
         }
     }
 
+    private boolean hasAudioStream(Path inputMp4) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=codec_type",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                inputMp4.toAbsolutePath().toString()
+        );
+        pb.redirectErrorStream(true);
+
+        Process p = pb.start();
+        String out = new String(p.getInputStream().readAllBytes()).trim();
+        int code = p.waitFor();
+
+        if (code != 0) {
+            throw new TranscodeRetryableException("FFPROBE_AUDIO_CHECK_FAILED code=" + code + ", out=" + out);
+        }
+        return "audio".equalsIgnoreCase(out);
+    }
+
     private int probeDurationSec(Path inputMp4) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(
                 "ffprobe",
                 "-v", "error",
-                "-loglevel", "quiet",     // 경고문 싹 무시하고 얌전히 결과만 내놓도록 강제
                 "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 inputMp4.toAbsolutePath().toString()
