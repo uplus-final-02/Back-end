@@ -2,6 +2,7 @@ package org.backend.userapi.config;
 
 import java.util.List;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,24 +42,27 @@ public class SecurityConfig {
 				.exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint)
 						.accessDeniedHandler(jwtAccessDeniedHandler))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/auth/signup/email/send-code", "/api/auth/signup/email/verify-code",
+					.requestMatchers("/api/auth/signup/email/send-code", "/api/auth/signup/email/verify-code",
 								"/api/auth/signup/profile/nickname", "/api/auth/signup/profile/tags",
 								"/api/auth/login/google", "/api/auth/login/kakao", "/api/auth/login/naver",
 								"/api/auth/login/email", "/api/auth/reissue")
-						.permitAll().requestMatchers("/api/auth/logout").authenticated()
-						.requestMatchers("/api/membership/**").authenticated().requestMatchers("/api/payments/**")
-						.authenticated()
-						.requestMatchers("/api/histories/bookmarks/**", "/api/users/me/bookmarks/**",
+					.permitAll().requestMatchers("/api/auth/logout").authenticated()
+					.requestMatchers("/api/membership/**").authenticated().requestMatchers("/api/payments/**")
+					.authenticated()
+					.requestMatchers("/api/histories/bookmarks/**", "/api/users/me/bookmarks/**",
 								"/api/users/me/preferred-tags", "/api/contents/recommended")
-						.authenticated()
+					.authenticated()
 
-						// 💡 [최종 결정] 와일드카드 없이, 정확히 어드민 전용 4개 API만 콕 집어서 방어!
-						// 이렇게 하면 /api/index/status 같은 조회용 API는 안전하게 뚫려있게 됩니다.
-						.requestMatchers("/api/index/rebuild", "/api/index/status", "/api/search/log/zero-results",
+					// 💡 [최종 결정] 와일드카드 없이, 정확히 어드민 전용 4개 API만 콕 집어서 방어!
+					// 이렇게 하면 /api/index/status 같은 조회용 API는 안전하게 뚫려있게 됩니다.
+					.requestMatchers("/api/index/rebuild", "/api/index/status", "/api/search/log/zero-results",
 								"/api/search/log/top-keywords", "/api/search/dlq/retry")
-						.hasRole("ADMIN")
+					.hasRole("ADMIN")
 
-						.anyRequest().permitAll())
+					// ASYNC 타입의 디스패처는 인증 무사 통과
+					.dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+
+					.anyRequest().permitAll())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
