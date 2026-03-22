@@ -49,7 +49,7 @@ public class Subscriptions extends BaseTimeEntity {
           LocalDateTime expiresAt) {
       this.user = user;
       this.subscriptionStatus = subscriptionStatus != null ? subscriptionStatus : SubscriptionStatus.ACTIVE;
-      this.planType = planType != null ? planType : PlanType.SUB_BASIC;
+      this.planType = planType != null ? planType : PlanType.BASIC;
       this.startedAt = startedAt != null ? startedAt : LocalDateTime.now();
       this.expiresAt = expiresAt;
   }

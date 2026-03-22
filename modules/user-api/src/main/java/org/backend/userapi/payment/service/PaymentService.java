@@ -177,7 +177,7 @@ public class PaymentService {
         if (subscription == null) {
             subscription = Subscriptions.builder()
                     .user(user)
-                    .planType(PlanType.SUB_BASIC)
+                    .planType(PlanType.BASIC)
                     .subscriptionStatus(SubscriptionStatus.ACTIVE)
                     .startedAt(now)
                     .expiresAt(newExpiresAt)
