@@ -41,7 +41,13 @@ public class VideoTranscodeKafkaConsumer {
                 event.eventId(), event.requestType(), event.videoFileId(), event.originalKey()
         );
 
-        videoTranscodeService.transcode(event);
+        try {
+            videoTranscodeService.transcode(event);
+        } catch (Exception e) {
+            log.error("[TRANSCODE][FATAL_ERROR][{}] 인코딩 중 치명적 예외 발생! eventId={}, error={}",
+                workerId, event.eventId(), e.getMessage(), e);
+            throw e; // 카프카가 재시도하거나 DLQ로 보낼 수 있게 에러를 다시 밖으로 던져줌
+        }
 
         log.info("[KAFKA][ACK][{}] topic={}, partition={}, offset={}, eventId={}",
                 workerId, record.topic(), record.partition(), record.offset(), event.eventId());
