@@ -152,6 +152,14 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse<>(409, e.getMessage(), null));
     }
 
+    // ── 닉네임 변경 30일 쿨다운 → 409 ────────────────────────────────
+    @ExceptionHandler(NicknameCooldownException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNicknameCooldown(NicknameCooldownException e) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
+
     @ExceptionHandler(SocialProviderConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleSocialProviderConflict(SocialProviderConflictException e) {
         return ResponseEntity
@@ -248,6 +256,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PaymentInProgressException.class)
     public ResponseEntity<ApiResponse<Void>> handlePaymentInProgress(PaymentInProgressException e) {
         log.warn("[Payment] 중복 요청 처리 중: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, e.getMessage(), null));
+    }
+
+    // ── 로그인 필요 → 401 ────────────────────────────────────────────
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException e) {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, e.getMessage(), null));
+    }
+
+    // ── 소유자/권한 없음 → 403 ────────────────────────────────────────
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException e) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, e.getMessage(), null));
+    }
+
+    // ── 영상 재생 불가 상태 (비공개·트랜스코딩 미완료·HLS 미생성) → 409 ──
+    @ExceptionHandler(VideoNotPlayableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVideoNotPlayable(VideoNotPlayableException e) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, e.getMessage(), null));

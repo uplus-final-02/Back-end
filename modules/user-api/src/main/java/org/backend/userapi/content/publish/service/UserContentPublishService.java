@@ -4,6 +4,8 @@ import content.entity.UserContent;
 import content.repository.UserContentRepository;
 import core.security.principal.JwtPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.common.exception.ForbiddenException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,10 +19,10 @@ public class UserContentPublishService {
     @Transactional
     public void requestPublish(Long userContentId, JwtPrincipal principal) {
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND"));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         if (principal == null || principal.getUserId() == null || !uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN");
+            throw new ForbiddenException("접근 권한이 없습니다.");
         }
 
         uc.requestPublish();
@@ -30,10 +32,10 @@ public class UserContentPublishService {
     @Transactional
     public void cancelPublish(Long userContentId, JwtPrincipal principal) {
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND"));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         if (principal == null || principal.getUserId() == null || !uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN");
+            throw new ForbiddenException("접근 권한이 없습니다.");
         }
 
         uc.cancelPublishRequest();

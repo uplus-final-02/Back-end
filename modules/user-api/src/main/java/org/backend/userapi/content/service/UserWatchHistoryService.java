@@ -11,6 +11,9 @@ import content.repository.UserVideoFileRepository;
 import content.repository.UserWatchHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.common.exception.ForbiddenException;
+import org.backend.userapi.common.exception.VideoNotPlayableException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,8 +45,7 @@ public class UserWatchHistoryService {
     @Transactional
     public void upsertWatchHistory(Long userId, Long userContentId) {
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "USER_CONTENT_NOT_FOUND: " + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         // /play와 동일한 재생 가능 검증 — /watch를 직접 호출해도 비공개·미완료 이력이 쌓이지 않도록
         validatePlayable(uc, userContentId);
@@ -79,21 +81,20 @@ public class UserWatchHistoryService {
 
     private void validatePlayable(UserContent uc, Long userContentId) {
         if (uc.getContentStatus() != ContentStatus.ACTIVE) {
-            throw new IllegalStateException("CONTENT_NOT_AVAILABLE");
+            throw new ContentNotFoundException("재생 불가능한 콘텐츠입니다.");
         }
 
         UserVideoFile uvf = userVideoFileRepository.findByContent_Id(userContentId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "USER_VIDEO_FILE_NOT_FOUND: contentId=" + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("영상 파일 정보를 찾을 수 없습니다."));
 
         if (uvf.getVideoStatus() != VideoStatus.PUBLIC) {
-            throw new IllegalStateException("VIDEO_NOT_PUBLIC");
+            throw new ForbiddenException("비공개 영상입니다.");
         }
         if (uvf.getTranscodeStatus() != TranscodeStatus.DONE) {
-            throw new IllegalStateException("VIDEO_NOT_READY: transcodeStatus=" + uvf.getTranscodeStatus());
+            throw new VideoNotPlayableException("아직 처리 중인 영상입니다. 잠시 후 다시 시도해주세요.");
         }
         if (uvf.getHlsUrl() == null || uvf.getHlsUrl().isBlank()) {
-            throw new IllegalStateException("HLS_URL_NOT_READY");
+            throw new VideoNotPlayableException("재생 URL이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.");
         }
     }
 }
