@@ -1,5 +1,6 @@
 package org.backend.userapi.user.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -11,6 +12,7 @@ import common.enums.SubscriptionStatus;
 import core.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import user.entity.AuthAccount;
+import user.entity.Subscriptions;
 import user.entity.User;
 import user.entity.UserPreferredTag;
 import user.repository.AuthAccountRepository;
@@ -50,8 +52,20 @@ public class ProfileService {
         .collect(Collectors.toList());
 
     // 구독 상태 확인 ("SUBSCRIBED" / "NONE")
-    boolean isSubscribed = subscriptionsRepository
-    	    .existsByUser_IdAndSubscriptionStatus(userId, SubscriptionStatus.ACTIVE);
+    Subscriptions subscription = subscriptionsRepository.findByUser_Id(userId).orElse(null);
+
+    boolean isSubscribed = false;
+
+    if (subscription != null) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = subscription.getExpiresAt();
+        SubscriptionStatus status = subscription.getSubscriptionStatus();
+
+        boolean notExpired = expiresAt != null && expiresAt.isAfter(now);
+
+        isSubscribed = notExpired &&
+            (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.CANCELED);
+    }
 
     String subStatus = isSubscribed ? "SUBSCRIBED" : "NONE";
 

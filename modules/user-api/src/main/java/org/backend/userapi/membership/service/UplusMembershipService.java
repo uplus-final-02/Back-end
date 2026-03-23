@@ -101,22 +101,24 @@ public class UplusMembershipService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        SubscriptionStatus status = subscription.getSubscriptionStatus();
         LocalDateTime expiresAt = subscription.getExpiresAt();
 
+        SubscriptionStatus rawStatus = subscription.getSubscriptionStatus();
         boolean notExpired = expiresAt != null && expiresAt.isAfter(now);
 
-        
-        boolean paid = notExpired && (status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.CANCELED);
+        SubscriptionStatus effectiveStatus =
+                notExpired ? rawStatus : SubscriptionStatus.EXPIRED;
 
         
-        String displayStatus = notExpired ? status.name() : SubscriptionStatus.EXPIRED.name();
+        boolean paid =
+                effectiveStatus == SubscriptionStatus.ACTIVE ||
+                effectiveStatus == SubscriptionStatus.CANCELED;
 
         return SubscriptionMeResponse.builder()
                 .subscriptionId(subscription.getId())
                 .grade(subscription.getPlanType())
-                .subscriptionStatus(status)
-                .displayStatus(displayStatus)
+                .subscriptionStatus(effectiveStatus)
+                .displayStatus(effectiveStatus.name())
                 .startedAt(subscription.getStartedAt())
                 .expiresAt(expiresAt)
                 .paid(paid)

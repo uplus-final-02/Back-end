@@ -220,7 +220,10 @@ public class VideoService {
         // 4. 최소 등급이 UPLUS인 경우 (오직 유플러스 회원만)
         if ("UPLUS".equalsIgnoreCase(requiredLevel)) {
             if (!isUplus) {
-                throw new AccessDeniedException("LG U+ 회원 전용 콘텐츠입니다.");
+                if (isPaid) {
+                    throw new AccessDeniedException("LG U+ 회원 전용 콘텐츠입니다.");
+                }
+                throw new AccessDeniedException("LG U+ 회원 인증이 필요한 콘텐츠입니다.");
             }
             return;
         }
