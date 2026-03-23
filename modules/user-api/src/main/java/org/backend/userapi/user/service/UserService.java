@@ -1,6 +1,9 @@
 package org.backend.userapi.user.service;
 
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.ConflictException;
+import org.backend.userapi.common.exception.DuplicateNicknameException;
+import org.backend.userapi.common.exception.NicknameCooldownException;
 import org.backend.userapi.user.dto.response.NicknameUpdateResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +30,7 @@ public class UserService {
 
     // 중복 검사
     if (!user.getNickname().equals(newNickname) && userRepository.existsByNickname(newNickname)) {
-      throw new IllegalArgumentException("이미 존재하는 닉네임입니다.");
+      throw new DuplicateNicknameException("이미 사용 중인 닉네임입니다.");
     }
 
     // 변경 주기 체크
@@ -36,7 +39,7 @@ public class UserService {
     if (lastModified != null) {
       LocalDateTime availableAt = lastModified.plusDays(CHANGE_LIMIT_DAYS);
       if (availableAt.isAfter(LocalDateTime.now())) {
-        throw new IllegalStateException("닉네임은 30일마다 변경할 수 있습니다. 다음 변경 가능일: " + availableAt);
+        throw new NicknameCooldownException("닉네임은 30일마다 변경할 수 있습니다. 다음 변경 가능일: " + availableAt);
       }
     }
 
@@ -56,7 +59,7 @@ public class UserService {
 	            .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
 	    if (user.isWithdrawn()) {
-	        throw new IllegalStateException("이미 탈퇴 처리된 회원입니다.");
+	        throw new ConflictException("이미 탈퇴 처리된 회원입니다.");
 	    }
 
 	    user.withdraw(reason);

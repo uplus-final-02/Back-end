@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.backend.userapi.auth.service.MembershipCheckService;
 import org.backend.userapi.common.exception.ConflictException;
+import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.common.exception.RedisServiceUnavailableException;
 import org.backend.userapi.payment.dto.SubscribeRequest;
 import org.backend.userapi.payment.dto.SubscribeResponse;
@@ -157,12 +158,12 @@ public class PaymentService {
 
             // 이미 구독 중
             if (status == SubscriptionStatus.ACTIVE && notExpired) {
-                throw new IllegalStateException("이미 구독 중입니다.");
+                throw new ConflictException("이미 구독 중입니다.");
             }
 
             // 해지 예약 상태(만료 전)
             if (status == SubscriptionStatus.CANCELED && notExpired) {
-                throw new IllegalArgumentException("해지 예약 상태입니다. 만료 후 재구독 가능합니다.");
+                throw new ConflictException("해지 예약 상태입니다. 만료 후 재구독 가능합니다.");
             }
 
             // 만료

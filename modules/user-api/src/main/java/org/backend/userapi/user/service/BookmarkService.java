@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.backend.userapi.common.exception.BookmarkNotFoundException;
+import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.service.ContentService;
 import org.backend.userapi.user.dto.response.BookmarkListResponse;
@@ -50,10 +51,10 @@ public class BookmarkService {
         }
 
         Content content = contentRepository.findById(contentId)
-                .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ContentNotFoundException("콘텐츠를 찾을 수 없습니다."));
 
         if (content.getStatus() != ContentStatus.ACTIVE) {
-            throw new IllegalArgumentException("콘텐츠를 찾을 수 없습니다.");
+            throw new ContentNotFoundException("콘텐츠를 찾을 수 없습니다.");
         }
 
         bookmarkRepository.save(Bookmark.builder()

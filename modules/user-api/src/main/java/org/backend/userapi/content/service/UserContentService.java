@@ -10,6 +10,11 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.common.exception.ConflictException;
+import org.backend.userapi.common.exception.ForbiddenException;
+import org.backend.userapi.common.exception.UnauthorizedException;
+import org.backend.userapi.common.exception.VideoNotPlayableException;
 import org.backend.userapi.content.dto.UserContentDeleteResponse;
 import org.backend.userapi.content.dto.UserContentPlayResponse;
 import org.backend.userapi.content.dto.UserContentUpdateRequest;
@@ -75,13 +80,13 @@ public class UserContentService {
         }
 
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND: " + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         if (!uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN: not owner");
+            throw new ForbiddenException("접근 권한이 없습니다.");
         }
         if (uc.getContentStatus() == ContentStatus.DELETED) {
-            throw new IllegalStateException("USER_CONTENT_ALREADY_DELETED");
+            throw new ConflictException("이미 삭제된 콘텐츠입니다.");
         }
 
         uc.updateTitle(req.title());
@@ -89,7 +94,7 @@ public class UserContentService {
         uc.updateThumbnailUrl(req.thumbnailUrl());
 
         UserVideoFile uvf = userVideoFileRepository.findByContent_Id(uc.getId())
-                .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND: contentId=" + uc.getId()));
+                .orElseThrow(() -> new ContentNotFoundException("영상 파일 정보를 찾을 수 없습니다."));
 
         if (req.contentStatus() == ContentStatus.HIDDEN) {
             uc.cancelPublishRequest();
@@ -120,10 +125,10 @@ public class UserContentService {
         requireLogin(principal);
 
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND: " + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         if (!uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN: not owner");
+            throw new ForbiddenException("접근 권한이 없습니다.");
         }
 
         if (uc.getContentStatus() == ContentStatus.DELETED) {
@@ -144,11 +149,10 @@ public class UserContentService {
         requireLogin(principal);
 
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "USER_CONTENT_NOT_FOUND: " + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
 
         if (!uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN: not owner");
+            throw new ForbiddenException("접근 권한이 없습니다.");
         }
 
         validateFile(file);
@@ -249,19 +253,19 @@ public class UserContentService {
      */
     private void validatePlayable(UserVideoFile uvf) {
         if (uvf.getVideoStatus() != VideoStatus.PUBLIC) {
-            throw new IllegalStateException("VIDEO_NOT_PUBLIC");
+            throw new ForbiddenException("비공개 영상입니다.");
         }
         if (uvf.getTranscodeStatus() != TranscodeStatus.DONE) {
-            throw new IllegalStateException("VIDEO_NOT_READY: transcodeStatus=" + uvf.getTranscodeStatus());
+            throw new VideoNotPlayableException("아직 처리 중인 영상입니다. 잠시 후 다시 시도해주세요.");
         }
         if (uvf.getHlsUrl() == null || uvf.getHlsUrl().isBlank()) {
-            throw new IllegalStateException("HLS_URL_NOT_READY");
+            throw new VideoNotPlayableException("재생 URL이 준비되지 않았습니다. 잠시 후 다시 시도해주세요.");
         }
     }
 
     private void requireLogin(JwtPrincipal principal) {
         if (principal == null || principal.getUserId() == null) {
-            throw new IllegalArgumentException("LOGIN_REQUIRED");
+            throw new UnauthorizedException("로그인이 필요합니다.");
         }
     }
 
@@ -270,23 +274,23 @@ public class UserContentService {
 
         // 1. 유저 콘텐츠 기본 정보 조회
         UserContent userContent = userContentRepository.findById(userContentId)
-                                                       .orElseThrow(() -> new IllegalArgumentException("유저 콘텐츠를 찾을 수 없습니다."));
+                                                       .orElseThrow(() -> new ContentNotFoundException("유저 콘텐츠를 찾을 수 없습니다."));
         UserVideoFile userVideoFile = userVideoFileRepository.findByContent_Id(userContentId).orElse(null);
 
 
         // [인가] 회원(jwtPrincipal 존재)이라면 누구나 열람 가능하므로 특별한 권한 체크 생략
         // (단, 비공개 처리되거나 삭제된 상태인지 검증하는 로직 정도만 추가)
         if (userContent.getContentStatus() == ContentStatus.DELETED) {
-            throw new IllegalStateException("삭제된 콘텐츠입니다.");
+            throw new ContentNotFoundException("삭제된 콘텐츠입니다.");
         }
         if (userContent.getContentStatus() != ContentStatus.ACTIVE) {
-            throw new IllegalStateException("서비스 불가능한 콘텐츠입니다.");
+            throw new ContentNotFoundException("서비스 불가능한 콘텐츠입니다.");
         }
         if (userVideoFile.getVideoStatus() != VideoStatus.PUBLIC) {
-            throw new IllegalStateException("비공개 비디오입니다.");
+            throw new ForbiddenException("비공개 영상입니다.");
         }
         if (userVideoFile.getTranscodeStatus() != TranscodeStatus.DONE) {
-            throw new IllegalStateException("아직 처리 중인 비디오입니다.");
+            throw new VideoNotPlayableException("아직 처리 중인 영상입니다. 잠시 후 다시 시도해주세요.");
         }
 
         Long userId = jwtPrincipal.getUserId();

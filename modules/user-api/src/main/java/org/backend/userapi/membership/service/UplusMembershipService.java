@@ -54,7 +54,7 @@ public class UplusMembershipService {
         UserUplusVerified verified = userUplusVerifiedRepository.findByUser_Id(userId).orElse(null);
         // 이미 본인 계정이 같은 번호로 인증된 상태면 재인증 막음
         if (verified != null && verified.isVerified() && phoneNumber.equals(verified.getPhoneNumber())) {
-            throw new IllegalArgumentException("이미 인증된 회원입니다.");
+            throw new ConflictException("이미 인증된 회원입니다.");
         }
         
         // 다른 계정이 이미 사용 중인 번호인지 확인
@@ -137,12 +137,12 @@ public class UplusMembershipService {
         // 이미 만료된 경우
         if (!subscription.getExpiresAt().isAfter(now)) {
             subscription.expire();
-            throw new IllegalArgumentException("이미 만료된 구독입니다.");
+            throw new ConflictException("이미 만료된 구독입니다.");
         }
 
         // 이미 해지 예약된 상태
         if (subscription.getSubscriptionStatus() == SubscriptionStatus.CANCELED) {
-            throw new IllegalArgumentException("이미 해지 예약된 구독입니다.");
+            throw new ConflictException("이미 해지 예약된 구독입니다.");
         }
 
         subscription.cancel();

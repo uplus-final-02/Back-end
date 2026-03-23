@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.backend.userapi.comment.dto.CommentCreateRequestDto;
 import org.backend.userapi.comment.dto.CommentResponseDto;
 import org.backend.userapi.comment.dto.CommentUpdateRequestDto;
+import org.backend.userapi.common.exception.ConflictException;
+import org.backend.userapi.common.exception.ForbiddenException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -65,12 +67,12 @@ public class CommentService {
 
     // 삭제 확인
     if (comment.getStatus() == CommentStatus.DELETED) {
-      throw new IllegalArgumentException("삭제된 댓글은 수정할 수 없습니다.");
+      throw new ConflictException("삭제된 댓글은 수정할 수 없습니다.");
     }
 
     // 권한 체크
     if (!comment.getUser().getId().equals(userId)) {
-      throw new IllegalArgumentException("댓글을 수정할 권한이 없습니다.");
+      throw new ForbiddenException("댓글을 수정할 권한이 없습니다.");
     }
 
     // 내용 수정
@@ -96,12 +98,12 @@ public class CommentService {
 
     // 삭제 확인
     if (comment.getStatus() == CommentStatus.DELETED) {
-      throw new IllegalArgumentException("이미 삭제된 댓글입니다.");
+      throw new ConflictException("이미 삭제된 댓글입니다.");
     }
 
     // 권한 체크
     if (!comment.getUser().getId().equals(userId)) {
-      throw new IllegalArgumentException("댓글을 삭제할 권한이 없습니다.");
+      throw new ForbiddenException("댓글을 삭제할 권한이 없습니다.");
     }
 
     comment.delete();
