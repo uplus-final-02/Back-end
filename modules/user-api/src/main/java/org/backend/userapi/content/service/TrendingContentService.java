@@ -235,13 +235,13 @@ public class TrendingContentService {
     }
 
     /**
-     * 🌟 캐시 동기화용 스케줄러 (EC2 A, B 모두 각자 실행됨)
-     * 메인 스케줄러(0분 20초)가 DB 적재를 마칠 수 있도록 넉넉히 기다렸다가,
-     * 매시간 2분 0초에 딱 한 번씩만 각자의 로컬 캐시를 갱신합니다.
+     * 🌟 캐시 동기화용 스케줄러 (EC2 A, B 모두 각자 실행)
+     * 메인 스케줄러가 언제 끝나든 상관없이, 1분마다 DB를 찔러보고
+     * 새로운 버전이 올라오면 즉시 각자의 로컬 캐시를 갱신합니다.
      */
-    @Scheduled(cron = "0 2 * * * *")
+    @Scheduled(fixedRate = 60000)
     public void syncLocalCacheWithDB() {
-        log.info("[Trending Chart] 로컬 캐시 1시간 주기 동기화 실행");
+        log.debug("[Trending Chart] 로컬 캐시 1분 주기 동기화 실행");
         refreshCache();
     }
 }
