@@ -4,6 +4,7 @@ import content.entity.UserContent;
 import content.repository.UserContentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.recommendation.service.TagVectorService;
 import org.backend.userapi.search.document.UserContentDocument;
 import org.backend.userapi.search.repository.UserContentSearchRepository;
@@ -111,8 +112,7 @@ public class UserContentIndexingServiceImpl implements UserContentIndexingServic
     @Transactional(readOnly = true)
     public void indexUserContent(Long userContentId) {
         UserContent uc = userContentRepository.findById(userContentId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "UserContent 없음: " + userContentId));
+                .orElseThrow(() -> new ContentNotFoundException("콘텐츠를 찾을 수 없습니다."));
         userContentSearchRepository.save(toDocument(uc));
         log.info("[UserContent 인덱싱] 단건 완료 — userContentId={}", userContentId);
     }

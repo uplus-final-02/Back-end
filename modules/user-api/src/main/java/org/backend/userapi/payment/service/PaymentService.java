@@ -141,7 +141,7 @@ public class PaymentService {
         LocalDateTime now = LocalDateTime.now();
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. userId=" + userId));
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         if (membershipCheckService.isUplus(userId)) {
             throw new IllegalArgumentException("LG U+ 인증 회원은 베이직 구독을 신청할 수 없습니다.");

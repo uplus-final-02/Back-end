@@ -15,9 +15,12 @@ import core.storage.ObjectNotFoundException;
 import core.storage.ObjectStorageService;
 import core.storage.StorageException;
 import lombok.RequiredArgsConstructor;
+import org.backend.userapi.common.exception.ContentNotFoundException;
+import org.backend.userapi.common.exception.ConflictException;
 import org.backend.userapi.kafka.outbox.VideoTranscodeOutboxJdbcRepository;
 import org.backend.userapi.upload.dto.UserUploadConfirmRequest;
 import org.backend.userapi.upload.dto.UserUploadConfirmResponse;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,24 +43,24 @@ public class UserUploadConfirmService {
     @Transactional
     public UserUploadConfirmResponse confirm(JwtPrincipal principal, UserUploadConfirmRequest req) {
         if (principal == null || principal.getUserId() == null) {
-            throw new IllegalArgumentException("LOGIN_REQUIRED");
+            throw new AccessDeniedException("로그인이 필요합니다.");
         }
         validate(req);
 
         UserContent uc = userContentRepository.findById(req.userContentId())
-                .orElseThrow(() -> new IllegalArgumentException("USER_CONTENT_NOT_FOUND: " + req.userContentId()));
+                .orElseThrow(() -> new ContentNotFoundException("콘텐츠를 찾을 수 없습니다."));
 
         if (!uc.getUploaderId().equals(principal.getUserId())) {
-            throw new IllegalArgumentException("FORBIDDEN: not owner");
+            throw new AccessDeniedException("콘텐츠에 대한 접근 권한이 없습니다.");
         }
 
         var stat = safeStat(req.objectKey());
         if (stat.size() <= 0) {
-            throw new IllegalStateException("UPLOAD_NOT_COMPLETED");
+            throw new ConflictException("파일이 아직 업로드되지 않았습니다. 업로드를 먼저 완료해 주세요.");
         }
 
         UserVideoFile uvf = userVideoFileRepository.findByContent_Id(uc.getId())
-                .orElseThrow(() -> new IllegalStateException("USER_VIDEO_FILE_NOT_FOUND: contentId=" + uc.getId()));
+                .orElseThrow(() -> new ContentNotFoundException("영상 파일 정보를 찾을 수 없습니다."));
 
         uvf.updateOriginalKey(req.objectKey());
         uvf.updateTranscodeStatus(TranscodeStatus.WAITING);
@@ -74,7 +77,7 @@ public class UserUploadConfirmService {
             String payload = objectMapper.writeValueAsString(event);
             outboxRepository.saveUser(event.eventId(), uvf.getId(), userTopic, payload);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("EVENT_SERIALIZE_FAILED: " + event.eventId(), e);
+            throw new RuntimeException("이벤트 처리 중 오류가 발생했습니다.", e);
         }
 
         return new UserUploadConfirmResponse(
@@ -98,11 +101,11 @@ public class UserUploadConfirmService {
         try {
             return objectStorageService.statObject(objectKey);
         } catch (ObjectNotFoundException e) {
-            throw new IllegalStateException("UPLOAD_NOT_COMPLETED");
+            throw new ConflictException("파일이 아직 업로드되지 않았습니다. 업로드를 먼저 완료해 주세요.");
         } catch (StorageException e) {
             String msg = e.getMessage();
             if (msg != null && (msg.contains("NoSuchKey") || msg.contains("Object does not exist"))) {
-                throw new IllegalStateException("UPLOAD_NOT_COMPLETED");
+                throw new ConflictException("파일이 아직 업로드되지 않았습니다. 업로드를 먼저 완료해 주세요.");
             }
             throw e;
         }

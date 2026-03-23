@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.backend.userapi.common.exception.ContentNotFoundException;
 import org.backend.userapi.recommendation.service.TagVectorService;
 import org.backend.userapi.search.document.ContentDocument;
 import org.backend.userapi.search.repository.ContentSearchRepository;
@@ -319,7 +320,7 @@ public class ContentIndexingServiceImpl implements ContentIndexingService {
     @Transactional(readOnly = true)
     public void indexContent(Long contentId) {
         Content content = contentRepository.findById(contentId)
-                .orElseThrow(() -> new IllegalArgumentException("콘텐츠 없음: " + contentId));
+                .orElseThrow(() -> new ContentNotFoundException("콘텐츠를 찾을 수 없습니다."));
         contentSearchRepository.save(toDocument(content));
     }
 
