@@ -188,6 +188,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     	        @Param("lastId") Long lastId,
     	        Pageable pageable);
 
-    @Query("SELECT DISTINCT c FROM Content c LEFT JOIN FETCH c.contentTags WHERE c.id IN :ids")
+    @Query("SELECT DISTINCT c FROM Content c " +
+        "LEFT JOIN FETCH c.contentTags ct " +
+        "LEFT JOIN FETCH ct.tag " +
+        "WHERE c.id IN :ids")
     List<Content> findAllByIdWithTags(@Param("ids") List<Long> ids);
 }
