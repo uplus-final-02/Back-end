@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.common.dto.ApiResponse;
 import org.backend.userapi.video.dto.VideoPlayDto;
 import org.backend.userapi.video.dto.VideoSimpleMetaData;
@@ -17,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import software.amazon.awssdk.services.cloudfront.cookie.CookiesForCustomPolicy;
 
+@Slf4j
 @Tag(name = "정식 콘텐츠 재생 API", description = "에피소드(Video) HLS URL 발급, CloudFront 서명 쿠키, 조회수 증가")
 @RestController
 @RequestMapping("/api/contents")
@@ -32,7 +34,7 @@ public class PlayController {
     public ApiResponse<VideoPlayDto> playVideo(
         @Parameter(description = "에피소드(Video) ID") @PathVariable Long videoId,
         @AuthenticationPrincipal JwtPrincipal jwtPrincipal
-    ) throws Exception {
+    ) {
 
         VideoPlayDto result = videoService.getPlayInfo(videoId, jwtPrincipal);
 
@@ -51,8 +53,7 @@ public class PlayController {
                 result.setSignature(cookies.signatureHeaderValue().replace("CloudFront-Signature=", ""));
                 result.setKeyPairId(cookies.keyPairIdHeaderValue().replace("CloudFront-Key-Pair-Id=", ""));
             } catch (Exception e) {
-                // 환경변수 누락 등의 에러가 발생해도, 앱이 죽지 않고 로그만 남기도록 처리
-                System.out.println("⚠️ CloudFront 서명 쿠키 생성 실패 (로컬 환경이거나 키가 누락됨): " + e.getMessage());
+                log.warn("[CloudFront] 서명 쿠키 생성 실패 (로컬 환경이거나 키 누락): {}", e.getMessage());
             }
         }
 
@@ -75,7 +76,7 @@ public class PlayController {
     private void addCookieToResponse(HttpServletResponse response, String name, String rawValue) {
         // 1. 방어 로직: 값이 아예 비어있으면 서버 로그에 강력하게 경고를 띄웁니다.
         if (rawValue == null || rawValue.isBlank()) {
-            System.err.println("🚨 [치명적 오류] " + name + " 쿠키 값이 비어있습니다! (.env에 KEY_PAIR_ID 등이 있는지 확인하세요)");
+            log.error("[CloudFront] {} 쿠키 값이 비어있습니다. 환경변수(KEY_PAIR_ID 등)를 확인하세요.", name);
             return;
         }
 
