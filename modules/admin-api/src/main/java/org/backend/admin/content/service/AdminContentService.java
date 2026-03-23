@@ -82,11 +82,12 @@ public class AdminContentService {
 	// 콘텐츠 메타데이터 업데이트
     @Transactional
     public AdminContentUpdateResponse updateMetadata(Long contentId, AdminContentUpdateRequest req) {
-    	log.info("[MARKER] updateMetadata v=20260305-1432");
-    	Content content = contentRepository.findById(contentId)
+        log.info("[MARKER] updateMetadata v=20260305-1432");
+
+        Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new IllegalArgumentException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId));
 
-    	content.updateMetadata(
+        content.updateMetadata(
                 req.title(),
                 req.description(),
                 req.thumbnailUrl(),
@@ -98,35 +99,15 @@ public class AdminContentService {
             if (req.status() == ContentStatus.ACTIVE) {
                 content.requestPublish();
 
-                if (content.getType() == ContentType.SINGLE) {
-                    boolean anyDone = videoFileRepository
-                            .existsByVideo_Content_IdAndTranscodeStatus(contentId, TranscodeStatus.DONE);
+                boolean anyDone = videoFileRepository
+                        .existsByVideo_Content_IdAndTranscodeStatus(contentId, TranscodeStatus.DONE);
 
-                    if (anyDone) content.activate();
-                    else content.hide();
-
-                } else {
-                    boolean anyPublicDone = videoRepository
-                            .existsByContent_IdAndStatusAndVideoFile_TranscodeStatus(
-                                    contentId,
-                                    common.enums.VideoStatus.PUBLIC,
-                                    TranscodeStatus.DONE
-                            );
-
-                    if (anyPublicDone) content.activate();
-                    else content.hide();
-                }
+                if (anyDone) content.activate();
+                else content.hide();
 
             } else if (req.status() == ContentStatus.HIDDEN) {
                 content.cancelPublishRequest();
                 content.hide();
-
-                if (content.getType() == ContentType.SERIES) {
-                    List<Video> episodes = videoRepository.findAllByContent_Id(contentId);
-                    for (Video v : episodes) {
-                        v.updateStatus(common.enums.VideoStatus.PRIVATE);
-                    }
-                }
             }
         }
 
@@ -180,10 +161,6 @@ public class AdminContentService {
             log.info("video before title={}, desc={}", video.getTitle(), video.getDescription());
             video.updateInfo(newTitle, newDesc);
             log.info("video after  title={}, desc={}", video.getTitle(), video.getDescription());
-
-            if (ep.videoStatus() != null) {
-                video.updateStatus(ep.videoStatus());
-            }
         }
 
         Content saved = contentRepository.save(content);
