@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.backend.userapi.content.dto.DefaultContentResponse;
 import org.backend.userapi.content.dto.TrendingResponse;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -231,5 +232,16 @@ public class TrendingContentService {
         List<UserNicknameInfo> results = userRepository.findNicknamesByIds(uploaderIds);
         return results.stream()
                       .collect(Collectors.toMap(UserNicknameInfo::getId, UserNicknameInfo::getNickname));
+    }
+
+    /**
+     * 🌟 캐시 동기화용 스케줄러 (EC2 A, B 모두 각자 실행됨)
+     * 메인 스케줄러(0분 20초)가 DB 적재를 마칠 수 있도록 넉넉히 기다렸다가,
+     * 매시간 2분 0초에 딱 한 번씩만 각자의 로컬 캐시를 갱신합니다.
+     */
+    @Scheduled(cron = "0 2 * * * *")
+    public void syncLocalCacheWithDB() {
+        log.info("[Trending Chart] 로컬 캐시 1시간 주기 동기화 실행");
+        refreshCache();
     }
 }
