@@ -172,7 +172,7 @@ public class TrendingContentService {
                                          .map(TrendingHistory::getContentId)
                                          .toList();
 
-        List<Content> contents = contentRepository.findAllById(contentIds);
+        List<Content> contents = contentRepository.findAllByIdWithTags(contentIds);
         Map<Long, Content> contentMap = contents.stream()
                                                 .collect(Collectors.toMap(Content::getId, content -> content));
 
